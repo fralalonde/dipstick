@@ -1,5 +1,6 @@
 use std::net::UdpSocket;
 use std::io::Result;
+use super;
 
 /// Use a safe maximum size for UDP to prevent fragmentation.
 const MAX_UDP_PAYLOAD: usize = 576;

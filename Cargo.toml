@@ -6,3 +6,6 @@ authors = ["Francis Lalonde <francis.lalonde@adgear.com>"]
 [dependencies]
 lazy_static = "0.2.8"
 time = "0.1"
+
+[features]
+bench = []
