@@ -1,39 +1,38 @@
 #![cfg_attr(feature = "bench", feature(test))]
 
+
 #[cfg(feature="bench")]
 extern crate test;
 extern crate time;
-extern crate lazy_static;
+//#[macro_use]
+//extern crate lazy_static;
 
-use test::test::Bencher;
+//mod pcg32;
+//mod statsd;
 
-mod pcg32;
-
-use pcg32::pcg32_random;
+//use pcg32::pcg32_random;
+use std::collections::HashMap;
 
 //////////////////
 // DEFINITIONS
 
-type ValueType = f32;
+type Value = u64;
 
-type TimeType = u64;
+struct TimeType (u64);
+
+impl TimeType {
+    fn now() -> TimeType { TimeType(time::precise_time_ns()) }
+    fn elapsed_ms(self) -> Value { (TimeType::now().0 - self.0) / 1_000_000 }
+}
 
 type RateType = f32;
 
-//type ChannelTimebase = [u32; 2]; // u32 base (alternating) + u32 offset = u64 time
-
+#[derive(Debug, Copy, Clone)]
 enum MetricType {
     Event,
     Count,
     Gauge,
     Time,
-}
-
-///////////////////
-// GLOBALS
-
-lazy_static! {
-    static ref SKIP_SCOPE: CloseScope = SkipScope {};
 }
 
 //////////////////
@@ -42,258 +41,146 @@ lazy_static! {
 // INSTRUMENTATION (API CONTRACT)
 
 trait Event {
-    fn mark(&self);
+    fn event(&self);
 }
 
-trait Value {
-    fn value(&self, value: ValueType);
+struct ValueMetric ();
+
+impl ValueMetric {
+    fn value(value: Value) -> () {}
 }
 
-trait Time {
-    fn start() -> TimeType {}
-    fn time(&self, start_time: TimeType);
+struct TimeMetric ();
+
+impl TimeMetric {
+    fn start() -> TimeType { TimeType::now() }
 }
-
-trait Scope {
-    fn open_scope(&self) -> OpenedScope;
-}
-
-trait TagEvent {
-    fn tag_event(&self, tags: Option<&[S]>);}
-
-trait TagValue {
-    fn tag_value(&self, value: ValueType, tags: Option<&[S]>);
-}
-
-trait OpenedScope {
-    fn close_scope(self);
-}
-
 
 // CHANNEL
 
-/// Base instruments
-trait Meter {
-    fn new_event<S: AsRef<str>>(&self, name: S) -> Event;
-    fn new_count<S: AsRef<str>>(&self, name: S) -> Value;
-    fn new_timer<S: AsRef<str>>(&self, name: S) -> Value;
-    fn new_gauge<S: AsRef<str>>(&self, name: S) -> Value;
-    fn new_scope<S: AsRef<str>>(&self, name: S) -> Scope;
+trait MetricId {}
+
+trait Channel {
+    type Metric: MetricId;
+    fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sample: RateType) -> Self::Metric;
+    fn write<S: AsRef<str>>(&self, metric: &Self::Metric, value: Value, tags: Option<&[S]>);
+//    fn scope<S: AsRef<str>>(&self, properties: Option<&HashMap<String, String>>, Fn(Channel) -> bool);
 }
 
-/// Per-instrument sampling
-trait SampleMeter {
-    fn new_sample_event<S: AsRef<str>>(&self, name: S, sampling: RateType) -> Event;
-    fn new_sample_count<S: AsRef<str>>(&self, name: S, sampling: RateType) -> Value;
-    fn new_sample_timer<S: AsRef<str>>(&self, name: S, sampling: RateType) -> Value;
-    fn new_sample_gauge<S: AsRef<str>>(&self, name: S, sampling: RateType) -> Value;
-    fn new_sample_scope<S: AsRef<str>>(&self, name: S, sampling: RateType) -> Scope;
+////////////
+
+struct LogMetric {
+    prefix: String
 }
 
-/// Tag instruments
-trait TagMeter {
-    fn new_tag_event<S: AsRef<str>>(&self, name: S) -> TagEvent;
-    fn new_tag_count<S: AsRef<str>>(&self, name: S) -> TagValue;
-    fn new_tag_timer<S: AsRef<str>>(&self, name: S) -> TagValue;
-    fn new_tag_gauge<S: AsRef<str>>(&self, name: S) -> TagValue;
-}
+impl MetricId for LogMetric {}
 
-// (SPI CONTRACT)
+struct LogChannel {}
 
-// OUTPUT
+impl Channel for LogChannel {
+    type Metric = LogMetric;
 
-type ValueOut = Fn(ValueType) -> ();
-
-type TagValueOut = Fn(ValueType, Option<&[AsRef<str>]>) -> ();
-
-trait ChannelOutput {
-    fn new_value<S: AsRef<str>>(&self, name: S, m_type: MetricType, sampling: RateType) -> ValueOut;
-    fn new_tag_value<S: AsRef<str>>(&self, m_type: MetricType, name: S) -> TagValueOut;
-    fn new_scope<S: AsRef<str>>(&self, name: S, sampling: RateType) -> Scope;
-
-    fn write<S: AsRef<str>>(&self, m_type: MetricType, name: S, sampling: RateType, value: ValueType, tags: Option<&[S]>) {
-        self.new_value(m_type, name, sampling).call_mut(value)
+    fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sample: RateType) -> LogMetric {
+        LogMetric { prefix: format!("Type {:?} | Name {} | Sample {}", m_type, name.as_ref(), sample)}
     }
 
-    fn tag_write<S: AsRef<str>>(&self, m_type: MetricType, name: S, sampling: RateType, value: ValueType, tags: Option<&[S]>) {
-        self.new_tag_value(m_type, name, sampling).call_mut(value, tags)
-    }
-
-    fn open_scope<S: AsRef<str>>(&self, scope_name: S, sampling: RateType) {
-        self.new_scope(name, sampling).open_scope()
-    }
-
-    fn in_scope<S: AsRef<str>>(&self, scope_name: S, sampling: RateType, mut block: FnMut(ChannelOutput) -> ()) {
-        let scope = self.new_scope(name, sampling).open_scope();
-        block.call_mut(self);
-        scope.close_scope()
+    fn write<S: AsRef<str>>(&self, metric: &LogMetric, value: Value, tags: Option<&[S]>) {
+        // TODO format faster
+        println!("{} | Value {}", metric.prefix, value)
     }
 }
 
+////////////
 
-/// A convenience macro to wrap a block or an expression with a start / stop timer.
-/// Elapsed time is sent to the supplied statsd client after the computation has been performed.
-/// Expression result (if any) is transparently returned.
-#[macro_export]
-macro_rules! time {
-    ($client: expr, $key: expr, $body: block) => (
-        let start_time = $client.start_time();
-        $body
-        $client.stop_time($key, start_time);
-    );
+struct StatsdMetric {
+    m_type: MetricType,
+    name: String,
+    sample: RateType
 }
 
-//////////////////
-// IMPLEMENTATION
+impl MetricId for StatsdMetric {}
 
-// SKIP SCOPE
+struct StatsdChannel {}
 
-struct SkipScope {}
+impl Channel for StatsdChannel {
+    type Metric = StatsdMetric;
 
-impl OpenedScope for SkipScope {
-    fn close_scope(self) {}
-}
+    fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sample: RateType) -> StatsdMetric {
+        StatsdMetric {m_type, name: name.as_ref().to_string(), sample}
+    }
 
-struct Metric {
-    out: ValueOut,
-}
-
-struct SampleMetric {
-    sampling: RateType,
-    out: ValueOut,
-}
-
-struct TagMetric {
-    out: TagValueOut,
-}
-
-impl Event for Metric {
-    fn mark(&self) {
-       self.out.call(1.0);
+    fn write<S: AsRef<str>>(&self, metric: &StatsdMetric, value: Value, tags: Option<&[S]>) {
+        println!("BBM {:?} {} {}", metric.m_type, metric.name, value)
     }
 }
 
-impl Value for Metric {
-    fn value(&self, value: ValueType) {
-       self.out.call(value);
+////////////
+
+//thread_local!(static PROXY_SCOPE: RefCell<Dust> = dust());
+
+struct ProxyMetric<M: MetricId> {
+    target: M
+}
+
+impl <M: MetricId> MetricId for ProxyMetric<M> {}
+
+struct ProxyChannel<C: Channel> {
+    proxy_channel: C,
+}
+
+impl <C: Channel> Channel for ProxyChannel<C> {
+    type Metric = ProxyMetric<C::Metric>;
+
+    fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sample: RateType) -> ProxyMetric<C::Metric> {
+        let pm = self.proxy_channel.define(m_type, name, sample);
+        ProxyMetric { target: pm }
+    }
+
+    fn write<S: AsRef<str>>(&self, metric: &ProxyMetric<C::Metric>, value: Value, tags: Option<&[S]>) {
+        println!("Proxy");
+        self.proxy_channel.write(&metric.target, value, tags)
     }
 }
 
-impl Scope for Metric {
-    fn open_scope(&self) {
-       self.out.open_scope()
-    }
+////////////
+
+struct DualMetric<M1: MetricId, M2: MetricId> {
+    metric_1: M1,
+    metric_2: M2,
 }
 
-impl Event for SampleMetric {
-    fn mark(&self) {
-        if pcg32_random() < sampling {
-            self.out.call(1.0);
-        }
-    }
+impl <M1: MetricId, M2: MetricId> MetricId for DualMetric<M1, M2> {}
+
+struct DualChannel<C1: Channel, C2: Channel> {
+    channel_a: C1,
+    channel_b: C2,
 }
 
-impl Value for SampleMetric {
-    fn value(&self, value: ValueType) {
-        if pcg32_random() < sampling {
-            self.out.call(value);
-        }
-    }
-}
+impl <C1: Channel, C2: Channel> Channel for DualChannel<C1, C2> {
+    type Metric = DualMetric<C1::Metric, C2::Metric>;
 
-impl Scope for SampleMetric {
-    fn open_scope(&self) {
-        if pcg32_random() < sampling {
-            out.open_scope()
-        } else {
-            SKIP_SCOPE
-        }
+    fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sample: RateType) -> DualMetric<C1::Metric, C2::Metric> {
+        let metric_1 = self.channel_a.define(m_type, &name, sample);
+        let metric_2 = self.channel_b.define(m_type, &name, sample);
+        DualMetric { metric_1, metric_2  }
     }
-}
 
-impl TagEvent for TagMetric {
-    fn tag_event(&self, tags: Option<&[S]>) {
-        self.out.call(1.0, tags);
-    }
-}
-
-impl TagValue for TagMetric {
-    fn tag_value(&self, value: ValueType, tags: Option<&[S]>) {
-        self.out.call(value, tags);
+    fn write<S: AsRef<str>>(&self, metric: &DualMetric<C1::Metric, C2::Metric>, value: Value, tags: Option<&[S]>) {
+        println!("Channel A");
+        self.channel_a.write(&metric.metric_1, value, tags);
+        println!("Channel B");
+        self.channel_b.write(&metric.metric_2, value, tags);
     }
 }
 
 
-/// A point in time from which elapsed time can be determined
-pub struct StartTime (u64);
+////////////
 
-impl StartTime {
-    /// The number of milliseconds elapsed between now and this StartTime
-    fn elapsed_ms(self) -> u64 {
-        (time::precise_time_ns() - self.0) / 1_000_000
-    }
-}
-
-
-/// eager aggregation
-/// expand every new_* to many new_*
-struct AggregatingBuffer {
-
-}
-
-
-/// lazy aggregation
-/// expand every new_* to many new_*
-struct BufferAggregator {
-
-}
-
-struct Joined {
-
-}
-
-// flush when scope closed
-// unscoped passthru
-struct ScopeBuffer {
-
-}
-
-// flush every n metrics
-struct CountBuffer {
-
-}
-
-// flush every n millis
-struct TimeBuffer {
-
-}
-
-// flush every n metrics
-struct Buffer {
-
-}
-
-// separate thread
-struct Async {
-
-}
-
-struct RandomSampler {
-
-}
-
-struct TimeSampler {
-
-}
-
-
-#[test]
-mod test {
-
-}
-
-#[bench]
-fn bench_trait(b: &mut Bencher) {
-    b.iter(|| {});
+fn main() {
+    let channel_a = ProxyChannel {proxy_channel: LogChannel {}};
+    let channel_b = ProxyChannel {proxy_channel: StatsdChannel {}};
+    let channel_x = DualChannel { channel_a, channel_b };
+    let z = channel_x.define(MetricType::Count, "count_a", 1.0);
+    channel_x.write(&z, 1, Some(&["TAG"]));
 }
 

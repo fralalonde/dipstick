@@ -12,7 +12,7 @@ fn seed() -> u64 {
         .wrapping_add(1442695040888963407)
 }
 
-fn pcg32_random() -> u32 {
+pub fn pcg32_random() -> u32 {
     thread_local! {
         static PCG32_STATE: RefCell<u64> = RefCell::new(seed());
     }
@@ -38,6 +38,4 @@ fn to_int_rate(float_rate: f64) -> u32 {
     ((1.0 - float_rate) * ::std::u32::MAX as f64) as u32
 }
 
-fn accept_sample(int_rate: u32) -> bool {
-    pcg32::random() > int_rate
-}
+fn accept_sample(int_rate: u32) -> bool { pcg32_random > int_rate }
