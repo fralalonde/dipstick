@@ -1,9 +1,12 @@
 #![cfg_attr(feature = "bench", feature(test))]
 
+#![feature(fn_traits)]
 
 #[cfg(feature="bench")]
 extern crate test;
 extern crate time;
+//#[macro_use]
+//extern crate error_chain;
 //#[macro_use]
 //extern crate lazy_static;
 
@@ -12,6 +15,7 @@ extern crate time;
 
 //use pcg32::pcg32_random;
 use std::collections::HashMap;
+use std::net::UdpSocket;
 
 //////////////////
 // DEFINITIONS
@@ -47,7 +51,7 @@ trait Event {
 struct ValueMetric ();
 
 impl ValueMetric {
-    fn value(value: Value) -> () {}
+    fn value(value: Value) {}
 }
 
 struct TimeMetric ();
@@ -58,36 +62,59 @@ impl TimeMetric {
 
 // CHANNEL
 
-trait MetricId {}
+trait DefinedMetric {}
 
-trait Channel {
-    type Metric: MetricId;
-    fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sample: RateType) -> Self::Metric;
-    fn write<S: AsRef<str>>(&self, metric: &Self::Metric, value: Value, tags: Option<&[S]>);
-//    fn scope<S: AsRef<str>>(&self, properties: Option<&HashMap<String, String>>, Fn(Channel) -> bool);
+trait MetricWrite<M: DefinedMetric> {
+    fn write<S: AsRef<str>>(&self, metric: &M, value: Value, tags: Option<&[S]>);
 }
 
-////////////
+trait Channel {
+    type Metric: DefinedMetric;
+    type Write: MetricWrite<Self::Metric>;
+    fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sample: RateType) -> Self::Metric;
+    fn write<F>(&self, metrics: F) where F: Fn(&Self::Write);
+}
+
+//////////// Log Channel
 
 struct LogMetric {
     prefix: String
 }
 
-impl MetricId for LogMetric {}
+impl DefinedMetric for LogMetric {}
 
-struct LogChannel {}
+struct LogWrite {}
 
-impl Channel for LogChannel {
-    type Metric = LogMetric;
-
-    fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sample: RateType) -> LogMetric {
-        LogMetric { prefix: format!("Type {:?} | Name {} | Sample {}", m_type, name.as_ref(), sample)}
-    }
-
+impl MetricWrite<LogMetric> for LogWrite {
     fn write<S: AsRef<str>>(&self, metric: &LogMetric, value: Value, tags: Option<&[S]>) {
         // TODO format faster
         println!("{} | Value {}", metric.prefix, value)
     }
+}
+
+struct LogChannel {
+    write: LogWrite
+}
+
+impl LogChannel {
+    fn new() -> LogChannel {
+        LogChannel { write: LogWrite {}}
+    }
+}
+
+impl Channel for LogChannel {
+    type Metric = LogMetric;
+    
+    fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sample: RateType) -> LogMetric {
+        LogMetric { prefix: format!("Type {:?} | Name {} | Sample {}", m_type, name.as_ref(), sample)}
+    }
+
+    type Write = LogWrite;
+
+    fn write<F>(&self, metrics: F ) where F: Fn(&Self::Write) {
+        metrics(&self.write)
+    }
+    
 }
 
 ////////////
@@ -98,9 +125,32 @@ struct StatsdMetric {
     sample: RateType
 }
 
-impl MetricId for StatsdMetric {}
+impl DefinedMetric for StatsdMetric {}
 
-struct StatsdChannel {}
+struct StatsdWrite {}
+
+impl MetricWrite<StatsdMetric> for StatsdWrite {
+    fn write<S: AsRef<str>>(&self, metric: &StatsdMetric, value: Value, tags: Option<&[S]>) {
+        // TODO send to UDP
+        println!("Statsd {:?} {} {}", metric.m_type, metric.name, value)
+    }
+}
+
+struct StatsdChannel {
+    socket: UdpSocket,
+    prefix: String,
+    write: StatsdWrite
+}
+
+impl StatsdChannel {
+    fn new<S: AsRef<str>>(address: &str, prefix_str: S) -> std::io::Result<StatsdChannel> {
+        let socket = UdpSocket::bind("0.0.0.0:0")?; // NB: CLOEXEC by default
+        socket.set_nonblocking(true)?;
+        socket.connect(address)?;
+
+        Ok(StatsdChannel {socket, prefix: prefix_str.as_ref().to_string(), write: StatsdWrite {}})
+    }
+}
 
 impl Channel for StatsdChannel {
     type Metric = StatsdMetric;
@@ -109,67 +159,106 @@ impl Channel for StatsdChannel {
         StatsdMetric {m_type, name: name.as_ref().to_string(), sample}
     }
 
-    fn write<S: AsRef<str>>(&self, metric: &StatsdMetric, value: Value, tags: Option<&[S]>) {
-        println!("BBM {:?} {} {}", metric.m_type, metric.name, value)
+    type Write = StatsdWrite;
+
+    fn write<F>(&self, metrics: F )
+        where F: Fn(&Self::Write) {
+        metrics(&self.write)
     }
 }
 
 ////////////
 
-//thread_local!(static PROXY_SCOPE: RefCell<Dust> = dust());
-
-struct ProxyMetric<M: MetricId> {
+struct ProxyMetric<M: DefinedMetric> {
     target: M
 }
 
-impl <M: MetricId> MetricId for ProxyMetric<M> {}
+impl <M: DefinedMetric> DefinedMetric for ProxyMetric<M> {}
+
+struct ProxyWrite<C: Channel> {
+    proxy_channel: C,
+}
+
+impl <C: Channel> MetricWrite<ProxyMetric<<C as Channel>::Metric>> for ProxyWrite<C> {
+    fn write<S: AsRef<str>>(&self, metric: &ProxyMetric<<C as Channel>::Metric>, value: Value, tags: Option<&[S]>) {
+        println!("Proxy");
+        self.proxy_channel.write(|scope| scope.write(&metric.target, value, tags))
+    }
+}
 
 struct ProxyChannel<C: Channel> {
-    proxy_channel: C,
+    write: ProxyWrite<C>
+}
+
+impl <C: Channel> ProxyChannel<C> {
+    fn new(proxy_channel: C) -> ProxyChannel<C> {
+        ProxyChannel { write: ProxyWrite { proxy_channel }}
+    }
 }
 
 impl <C: Channel> Channel for ProxyChannel<C> {
     type Metric = ProxyMetric<C::Metric>;
 
     fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sample: RateType) -> ProxyMetric<C::Metric> {
-        let pm = self.proxy_channel.define(m_type, name, sample);
+        let pm = self.write.proxy_channel.define(m_type, name, sample);
         ProxyMetric { target: pm }
     }
 
-    fn write<S: AsRef<str>>(&self, metric: &ProxyMetric<C::Metric>, value: Value, tags: Option<&[S]>) {
-        println!("Proxy");
-        self.proxy_channel.write(&metric.target, value, tags)
+    type Write = ProxyWrite<C>;
+
+    fn write<F>(&self, metrics: F )
+        where F: Fn(&Self::Write) {
+        metrics(&self.write)
     }
 }
 
 ////////////
 
-struct DualMetric<M1: MetricId, M2: MetricId> {
+struct DualMetric<M1: DefinedMetric, M2: DefinedMetric> {
     metric_1: M1,
     metric_2: M2,
 }
 
-impl <M1: MetricId, M2: MetricId> MetricId for DualMetric<M1, M2> {}
+impl <M1: DefinedMetric, M2: DefinedMetric> DefinedMetric for DualMetric<M1, M2> {}
 
-struct DualChannel<C1: Channel, C2: Channel> {
+struct DualWrite<C1: Channel, C2: Channel> {
     channel_a: C1,
     channel_b: C2,
+}
+
+impl <C1: Channel, C2: Channel> MetricWrite<DualMetric<<C1 as Channel>::Metric, <C2 as Channel>::Metric>> for DualWrite<C1, C2> {
+    fn write<S: AsRef<str>>(&self, metric: &DualMetric<<C1 as Channel>::Metric, <C2 as Channel>::Metric>, value: Value, tags: Option<&[S]>) {
+        println!("Channel A");
+        self.channel_a.write(|scope| scope.write(&metric.metric_1, value, tags));
+        println!("Channel B");
+        self.channel_b.write(|scope| scope.write(&metric.metric_2, value, tags));
+    }
+}
+
+struct DualChannel<C1: Channel, C2: Channel> {
+    write: DualWrite<C1, C2>
+}
+
+impl <C1: Channel, C2: Channel> DualChannel<C1, C2> {
+    fn new(channel_a: C1, channel_b: C2) -> DualChannel<C1, C2> {
+        DualChannel { write: DualWrite {channel_a, channel_b}}
+    }
 }
 
 impl <C1: Channel, C2: Channel> Channel for DualChannel<C1, C2> {
     type Metric = DualMetric<C1::Metric, C2::Metric>;
 
     fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sample: RateType) -> DualMetric<C1::Metric, C2::Metric> {
-        let metric_1 = self.channel_a.define(m_type, &name, sample);
-        let metric_2 = self.channel_b.define(m_type, &name, sample);
+        let metric_1 = self.write.channel_a.define(m_type, &name, sample);
+        let metric_2 = self.write.channel_b.define(m_type, &name, sample);
         DualMetric { metric_1, metric_2  }
     }
 
-    fn write<S: AsRef<str>>(&self, metric: &DualMetric<C1::Metric, C2::Metric>, value: Value, tags: Option<&[S]>) {
-        println!("Channel A");
-        self.channel_a.write(&metric.metric_1, value, tags);
-        println!("Channel B");
-        self.channel_b.write(&metric.metric_2, value, tags);
+    type Write = DualWrite<C1, C2>;
+
+    fn write<F>(&self, metrics: F )
+        where F: Fn(&Self::Write) {
+        metrics(&self.write)
     }
 }
 
@@ -177,10 +266,11 @@ impl <C1: Channel, C2: Channel> Channel for DualChannel<C1, C2> {
 ////////////
 
 fn main() {
-    let channel_a = ProxyChannel {proxy_channel: LogChannel {}};
-    let channel_b = ProxyChannel {proxy_channel: StatsdChannel {}};
-    let channel_x = DualChannel { channel_a, channel_b };
-    let z = channel_x.define(MetricType::Count, "count_a", 1.0);
-    channel_x.write(&z, 1, Some(&["TAG"]));
+    let channel_a = ProxyChannel::new( LogChannel::new() );
+    let channel_b = ProxyChannel::new( StatsdChannel::new("localhost:8125", "hello.").unwrap() );
+    let channel_x = DualChannel::new( channel_a, channel_b );
+    let metric = channel_x.define(MetricType::Count, "count_a", 1.0);
+    channel_x.write(|scope| scope.write(&metric, 1, Some(&["TAG"])));
 }
 
+//thread_local!(static PROXY_SCOPE: RefCell<Metric> = metric());

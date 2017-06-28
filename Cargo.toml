@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Francis Lalonde <francis.lalonde@adgear.com>"]
 
 [dependencies]
+error-chain = "0.10"
 lazy_static = "0.2.8"
 time = "0.1"
 
