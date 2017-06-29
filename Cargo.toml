@@ -1,7 +1,7 @@
 [package]
-name = "bladergator"
+name = "dipstick"
 version = "0.1.0"
-authors = ["Francis Lalonde <francis.lalonde@adgear.com>"]
+authors = ["Francis Lalonde <fralalonde@gmail.com>"]
 
 [dependencies]
 error-chain = "0.10"
