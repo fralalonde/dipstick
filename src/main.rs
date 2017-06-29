@@ -16,6 +16,7 @@ extern crate time;
 //use pcg32::pcg32_random;
 use std::collections::HashMap;
 use std::net::UdpSocket;
+use std::rc::Rc;
 
 //////////////////
 // DEFINITIONS
@@ -44,35 +45,57 @@ enum MetricType {
 
 // INSTRUMENTATION (API CONTRACT)
 
-trait Event {
+trait EventMetric {
     fn event(&self);
 }
 
-struct ValueMetric ();
-
-impl ValueMetric {
-    fn value(value: Value) {}
+trait ValueMetric {
+    fn value(&self, value: Value);
 }
 
-struct TimeMetric ();
-
-impl TimeMetric {
+trait TimeMetric: ValueMetric {
     fn start() -> TimeType { TimeType::now() }
+
+    fn stop(&self, start_time: TimeType) -> u64 {
+        let elapsed_ms = start_time.elapsed_ms();
+        self.value(elapsed_ms);
+        elapsed_ms
+    }
 }
+
+trait MetricScope {
+    fn set_property<S: AsRef<str>>(&self, key: S, value: S) -> &Self;
+}
+
+trait Sugar {
+    type Event: EventMetric;
+    type Value: ValueMetric;
+    type Time:  TimeMetric;
+    type Scope: MetricScope;
+
+    fn new_event<S: AsRef<str>>(&self, name: S) -> Self::Event;
+    fn new_count<S: AsRef<str>>(&self, name: S) -> Self::Value;
+    fn new_timer<S: AsRef<str>>(&self, name: S) -> Self::Time;
+    fn new_gauge<S: AsRef<str>>(&self, name: S) -> Self::Value;
+
+    fn scope<F>(&self, operations: F) where F: Fn(&Self::Scope);
+}
+
 
 // CHANNEL
 
 trait DefinedMetric {}
 
 trait MetricWrite<M: DefinedMetric> {
-    fn write<S: AsRef<str>>(&self, metric: &M, value: Value, tags: Option<&[S]>);
+    fn write(&self, metric: &M, value: Value);
+    fn write_tag<S: AsRef<str>>(&self, metric: &M, value: Value, tags: Option<&[S]>);
 }
 
 trait Channel {
     type Metric: DefinedMetric;
     type Write: MetricWrite<Self::Metric>;
     fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sample: RateType) -> Self::Metric;
-    fn write<F>(&self, metrics: F) where F: Fn(&Self::Write);
+    fn write<F>(&self, operations: F) where F: Fn(&Self::Write);
 }
 
 //////////// Log Channel
@@ -86,7 +109,12 @@ impl DefinedMetric for LogMetric {}
 struct LogWrite {}
 
 impl MetricWrite<LogMetric> for LogWrite {
-    fn write<S: AsRef<str>>(&self, metric: &LogMetric, value: Value, tags: Option<&[S]>) {
+    fn write(&self, metric: &LogMetric, value: Value) {
+        // TODO format faster
+        println!("{} | Value {}", metric.prefix, value)
+    }
+
+    fn write_tag<S: AsRef<str>>(&self, metric: &LogMetric, value: Value, tags: Option<&[S]>) {
         // TODO format faster
         println!("{} | Value {}", metric.prefix, value)
     }
@@ -130,8 +158,14 @@ impl DefinedMetric for StatsdMetric {}
 struct StatsdWrite {}
 
 impl MetricWrite<StatsdMetric> for StatsdWrite {
-    fn write<S: AsRef<str>>(&self, metric: &StatsdMetric, value: Value, tags: Option<&[S]>) {
+    fn write(&self, metric: &StatsdMetric, value: Value) {
         // TODO send to UDP
+        println!("Statsd {:?} {} {}", metric.m_type, metric.name, value)
+    }
+
+    fn write_tag<S: AsRef<str>>(&self, metric: &StatsdMetric, value: Value, tags: Option<&[S]>) {
+        // TODO send to UDP
+        // TODO use tags
         println!("Statsd {:?} {} {}", metric.m_type, metric.name, value)
     }
 }
@@ -176,13 +210,18 @@ struct ProxyMetric<M: DefinedMetric> {
 impl <M: DefinedMetric> DefinedMetric for ProxyMetric<M> {}
 
 struct ProxyWrite<C: Channel> {
-    proxy_channel: C,
+    target: C,
 }
 
 impl <C: Channel> MetricWrite<ProxyMetric<<C as Channel>::Metric>> for ProxyWrite<C> {
-    fn write<S: AsRef<str>>(&self, metric: &ProxyMetric<<C as Channel>::Metric>, value: Value, tags: Option<&[S]>) {
+    fn write(&self, metric: &ProxyMetric<<C as Channel>::Metric>, value: Value) {
         println!("Proxy");
-        self.proxy_channel.write(|scope| scope.write(&metric.target, value, tags))
+        self.target.write(|scope| scope.write(&metric.target, value))
+    }
+
+    fn write_tag<S: AsRef<str>>(&self, metric: &ProxyMetric<<C as Channel>::Metric>, value: Value, tags: Option<&[S]>) {
+        println!("Proxy");
+        self.target.write(|scope| scope.write_tag(&metric.target, value, tags))
     }
 }
 
@@ -191,8 +230,8 @@ struct ProxyChannel<C: Channel> {
 }
 
 impl <C: Channel> ProxyChannel<C> {
-    fn new(proxy_channel: C) -> ProxyChannel<C> {
-        ProxyChannel { write: ProxyWrite { proxy_channel }}
+    fn new(target: C) -> ProxyChannel<C> {
+        ProxyChannel { write: ProxyWrite { target }}
     }
 }
 
@@ -200,16 +239,102 @@ impl <C: Channel> Channel for ProxyChannel<C> {
     type Metric = ProxyMetric<C::Metric>;
 
     fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sample: RateType) -> ProxyMetric<C::Metric> {
-        let pm = self.write.proxy_channel.define(m_type, name, sample);
+        let pm = self.write.target.define(m_type, name, sample);
         ProxyMetric { target: pm }
     }
 
     type Write = ProxyWrite<C>;
 
-    fn write<F>(&self, metrics: F )
+    fn write<F>(&self, operations: F )
         where F: Fn(&Self::Write) {
-        metrics(&self.write)
+        operations(&self.write)
     }
+}
+
+
+////////////
+
+struct SugarEvent<C: Channel> {
+    metric: <C as Channel>::Metric,
+    target: Rc<C>,
+}
+
+struct SugarValue<C: Channel> {
+    metric: <C as Channel>::Metric,
+    target: Rc<C>,
+}
+
+struct SugarTime<C: Channel> {
+    metric: <C as Channel>::Metric,
+    target: Rc<C>,
+}
+
+struct SugarScope {
+}
+
+impl <C: Channel> EventMetric for SugarEvent<C>  {
+    fn event(&self) {
+        self.target.write(|scope| scope.write(&self.metric, 1))
+    }
+}
+
+impl <C: Channel> ValueMetric for SugarValue<C> {
+    fn value(&self, value: Value) {
+        self.target.write(|scope| scope.write(&self.metric, value))
+    }
+}
+
+impl <C: Channel> ValueMetric for SugarTime<C> {
+    fn value(&self, value: Value) {
+        self.target.write(|scope| scope.write(&self.metric, value))
+    }
+}
+
+impl <C: Channel> TimeMetric for SugarTime<C> {}
+
+impl MetricScope for SugarScope {
+    fn set_property<S: AsRef<str>>(&self, key: S, value: S) -> &Self {
+        self
+    }
+}
+
+struct SugarChannel<C: Channel> {
+    target: Rc<C>
+}
+
+impl <C: Channel> SugarChannel<C> {
+    fn new(target: C) -> SugarChannel<C> {
+        SugarChannel { target: Rc::new(target) }
+    }
+}
+
+impl <C: Channel> Sugar for SugarChannel<C> {
+    type Event = SugarEvent<C>;
+    type Value = SugarValue<C>;
+    type Time = SugarTime<C>;
+    type Scope = SugarScope;
+
+    fn new_event<S: AsRef<str>>(&self, name: S) -> Self::Event {
+        let metric = self.target.define(MetricType::Event, name, 1.0);
+        SugarEvent { metric, target: self.target.clone() }
+    }
+
+    fn new_count<S: AsRef<str>>(&self, name: S) -> Self::Value {
+        let metric = self.target.define(MetricType::Count, name, 1.0);
+        SugarValue { metric, target: self.target.clone() }
+    }
+
+    fn new_timer<S: AsRef<str>>(&self, name: S) -> Self::Time {
+        let metric = self.target.define(MetricType::Time, name, 1.0);
+        SugarTime { metric, target: self.target.clone() }
+    }
+
+    fn new_gauge<S: AsRef<str>>(&self, name: S) -> Self::Value {
+        let metric = self.target.define(MetricType::Gauge, name, 1.0);
+        SugarValue { metric, target: self.target.clone() }
+    }
+
+    fn scope<F>(&self, operations: F) where F: Fn(&Self::Scope) {}
 }
 
 ////////////
@@ -227,11 +352,18 @@ struct DualWrite<C1: Channel, C2: Channel> {
 }
 
 impl <C1: Channel, C2: Channel> MetricWrite<DualMetric<<C1 as Channel>::Metric, <C2 as Channel>::Metric>> for DualWrite<C1, C2> {
-    fn write<S: AsRef<str>>(&self, metric: &DualMetric<<C1 as Channel>::Metric, <C2 as Channel>::Metric>, value: Value, tags: Option<&[S]>) {
+    fn write(&self, metric: &DualMetric<<C1 as Channel>::Metric, <C2 as Channel>::Metric>, value: Value) {
         println!("Channel A");
-        self.channel_a.write(|scope| scope.write(&metric.metric_1, value, tags));
+        self.channel_a.write(|scope| scope.write(&metric.metric_1, value));
         println!("Channel B");
-        self.channel_b.write(|scope| scope.write(&metric.metric_2, value, tags));
+        self.channel_b.write(|scope| scope.write(&metric.metric_2, value));
+    }
+
+    fn write_tag<S: AsRef<str>>(&self, metric: &DualMetric<<C1 as Channel>::Metric, <C2 as Channel>::Metric>, value: Value, tags: Option<&[S]>) {
+        println!("Channel A");
+        self.channel_a.write(|scope| scope.write_tag(&metric.metric_1, value, tags));
+        println!("Channel B");
+        self.channel_b.write(|scope| scope.write_tag(&metric.metric_2, value, tags));
     }
 }
 
@@ -256,9 +388,9 @@ impl <C1: Channel, C2: Channel> Channel for DualChannel<C1, C2> {
 
     type Write = DualWrite<C1, C2>;
 
-    fn write<F>(&self, metrics: F )
+    fn write<F>(&self, operations: F )
         where F: Fn(&Self::Write) {
-        metrics(&self.write)
+        operations(&self.write)
     }
 }
 
@@ -267,10 +399,23 @@ impl <C1: Channel, C2: Channel> Channel for DualChannel<C1, C2> {
 
 fn main() {
     let channel_a = ProxyChannel::new( LogChannel::new() );
+    let statsd_only_metric = channel_a.define(MetricType::Event, "statsd_event_a", 1.0);
+
     let channel_b = ProxyChannel::new( StatsdChannel::new("localhost:8125", "hello.").unwrap() );
     let channel_x = DualChannel::new( channel_a, channel_b );
+
     let metric = channel_x.define(MetricType::Count, "count_a", 1.0);
-    channel_x.write(|scope| scope.write(&metric, 1, Some(&["TAG"])));
+    channel_x.write(|scope| scope.write(&metric, 1));
+
+    channel_x.write(|scope| {
+        scope.write_tag(&metric, 1, Some(&["TAG"]));
+//        scope.write(&statsd_only_metric, 1, Some(&["TAG"])) <- this fails AT COMPILE TIME. FUCK YEAH!
+    });
+
+    let sugar_x = SugarChannel::new(channel_x);
+    let counter = sugar_x.new_count("sugar_count_a");
+    counter.value(1);
+
 }
 
 //thread_local!(static PROXY_SCOPE: RefCell<Metric> = metric());
