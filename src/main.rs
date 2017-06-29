@@ -111,12 +111,12 @@ struct LogWrite {}
 impl MetricWrite<LogMetric> for LogWrite {
     fn write(&self, metric: &LogMetric, value: Value) {
         // TODO format faster
-        println!("{} | Value {}", metric.prefix, value)
+        println!("LOG {} | Value {}", metric.prefix, value)
     }
 
     fn write_tag<S: AsRef<str>>(&self, metric: &LogMetric, value: Value, tags: Option<&[S]>) {
         // TODO format faster
-        println!("{} | Value {}", metric.prefix, value)
+        println!("LOG TAGS {} | Value {}", metric.prefix, value)
     }
 }
 
@@ -160,13 +160,13 @@ struct StatsdWrite {}
 impl MetricWrite<StatsdMetric> for StatsdWrite {
     fn write(&self, metric: &StatsdMetric, value: Value) {
         // TODO send to UDP
-        println!("Statsd {:?} {} {}", metric.m_type, metric.name, value)
+        println!("STATSD {}:{}|{:?}", metric.name, value, metric.m_type)
     }
 
     fn write_tag<S: AsRef<str>>(&self, metric: &StatsdMetric, value: Value, tags: Option<&[S]>) {
         // TODO send to UDP
         // TODO use tags
-        println!("Statsd {:?} {} {}", metric.m_type, metric.name, value)
+        println!("STATSD TAGS {}:{}|{:?}", metric.name, value, metric.m_type)
     }
 }
 
