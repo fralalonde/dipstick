@@ -251,6 +251,99 @@ impl <C: Channel> Channel for ProxyChannel<C> {
     }
 }
 
+////////////
+
+enum StatsType {
+    HitCount,
+    Sum,
+    MeanValue,
+    Max,
+    Min,
+    MeanRate
+}
+
+struct AggregateMetric {
+    hit_count: u64,
+    value_sum: u64,
+    value_max: u64,
+    value_min: u64,
+}
+
+impl AggregateMetric {
+    fn new() -> AggregateMetric {
+        AggregateMetric{ hit_count: 0, value_sum: 0, value_max: 0, value_min: 0}
+    }
+}
+
+impl DefinedMetric for AggregateMetric {
+
+}
+
+struct AggregateWrite<C: Channel> {
+    target: C,
+}
+
+impl <C: Channel> MetricWrite<AggregateMetric> for AggregateWrite<C> {
+    fn write(&self, metric: &AggregateMetric, value: Value) {
+        println!("Aggregate");
+        self.target.write(|scope| scope.write(&metric.target, value))
+    }
+
+    fn write_tag<S: AsRef<str>>(&self, metric: &AggregateMetric, value: Value, tags: Option<&[S]>) {
+        println!("Aggregate");
+        self.target.write(|scope| scope.write_tag(&metric.target, value, tags))
+    }
+}
+
+struct AggregateChannel<C: Channel> {
+    write: AggregateWrite<C>,
+    stats: Vec<AggregateMetric>
+}
+
+impl <C: Channel> AggregateChannel<C> {
+    fn new(target: C) -> AggregateChannel<C> {
+        AggregateChannel { write: AggregateWrite { target }, stats: Vec::new()}
+    }
+}
+
+impl <C: Channel> Channel for AggregateChannel<C> {
+    type Metric = AggregateMetric;
+
+    fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sample: RateType) -> AggregateMetric {
+        let pm = self.write.target.define(m_type, name, sample);
+        let mut exp = match m_type {
+            MetricType::Gauge => {vec!(
+                self.write.target.define(m_type, format!("{}.avg", name.as_ref()), sample),
+                self.write.target.define(m_type, format!("{}.max", name.as_ref()), sample)
+                                      )}
+            MetricType::Count => {vec!(
+                self.write.target.define(m_type, format!("{}.avg", name.as_ref()), sample),
+                self.write.target.define(m_type, format!("{}.sum", name.as_ref()), sample),
+                self.write.target.define(m_type, format!("{}.max", name.as_ref()), sample),
+                self.write.target.define(m_type, format!("{}.rate", name.as_ref()), sample)
+                                      )}
+            MetricType::Time => {vec!(
+                self.write.target.define(m_type, format!("{}.avg", name.as_ref()), sample),
+                self.write.target.define(m_type, format!("{}.sum", name.as_ref()), sample),
+                self.write.target.define(m_type, format!("{}.max", name.as_ref()), sample),
+                self.write.target.define(m_type, format!("{}.rate", name.as_ref()), sample)
+                                     )}
+            MetricType::Event => {vec!(
+                self.write.target.define(m_type, format!("{}.count", name.as_ref()), sample),
+                self.write.target.define(m_type, format!("{}.rate", name.as_ref()), sample)
+                                      )}
+        };
+        AggregateMetric::new()
+    }
+
+    type Write = AggregateWrite<C>;
+
+    fn write<F>(&self, operations: F )
+        where F: Fn(&Self::Write) {
+        operations(&self.write)
+    }
+}
+
 
 ////////////
 
