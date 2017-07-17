@@ -1,5 +1,17 @@
 #![cfg_attr(feature = "bench", feature(test))]
 
+#![warn(
+missing_copy_implementations,
+missing_debug_implementations,
+missing_docs,
+trivial_casts,
+trivial_numeric_casts,
+unused_extern_crates,
+unused_import_braces,
+unused_qualifications,
+variant_size_differences,
+)]
+
 #![feature(fn_traits)]
 
 #[cfg(feature="bench")]
@@ -17,6 +29,7 @@ extern crate time;
 use std::collections::HashMap;
 use std::net::UdpSocket;
 use std::rc::Rc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 //////////////////
 // DEFINITIONS
@@ -86,9 +99,10 @@ trait Sugar {
 
 trait DefinedMetric {}
 
+const NO_TAGS: Vec<String> = vec!();
+
 trait MetricWrite<M: DefinedMetric> {
-    fn write(&self, metric: &M, value: Value);
-    fn write_tag<S: AsRef<str>>(&self, metric: &M, value: Value, tags: Option<&[S]>);
+    fn write<S: AsRef<str>>(&self, metric: &M, value: Value, tags: Vec<S>);
 }
 
 trait Channel {
@@ -109,12 +123,7 @@ impl DefinedMetric for LogMetric {}
 struct LogWrite {}
 
 impl MetricWrite<LogMetric> for LogWrite {
-    fn write(&self, metric: &LogMetric, value: Value) {
-        // TODO format faster
-        println!("LOG {} | Value {}", metric.prefix, value)
-    }
-
-    fn write_tag<S: AsRef<str>>(&self, metric: &LogMetric, value: Value, tags: Option<&[S]>) {
+    fn write<S: AsRef<str>>(&self, metric: &LogMetric, value: Value, tags: Vec<S>) {
         // TODO format faster
         println!("LOG TAGS {} | Value {}", metric.prefix, value)
     }
@@ -158,12 +167,8 @@ impl DefinedMetric for StatsdMetric {}
 struct StatsdWrite {}
 
 impl MetricWrite<StatsdMetric> for StatsdWrite {
-    fn write(&self, metric: &StatsdMetric, value: Value) {
-        // TODO send to UDP
-        println!("STATSD {}:{}|{:?}", metric.name, value, metric.m_type)
-    }
 
-    fn write_tag<S: AsRef<str>>(&self, metric: &StatsdMetric, value: Value, tags: Option<&[S]>) {
+    fn write<S: AsRef<str>>(&self, metric: &StatsdMetric, value: Value, tags: Vec<S>) {
         // TODO send to UDP
         // TODO use tags
         println!("STATSD TAGS {}:{}|{:?}", metric.name, value, metric.m_type)
@@ -214,14 +219,10 @@ struct ProxyWrite<C: Channel> {
 }
 
 impl <C: Channel> MetricWrite<ProxyMetric<<C as Channel>::Metric>> for ProxyWrite<C> {
-    fn write(&self, metric: &ProxyMetric<<C as Channel>::Metric>, value: Value) {
-        println!("Proxy");
-        self.target.write(|scope| scope.write(&metric.target, value))
-    }
 
-    fn write_tag<S: AsRef<str>>(&self, metric: &ProxyMetric<<C as Channel>::Metric>, value: Value, tags: Option<&[S]>) {
+    fn write<S: AsRef<str>>(&self, metric: &ProxyMetric<<C as Channel>::Metric>, value: Value, tags: Vec<S>) {
         println!("Proxy");
-        self.target.write(|scope| scope.write_tag(&metric.target, value, tags))
+        self.target.write(|scope| scope.write(&metric.target, value, tags))
     }
 }
 
@@ -263,10 +264,10 @@ enum StatsType {
 }
 
 struct AggregateMetric {
-    hit_count: u64,
-    value_sum: u64,
-    value_max: u64,
-    value_min: u64,
+    hit_count: AtomicUsize,
+    value_sum: AtomicUsize,
+    value_max: AtomicUsize,
+    value_min: AtomicUsize,
 }
 
 impl AggregateMetric {
@@ -284,14 +285,12 @@ struct AggregateWrite<C: Channel> {
 }
 
 impl <C: Channel> MetricWrite<AggregateMetric> for AggregateWrite<C> {
-    fn write(&self, metric: &AggregateMetric, value: Value) {
+    fn write<S: AsRef<str>>(&self, metric: &AggregateMetric, value: Value, tags: Vec<S>) {
         println!("Aggregate");
-        self.target.write(|scope| scope.write(&metric.target, value))
-    }
+        metric.hit_count.fetch_add(1, Ordering::Relaxed);
+        metric.value_sum.fetch_add(value, Ordering::Relaxed);
 
-    fn write_tag<S: AsRef<str>>(&self, metric: &AggregateMetric, value: Value, tags: Option<&[S]>) {
-        println!("Aggregate");
-        self.target.write(|scope| scope.write_tag(&metric.target, value, tags))
+//        self.target.write(|scope| scope.write(metric, value, tags))
     }
 }
 
@@ -367,19 +366,19 @@ struct SugarScope {
 
 impl <C: Channel> EventMetric for SugarEvent<C>  {
     fn event(&self) {
-        self.target.write(|scope| scope.write(&self.metric, 1))
+        self.target.write(|scope| scope.write(&self.metric, 1, NO_TAGS))
     }
 }
 
 impl <C: Channel> ValueMetric for SugarValue<C> {
     fn value(&self, value: Value) {
-        self.target.write(|scope| scope.write(&self.metric, value))
+        self.target.write(|scope| scope.write(&self.metric, value, NO_TAGS))
     }
 }
 
 impl <C: Channel> ValueMetric for SugarTime<C> {
     fn value(&self, value: Value) {
-        self.target.write(|scope| scope.write(&self.metric, value))
+        self.target.write(|scope| scope.write(&self.metric, value, NO_TAGS))
     }
 }
 
@@ -445,18 +444,11 @@ struct DualWrite<C1: Channel, C2: Channel> {
 }
 
 impl <C1: Channel, C2: Channel> MetricWrite<DualMetric<<C1 as Channel>::Metric, <C2 as Channel>::Metric>> for DualWrite<C1, C2> {
-    fn write(&self, metric: &DualMetric<<C1 as Channel>::Metric, <C2 as Channel>::Metric>, value: Value) {
+    fn write<S: AsRef<str>>(&self, metric: &DualMetric<<C1 as Channel>::Metric, <C2 as Channel>::Metric>, value: Value, tags: Vec<S>) {
         println!("Channel A");
-        self.channel_a.write(|scope| scope.write(&metric.metric_1, value));
+        self.channel_a.write(|scope| scope.write(&metric.metric_1, value, tags));
         println!("Channel B");
-        self.channel_b.write(|scope| scope.write(&metric.metric_2, value));
-    }
-
-    fn write_tag<S: AsRef<str>>(&self, metric: &DualMetric<<C1 as Channel>::Metric, <C2 as Channel>::Metric>, value: Value, tags: Option<&[S]>) {
-        println!("Channel A");
-        self.channel_a.write(|scope| scope.write_tag(&metric.metric_1, value, tags));
-        println!("Channel B");
-        self.channel_b.write(|scope| scope.write_tag(&metric.metric_2, value, tags));
+        self.channel_b.write(|scope| scope.write(&metric.metric_2, value, tags));
     }
 }
 
@@ -498,10 +490,10 @@ fn main() {
     let channel_x = DualChannel::new( channel_a, channel_b );
 
     let metric = channel_x.define(MetricType::Count, "count_a", 1.0);
-    channel_x.write(|scope| scope.write(&metric, 1));
+    channel_x.write(|scope| scope.write(&metric, 1, NO_TAGS));
 
     channel_x.write(|scope| {
-        scope.write_tag(&metric, 1, Some(&["TAG"]));
+        scope.write(&metric, 1, NO_TAGS);
 //        scope.write(&statsd_only_metric, 1, Some(&["TAG"])) <- this fails AT COMPILE TIME. FUCK YEAH!
     });
 
