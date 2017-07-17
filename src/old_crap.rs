@@ -127,7 +127,7 @@ trait Metrics {
     fn new_tag_timer<S: AsRef<str>>(&self, name: S, sampling: RateType) -> Value { |start_time, tags| self.write(MetricType.TIME, name, 1.0, start_time.elapsed_ms(), Some(tags)) }
     fn new_tag_gauge<S: AsRef<str>>(&self, name: S, sampling: RateType) -> Value { |value, tags| self.write(MetricType.GAUGE, name, 1.0, value, Some(tags)) }
 
-    fn write<S: AsRef<str>>(&self, m_type: MetricType, name: S, sampling: RateType, value: ValueType, tags: Option<&[S]>);
+    fn write(&self, m_type: MetricType, name: S, sampling: RateType, value: ValueType, tags: Option<&[S]>);
 }
 
 struct SyncMetrics {
@@ -149,11 +149,11 @@ fn new_value<S: AsRef<str>>(&self, name: S, m_type: MetricType, sampling: RateTy
 fn new_tag_value<S: AsRef<str>>(&self, m_type: MetricType, name: S) -> TagValueOut;
 fn new_scope<S: AsRef<str>>(&self, name: S, sampling: RateType) -> Scope;
 
-fn adhoc_write<S: AsRef<str>>(&self, m_type: MetricType, name: S, sampling: RateType, value: ValueType, tags: Option<&[S]>) {
+fn adhoc_write(&self, m_type: MetricType, name: S, sampling: RateType, value: ValueType, tags: Option<&[S]>) {
 self.new_value(m_type, name, sampling).call_mut(value)
 }
 
-fn adhoc_tag_write<S: AsRef<str>>(&self, m_type: MetricType, name: S, sampling: RateType, value: ValueType, tags: Option<&[S]>) {
+fn adhoc_tag_write(&self, m_type: MetricType, name: S, sampling: RateType, value: ValueType, tags: Option<&[S]>) {
 self.new_tag_value(m_type, name, sampling).call_mut(value, tags)
 }
 
