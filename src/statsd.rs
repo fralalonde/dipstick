@@ -1,4 +1,4 @@
-use core::{MetricType, RateType, Value, MetricWrite, DefinedMetric, Channel};
+use core::{MetricType, RateType, Value, MetricWrite, DefinedMetric, MetricChannel};
 use std::net::UdpSocket;
 use std::io::Result;
 
@@ -39,7 +39,7 @@ impl StatsdChannel {
     }
 }
 
-impl Channel for StatsdChannel {
+impl MetricChannel for StatsdChannel {
     type Metric = StatsdMetric;
 
     fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sample: RateType) -> StatsdMetric {
