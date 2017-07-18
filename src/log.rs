@@ -1,4 +1,4 @@
-use core::{MetricType, RateType, Value, MetricWrite, DefinedMetric, Channel};
+use core::{MetricType, RateType, Value, MetricWrite, DefinedMetric, MetricChannel};
 
 //////////// Log Channel
 
@@ -27,7 +27,7 @@ impl LogChannel {
     }
 }
 
-impl Channel for LogChannel {
+impl MetricChannel for LogChannel {
     type Metric = LogMetric;
 
     fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sample: RateType) -> LogMetric {

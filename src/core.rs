@@ -5,11 +5,12 @@ use time;
 
 pub type Value = u64;
 
+#[derive(Debug)]
 pub struct TimeType (u64);
 
 impl TimeType {
-    fn now() -> TimeType { TimeType(time::precise_time_ns()) }
-    fn elapsed_ms(self) -> Value { (TimeType::now().0 - self.0) / 1_000_000 }
+    pub fn now() -> TimeType { TimeType(time::precise_time_ns()) }
+    pub fn elapsed_ms(self) -> Value { (TimeType::now().0 - self.0) / 1_000_000 }
 }
 
 pub type RateType = f32;
@@ -36,7 +37,7 @@ pub trait ValueMetric {
 }
 
 pub trait TimerMetric: ValueMetric {
-    fn start() -> TimeType { TimeType::now() }
+    fn start(&self) -> TimeType { TimeType::now() }
 
     fn stop(&self, start_time: TimeType) -> u64 {
         let elapsed_ms = start_time.elapsed_ms();
@@ -63,6 +64,17 @@ pub trait MetricDispatch {
     fn scope<F>(&self, operations: F) where F: Fn(&Self::Scope);
 }
 
+/// A convenience macro to wrap a block or an expression with a start / stop timer.
+/// Elapsed time is sent to the supplied statsd client after the computation has been performed.
+/// Expression result (if any) is transparently returned.
+#[macro_export]
+macro_rules! time {
+    ($timer: expr, $body: block) => {{
+        let start_time = $timer.start();
+        $body
+        $timer.stop(start_time);
+    }};
+}
 
 // CHANNEL
 
@@ -72,7 +84,7 @@ pub trait MetricWrite<M: DefinedMetric> {
     fn write(&self, metric: &M, value: Value);
 }
 
-pub trait Channel {
+pub trait MetricChannel {
     type Metric: DefinedMetric;
     type Write: MetricWrite<Self::Metric>;
     fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sample: RateType) -> Self::Metric;

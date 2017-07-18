@@ -22,7 +22,7 @@ pub mod core;
 pub mod dual;
 pub mod dispatch;
 pub mod sampling;
-//pub mod aggregate;
+pub mod aggregate_sink;
 pub mod statsd;
 pub mod log;
 pub mod pcg32;

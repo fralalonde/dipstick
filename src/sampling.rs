@@ -1,4 +1,4 @@
-use core::{MetricType, RateType, Value, MetricWrite, DefinedMetric, Channel};
+use core::{MetricType, RateType, Value, MetricWrite, DefinedMetric, MetricChannel};
 
 ////////////
 
@@ -8,29 +8,29 @@ pub struct SamplingMetric<M: DefinedMetric> {
 
 impl <M: DefinedMetric> DefinedMetric for SamplingMetric<M> {}
 
-pub struct SamplingWrite<C: Channel> {
+pub struct SamplingWrite<C: MetricChannel> {
     target: C,
 }
 
-impl <C: Channel> MetricWrite<SamplingMetric<<C as Channel>::Metric>> for SamplingWrite<C> {
+impl <C: MetricChannel> MetricWrite<SamplingMetric<<C as MetricChannel>::Metric>> for SamplingWrite<C> {
 
-    fn write(&self, metric: &SamplingMetric<<C as Channel>::Metric>, value: Value) {
-        println!("Proxy");
+    fn write(&self, metric: &SamplingMetric<<C as MetricChannel>::Metric>, value: Value) {
+        println!("Sampling");
         self.target.write(|scope| scope.write(&metric.target, value))
     }
 }
 
-pub struct SamplingChannel<C: Channel> {
+pub struct SamplingChannel<C: MetricChannel> {
     write: SamplingWrite<C>
 }
 
-impl <C: Channel> SamplingChannel<C> {
+impl <C: MetricChannel> SamplingChannel<C> {
     pub fn new(target: C) -> SamplingChannel<C> {
         SamplingChannel { write: SamplingWrite { target }}
     }
 }
 
-impl <C: Channel> Channel for SamplingChannel<C> {
+impl <C: MetricChannel> MetricChannel for SamplingChannel<C> {
     type Metric = SamplingMetric<C::Metric>;
 
     fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sample: RateType) -> SamplingMetric<C::Metric> {
