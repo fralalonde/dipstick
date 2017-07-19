@@ -1,7 +1,6 @@
 use core::{MetricType, RateType, Value, MetricWrite, DefinedMetric, MetricChannel, TimeType};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::rc::Rc;
-use std::cell::RefCell;
+use std::sync::{Arc, RwLock};
 
 pub enum Score {
     Event { start_time: TimeType, hit_count: AtomicUsize },
@@ -40,20 +39,20 @@ impl AggregateMetric {
                     }
                 }
                 value_sum.fetch_add(value, Ordering::Acquire);
-                // TODO report concurrent updates / resets
+                // TODO report any concurrent updates / resets for measurement of contention
                 hit_count.fetch_add(1, Ordering::Acquire);
             }
         }
     }
 
-    pub fn reset(&mut self) {
-        match &mut self.score {
-            &mut Score::Event {ref mut start_time, ref hit_count} => {
-                *start_time = TimeType::now();
+    pub fn reset(&self) {
+        match &self.score {
+            &Score::Event {ref start_time, ref hit_count} => {
+//                *start_time = TimeType::now();
                 hit_count.store(0, Ordering::Release)
             },
-            &mut Score::Value {ref mut start_time, ref hit_count, ref value_sum,ref max, ref min} => {
-                *start_time = TimeType::now();
+            &Score::Value {ref start_time, ref hit_count, ref value_sum,ref max, ref min} => {
+//                *start_time = TimeType::now();
                 hit_count.store(0, Ordering::Release);
                 value_sum.store(0, Ordering::Release);
                 max.store(0, Ordering::Release);
@@ -63,42 +62,40 @@ impl AggregateMetric {
     }
 }
 
-impl DefinedMetric for Rc<AggregateMetric> {
+impl DefinedMetric for Arc<AggregateMetric> {
 }
 
 pub struct AggregateWrite {
 }
 
-impl MetricWrite<Rc<AggregateMetric>> for AggregateWrite {
-    fn write(&self, metric: &Rc<AggregateMetric>, value: Value) {
-        println!("Aggregate Metric");
+impl MetricWrite<Arc<AggregateMetric>> for AggregateWrite {
+    fn write(&self, metric: &Arc<AggregateMetric>, value: Value) {
         metric.write(value as usize);
     }
 }
 
 pub struct ScoreIterator {
-    metrics: Rc<RefCell<Vec<Rc<AggregateMetric>>>>,
+    metrics: Arc<RwLock<Vec<Arc<AggregateMetric>>>>,
 }
 
 impl ScoreIterator {
-    pub fn for_each<F>(&self, ops: F) where F: Fn(&AggregateMetric) {
-        for m in self.metrics.borrow().iter() {
-            ops(m)
-        }
+    pub fn for_each<F>(&self, operations: F) where F: Fn(&AggregateMetric) {
+        for metric in self.metrics.read().unwrap().iter() {
+            operations(metric);
+            metric.reset()
+        };
     }
-
-//    fn write<F>(&self, operations: F) where F: Fn(&Self::Write);
 }
 
 pub struct AggregateChannel {
     write: AggregateWrite,
-    metrics: Rc<RefCell<Vec<Rc<AggregateMetric>>>>,
+    metrics: Arc<RwLock<Vec<Arc<AggregateMetric>>>>,
 }
 
 impl AggregateChannel {
 
     pub fn new() -> AggregateChannel {
-        AggregateChannel { write: AggregateWrite {}, metrics: Rc::new(RefCell::new(Vec::new())) }
+        AggregateChannel { write: AggregateWrite {}, metrics: Arc::new(RwLock::new(Vec::new())) }
     }
 
     pub fn scores(&self) -> ScoreIterator {
@@ -108,12 +105,12 @@ impl AggregateChannel {
 }
 
 impl MetricChannel for AggregateChannel {
-    type Metric = Rc<AggregateMetric>;
+    type Metric = Arc<AggregateMetric>;
     type Write = AggregateWrite;
 
-    fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sample: RateType) -> Rc<AggregateMetric> {
+    fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sampling: RateType) -> Arc<AggregateMetric> {
         let name = name.as_ref().to_string();
-        let metric = Rc::new(AggregateMetric {
+        let metric = Arc::new(AggregateMetric {
             m_type, name, score: match m_type {
                 MetricType::Event => Score::Event {
                         start_time: TimeType::now(),
@@ -127,7 +124,7 @@ impl MetricChannel for AggregateChannel {
             }
         });
 
-        self.metrics.borrow_mut().push(metric.clone());
+        self.metrics.write().unwrap().push(metric.clone());
         metric
     }
 
@@ -136,3 +133,20 @@ impl MetricChannel for AggregateChannel {
     }
 }
 
+/// Run benchmarks with `cargo +nightly bench --features bench`
+#[cfg(feature="bench")]
+mod bench {
+
+    use super::AggregateChannel;
+    use core::{MetricType, MetricChannel, MetricWrite};
+    use test::Bencher;
+
+    #[bench]
+    fn time_bench_ten_percent(b: &mut Bencher) {
+        let aggregate = &AggregateChannel::new();
+        let metric = aggregate.define(MetricType::Event, "count_a", 1.0);
+        b.iter(|| aggregate.write(|scope| scope.write(&metric, 1)));
+    }
+
+
+}
