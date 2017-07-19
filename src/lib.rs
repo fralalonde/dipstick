@@ -16,7 +16,13 @@ variant_size_differences,
 
 #[cfg(feature="bench")]
 extern crate test;
+
 extern crate time;
+
+//extern crate cached;
+
+#[macro_use]
+extern crate log;
 
 pub mod core;
 pub mod dual;
@@ -24,5 +30,6 @@ pub mod dispatch;
 pub mod sampling;
 pub mod aggregate_sink;
 pub mod statsd;
-pub mod log;
+pub mod mlog;
 pub mod pcg32;
+//pub mod cache;
