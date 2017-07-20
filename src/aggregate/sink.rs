@@ -1,26 +1,34 @@
-use core::{MetricType, RateType, Value, MetricWrite, DefinedMetric, MetricChannel, TimeType};
+use core::{MetricType, RateType, Value, MetricWrite, DefinedMetric, MetricChannel};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
+use std::usize;
 
-pub enum Score {
-    Event { start_time: TimeType, hit_count: AtomicUsize },
-    Value { start_time: TimeType, hit_count: AtomicUsize, value_sum: AtomicUsize, max: AtomicUsize, min: AtomicUsize },
+enum AtomicScore {
+    Event { hit: AtomicUsize },
+    Value { hit: AtomicUsize, sum: AtomicUsize, max: AtomicUsize, min: AtomicUsize },
+}
+
+/// consumed aggregated values
+pub enum AggregateScore {
+    Event { hit: u64 },
+    Value { hit: u64, sum: u64, max: u64, min: u64 },
 }
 
 pub struct AggregateMetric {
     pub m_type: MetricType,
     pub name: String,
-    pub score: Score,
+    score: AtomicScore,
 }
 
 impl AggregateMetric {
 
+    /// add value to score
     pub fn write(&self, value: usize) -> () {
         match &self.score {
-            &Score::Event {ref hit_count, ..} => {
-                hit_count.fetch_add(1, Ordering::Acquire);
+            &AtomicScore::Event {ref hit, ..} => {
+                hit.fetch_add(1, Ordering::SeqCst);
             },
-            &Score::Value {ref hit_count, ref value_sum, ref max, ref min, ..} => {
+            &AtomicScore::Value {ref hit, ref sum, ref max, ref min, ..} => {
                 let mut try_max = max.load(Ordering::Acquire);
                 while value > try_max {
                     if max.compare_and_swap(try_max, value, Ordering::Release) == try_max {
@@ -38,25 +46,26 @@ impl AggregateMetric {
                         try_min = min.load(Ordering::Acquire);
                     }
                 }
-                value_sum.fetch_add(value, Ordering::Acquire);
+                sum.fetch_add(value, Ordering::Acquire);
                 // TODO report any concurrent updates / resets for measurement of contention
-                hit_count.fetch_add(1, Ordering::Acquire);
+                hit.fetch_add(1, Ordering::Acquire);
             }
         }
     }
 
-    pub fn reset(&self) {
-        match &self.score {
-            &Score::Event {ref start_time, ref hit_count} => {
-//                *start_time = TimeType::now();
-                hit_count.store(0, Ordering::Release)
-            },
-            &Score::Value {ref start_time, ref hit_count, ref value_sum,ref max, ref min} => {
-//                *start_time = TimeType::now();
-                hit_count.store(0, Ordering::Release);
-                value_sum.store(0, Ordering::Release);
-                max.store(0, Ordering::Release);
-                min.store(0, Ordering::Release);
+    /// reset aggregate values, save previous values to
+    pub fn read_and_reset(&self) -> AggregateScore {
+        match self.score {
+            AtomicScore::Event {ref hit} =>
+                AggregateScore::Event {
+                    hit: hit.swap(0, Ordering::Release) as u64 },
+            AtomicScore::Value {ref hit, ref sum,ref max, ref min} => {
+                AggregateScore::Value {
+                    hit: hit.swap(0, Ordering::Release) as u64,
+                    sum: sum.swap(0, Ordering::Release) as u64,
+                    max: max.swap(usize::MIN, Ordering::Release) as u64,
+                    min: min.swap(usize::MAX, Ordering::Release) as u64,
+                }
             }
         }
     }
@@ -82,7 +91,6 @@ impl ScoreIterator {
     pub fn for_each<F>(&self, operations: F) where F: Fn(&AggregateMetric) {
         for metric in self.metrics.read().unwrap().iter() {
             operations(metric);
-            metric.reset()
         };
     }
 }
@@ -112,15 +120,13 @@ impl MetricChannel for AggregateChannel {
         let name = name.as_ref().to_string();
         let metric = Arc::new(AggregateMetric {
             m_type, name, score: match m_type {
-                MetricType::Event => Score::Event {
-                        start_time: TimeType::now(),
-                        hit_count: AtomicUsize::new(0) },
-                _ => Score::Value {
-                        start_time: TimeType::now(),
-                        hit_count: AtomicUsize::new(0),
-                        value_sum: AtomicUsize::new(0),
-                        max: AtomicUsize::new(0),
-                        min: AtomicUsize::new(0) },
+                MetricType::Event => AtomicScore::Event {
+                        hit: AtomicUsize::new(0) },
+                _ => AtomicScore::Value {
+                        hit: AtomicUsize::new(0),
+                        sum: AtomicUsize::new(0),
+                        max: AtomicUsize::new(usize::MIN),
+                        min: AtomicUsize::new(usize::MAX) },
             }
         });
 
@@ -142,11 +148,33 @@ mod bench {
     use test::Bencher;
 
     #[bench]
-    fn time_bench_ten_percent(b: &mut Bencher) {
+    fn time_bench_write_event(b: &mut Bencher) {
         let aggregate = &AggregateChannel::new();
-        let metric = aggregate.define(MetricType::Event, "count_a", 1.0);
+        let metric = aggregate.define(MetricType::Event, "event_a", 1.0);
         b.iter(|| aggregate.write(|scope| scope.write(&metric, 1)));
     }
 
+
+    #[bench]
+    fn time_bench_write_count(b: &mut Bencher) {
+        let aggregate = &AggregateChannel::new();
+        let metric = aggregate.define(MetricType::Count, "count_a", 1.0);
+        b.iter(|| aggregate.write(|scope| scope.write(&metric, 1)));
+    }
+
+    #[bench]
+    fn time_bench_read_event(b: &mut Bencher) {
+        let aggregate = &AggregateChannel::new();
+        let metric = aggregate.define(MetricType::Event, "event_a", 1.0);
+        b.iter(|| metric.read_and_reset());
+    }
+
+
+    #[bench]
+    fn time_bench_read_count(b: &mut Bencher) {
+        let aggregate = &AggregateChannel::new();
+        let metric = aggregate.define(MetricType::Count, "count_a", 1.0);
+        b.iter(|| metric.read_and_reset());
+    }
 
 }

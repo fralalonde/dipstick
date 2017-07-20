@@ -1,6 +1,7 @@
 use core::{MetricType, Value, MetricWrite, MetricChannel, MetricDispatch, EventMetric, ValueMetric, TimerMetric, MetricScope};
 use std::rc::Rc;
-
+use std::cell::RefCell;
+use thread_local::ThreadLocal;
 
 ////////////
 
@@ -52,10 +53,16 @@ pub struct DirectDispatch<C: MetricChannel> {
     target: Rc<C>
 }
 
+
+
 impl <C: MetricChannel> DirectDispatch<C> {
     pub fn new(target: C) -> DirectDispatch<C> {
         DirectDispatch { target: Rc::new(target) }
     }
+}
+
+thread_local! {
+    static DISPATCH_SCOPE: RefCell<DirectScope> = RefCell::new(DirectScope {});
 }
 
 impl <C: MetricChannel> MetricDispatch for DirectDispatch<C> {
