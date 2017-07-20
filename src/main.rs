@@ -9,7 +9,7 @@ extern crate time;
 extern crate log;
 
 extern crate scheduled_executor;
-extern crate tokio_core;
+extern crate thread_local;
 
 //#[macro_use]
 //extern crate cached;
@@ -20,7 +20,7 @@ pub mod core;
 pub mod dual;
 pub mod dispatch;
 pub mod sampling;
-pub mod aggregate_sink;
+pub mod aggregate;
 pub mod statsd;
 pub mod mlog;
 //pub mod cache;
@@ -31,85 +31,82 @@ use dispatch::DirectDispatch;
 use sampling::SamplingChannel;
 use statsd::StatsdChannel;
 use mlog::LogChannel;
-use aggregate_sink::{AggregateChannel, Score};
-use core::{MetricType, MetricChannel, MetricWrite, MetricDispatch, ValueMetric, TimerMetric};
+use aggregate::sink::{AggregateChannel};
+use aggregate::source::{AggregateSource};
+use core::{MetricType, MetricChannel, MetricWrite, MetricDispatch, ValueMetric, TimerMetric, MetricPublish};
 use std::sync::atomic::{Ordering};
 use std::thread::sleep;
 use scheduled_executor::{CoreExecutor};
 use std::time::Duration;
 
 fn main() {
+    sample_scheduled_statsd_aggregation()
+}
+
+pub fn sample_scheduled_statsd_aggregation() {
+
+    // app metrics aggregate here
     let aggregate = AggregateChannel::new();
+
+    // aggregated metrics are collected here
     let scores = aggregate.scores();
-    let aggregated_statsd = StatsdChannel::new("localhost:8125", "hello.").unwrap();
 
-    let executor = CoreExecutor::with_name("metric scheduler").unwrap();
+    // define some application metrics
+    let app_metrics = DirectDispatch::new(aggregate);
+    let counter = app_metrics.new_count("counter_a");
+    let timer = app_metrics.new_timer("timer_a");
+
+    // send aggregated metrics to statsd
+    let statsd = StatsdChannel::new("localhost:8125", "hello.").unwrap();
+    let aggregate_metrics = AggregateSource::new(statsd, scores);
+
+    // collect every three seconds
+    let executor = CoreExecutor::new().unwrap();
     executor.schedule_fixed_rate(
-        Duration::from_secs(2),  // Wait 2 seconds before scheduling the first task
-        Duration::from_secs(5),  // and schedule every following task at 5 seconds intervals
-        move |_| {
-            aggregated_statsd.write(|scope| {
-                scores.for_each(|metric| {
-                    println!("m_type {:?}, name {}", metric.m_type, metric.name);
-                    match &metric.score {
-                        &Score::Event {ref hit_count, ..} => {
-                            let name = format!("{}.count", &metric.name);
-                            let temp_metric = aggregated_statsd.define(MetricType::Count, name, 1.0);
-                            scope.write(&temp_metric, hit_count.load(Ordering::Acquire) as u64);
-                        },
-                        &Score::Value {ref hit_count, ref value_sum, ref max, ref min, ..} => {
-                            let name = format!("{}.count", &metric.name);
-                            let temp_metric = aggregated_statsd.define(MetricType::Count, name, 1.0);
-                            scope.write(&temp_metric, hit_count.load(Ordering::Acquire) as u64);
-
-                            let name = format!("{}.sum", &metric.name);
-                            let temp_metric = aggregated_statsd.define(MetricType::Count, name, 1.0);
-                            scope.write(&temp_metric, value_sum.load(Ordering::Acquire) as u64);
-
-                            let name = format!("{}.max", &metric.name);
-                            let temp_metric = aggregated_statsd.define(MetricType::Gauge, name, 1.0);
-                            scope.write(&temp_metric, max.load(Ordering::Acquire) as u64);
-
-                            let name = format!("{}.min", &metric.name);
-                            let temp_metric = aggregated_statsd.define(MetricType::Gauge, name, 1.0);
-                            scope.write(&temp_metric, min.load(Ordering::Acquire) as u64);
-                        }
-                    }
-                });
-            });
-        }
+        Duration::from_secs(3),
+        Duration::from_secs(3),
+        move |_| aggregate_metrics.publish()
     );
 
-    // setup dual metric channels
-    let direct_statsd = StatsdChannel::new("localhost:8125", "goodbye.").unwrap();
-    let direct_sampling_statsd = SamplingChannel::new(direct_statsd);
-    let logging = LogChannel::new();
-    let direct_logging_and_statsd = DualChannel::new( logging, direct_sampling_statsd );
-
-    // define and send metrics using raw channel API
-    let metric = direct_logging_and_statsd.define(MetricType::Count, "count_a", 1.0);
-    direct_logging_and_statsd.write(|scope| scope.write(&metric, 1));
-
-    // define metrics using sweet dispatch API over aggregator channel
-    let direct_aggregate = DirectDispatch::new(aggregate);
-
-    let counter = direct_aggregate.new_count("sugar_count_a");
-    let timer = direct_aggregate.new_timer("sugar_time_a");
-
-    // "application" body
+    // generate some metric values
     loop {
-        counter.value(1);
-        counter.value(2);
-
-        timer.value(1);
-        timer.value(2);
-
-        let start_time = timer.start();
-        let ten_millis = std::time::Duration::from_millis(10);
-        sleep(ten_millis);
-        timer.stop(start_time);
-
-        time!(timer, { sleep(ten_millis); });
+        counter.value(11);
+        counter.value(22);
+        time!(timer, { sleep(Duration::from_millis(10)); });
     }
 
+}
+
+pub fn logging_and_statsd() {
+
+    let statsd = StatsdChannel::new("localhost:8125", "goodbye.").unwrap();
+    let logging = LogChannel::new("metrics");
+    let logging_and_statsd = DualChannel::new( logging, statsd );
+    DirectDispatch::new(logging_and_statsd);
+
+}
+
+pub fn sampling_statsd() {
+
+    let statsd = StatsdChannel::new("localhost:8125", "goodbye.").unwrap();
+    let sampling_statsd = SamplingChannel::new(statsd, 0.1);
+    DirectDispatch::new(sampling_statsd);
+
+}
+
+
+pub fn raw_write() {
+    // setup dual metric channels
+    let metrics_log = LogChannel::new("metrics");
+
+    // define and send metrics using raw channel API
+    let counter = metrics_log.define(MetricType::Count, "count_a", 1.0);
+    metrics_log.write(|scope| scope.write(&counter, 1));
+}
+
+pub fn counter_to_log() {
+    let metrics_log = LogChannel::new("metrics");
+    let metrics = DirectDispatch::new(metrics_log);
+    let counter = metrics.new_count("count_a");
+    counter.value(1);
 }

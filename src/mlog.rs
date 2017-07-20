@@ -13,17 +13,19 @@ pub struct LogWrite {}
 impl MetricWrite<LogMetric> for LogWrite {
     fn write(&self, metric: &LogMetric, value: Value) {
         // TODO format faster
-        println!("LOG TAGS {} | Value {}", metric.prefix, value)
+        info!("{}:{}", metric.prefix, value)
     }
 }
 
 pub struct LogChannel {
+    prefix: String,
     write: LogWrite
 }
 
 impl LogChannel {
-    pub fn new() -> LogChannel {
-        LogChannel { write: LogWrite {}}
+    pub fn new<S: AsRef<str>>(prefix: S) -> LogChannel {
+        let prefix = prefix.as_ref().to_string();
+        LogChannel { prefix, write: LogWrite {}}
     }
 }
 
@@ -31,7 +33,7 @@ impl MetricChannel for LogChannel {
     type Metric = LogMetric;
 
     fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sample: RateType) -> LogMetric {
-        LogMetric { prefix: format!("Type {:?} | Name {} | Sample {}", m_type, name.as_ref(), sample)}
+        LogMetric { prefix: format!("{:?}:{}{}", m_type, self.prefix, name.as_ref())}
     }
 
     type Write = LogWrite;

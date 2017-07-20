@@ -13,7 +13,7 @@ impl TimeType {
     pub fn elapsed_ms(self) -> Value { (TimeType::now().0 - self.0) / 1_000_000 }
 }
 
-pub type RateType = f32;
+pub type RateType = f64;
 
 #[derive(Debug, Copy, Clone)]
 pub enum MetricType {
@@ -62,6 +62,10 @@ pub trait MetricDispatch {
     fn new_gauge<S: AsRef<str>>(&self, name: S) -> Self::Value;
 
     fn scope<F>(&self, operations: F) where F: Fn(&Self::Scope);
+}
+
+pub trait MetricPublish {
+    fn publish(&self);
 }
 
 /// A convenience macro to wrap a block or an expression with a start / stop timer.
