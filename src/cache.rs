@@ -1,26 +1,6 @@
 use core::{MetricType, RateType, Value, MetricWrite, DefinedMetric, MetricChannel};
 use cached::SizedCache;
 
-////////////
-
-//pub struct InstrumentCacheMetric<M: DefinedMetric> {
-//    target: M
-//}
-//
-//impl <M: DefinedMetric> DefinedMetric for InstrumentCacheMetric<M> {}
-//
-//pub struct InstrumentCacheWrite<C: MetricChannel> {
-//    target: C,
-//}
-//
-//impl <C: MetricChannel> MetricWrite<InstrumentCacheMetric<<C as MetricChannel>::Metric>> for InstrumentCacheWrite<C> {
-//
-//    fn write(&self, metric: &InstrumentCacheMetric<<C as MetricChannel>::Metric>, value: Value) {
-//        debug!("InstrumentCache");
-//        self.target.write(|scope| scope.write(&metric.target, value))
-//    }
-//}
-
 pub struct InstrumentCacheChannel<C: MetricChannel> {
     target: C,
     cache: SizedCache<String, C::Metric>,

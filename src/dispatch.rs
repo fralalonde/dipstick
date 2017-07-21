@@ -1,47 +1,47 @@
-use core::{MetricType, Value, MetricWrite, MetricChannel, MetricDispatch, EventMetric, ValueMetric, TimerMetric, MetricScope};
+use core::{MetricType, Value, MetricWriter, MetricSink, MetricDispatch, EventMetric, ValueMetric, TimerMetric, MetricScope};
 use std::rc::Rc;
 use std::cell::RefCell;
 use thread_local::ThreadLocal;
 
 ////////////
 
-pub struct DirectEvent<C: MetricChannel> {
-    metric: <C as MetricChannel>::Metric,
+pub struct DirectEvent<C: MetricSink> {
+    metric: <C as MetricSink>::Metric,
     target: Rc<C>,
 }
 
-pub struct DirectValue<C: MetricChannel> {
-    metric: <C as MetricChannel>::Metric,
+pub struct DirectValue<C: MetricSink> {
+    metric: <C as MetricSink>::Metric,
     target: Rc<C>,
 }
 
-pub struct DirectTimer<C: MetricChannel> {
-    metric: <C as MetricChannel>::Metric,
+pub struct DirectTimer<C: MetricSink> {
+    metric: <C as MetricSink>::Metric,
     target: Rc<C>,
 }
 
 pub struct DirectScope {
 }
 
-impl <C: MetricChannel> EventMetric for DirectEvent<C>  {
+impl <C: MetricSink> EventMetric for DirectEvent<C>  {
     fn event(&self) {
         self.target.write(|scope| scope.write(&self.metric, 1))
     }
 }
 
-impl <C: MetricChannel> ValueMetric for DirectValue<C> {
+impl <C: MetricSink> ValueMetric for DirectValue<C> {
     fn value(&self, value: Value) {
         self.target.write(|scope| scope.write(&self.metric, value))
     }
 }
 
-impl <C: MetricChannel> ValueMetric for DirectTimer<C> {
+impl <C: MetricSink> ValueMetric for DirectTimer<C> {
     fn value(&self, value: Value) {
         self.target.write(|scope| scope.write(&self.metric, value))
     }
 }
 
-impl <C: MetricChannel> TimerMetric for DirectTimer<C> {}
+impl <C: MetricSink> TimerMetric for DirectTimer<C> {}
 
 impl MetricScope for DirectScope {
     fn set_property<S: AsRef<str>>(&self, key: S, value: S) -> &Self {
@@ -49,13 +49,11 @@ impl MetricScope for DirectScope {
     }
 }
 
-pub struct DirectDispatch<C: MetricChannel> {
+pub struct DirectDispatch<C: MetricSink> {
     target: Rc<C>
 }
 
-
-
-impl <C: MetricChannel> DirectDispatch<C> {
+impl <C: MetricSink> DirectDispatch<C> {
     pub fn new(target: C) -> DirectDispatch<C> {
         DirectDispatch { target: Rc::new(target) }
     }
@@ -65,7 +63,7 @@ thread_local! {
     static DISPATCH_SCOPE: RefCell<DirectScope> = RefCell::new(DirectScope {});
 }
 
-impl <C: MetricChannel> MetricDispatch for DirectDispatch<C> {
+impl <C: MetricSink> MetricDispatch for DirectDispatch<C> {
     type Event = DirectEvent<C>;
     type Value = DirectValue<C>;
     type Timer = DirectTimer<C>;

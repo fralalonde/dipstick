@@ -64,7 +64,7 @@ pub trait MetricDispatch {
     fn scope<F>(&self, operations: F) where F: Fn(&Self::Scope);
 }
 
-pub trait MetricPublish {
+pub trait MetricSource {
     fn publish(&self);
 }
 
@@ -82,15 +82,15 @@ macro_rules! time {
 
 // CHANNEL
 
-pub trait DefinedMetric {}
+pub trait SinkMetric {}
 
-pub trait MetricWrite<M: DefinedMetric> {
+pub trait MetricWriter<M: SinkMetric> {
     fn write(&self, metric: &M, value: Value);
 }
 
-pub trait MetricChannel {
-    type Metric: DefinedMetric;
-    type Write: MetricWrite<Self::Metric>;
+pub trait MetricSink {
+    type Metric: SinkMetric;
+    type Write: MetricWriter<Self::Metric>;
     fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sample: RateType) -> Self::Metric;
     fn write<F>(&self, operations: F) where F: Fn(&Self::Write);
 }
