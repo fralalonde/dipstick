@@ -1,4 +1,4 @@
-use core::{MetricType, RateType, Value, MetricWriter, SinkMetric, MetricSink};
+use core::{MetricType, RateType, Value, SinkWriter, SinkMetric, MetricSink};
 use pcg32;
 
 pub struct RandomSamplingMetric<M: SinkMetric> {
@@ -12,7 +12,7 @@ pub struct RandomSamplingWriter<C: MetricSink> {
     target: C,
 }
 
-impl <C: MetricSink> MetricWriter<RandomSamplingMetric<<C as MetricSink>::Metric>> for RandomSamplingWriter<C> {
+impl <C: MetricSink> SinkWriter<RandomSamplingMetric<<C as MetricSink>::Metric>> for RandomSamplingWriter<C> {
 
     fn write(&self, metric: &RandomSamplingMetric<<C as MetricSink>::Metric>, value: Value) {
         if pcg32::accept_sample(metric.int_sampling_rate) {

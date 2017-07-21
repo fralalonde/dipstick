@@ -1,4 +1,4 @@
-use core::{MetricType, RateType, Value, MetricWriter, SinkMetric, MetricSink};
+use core::{MetricType, RateType, Value, SinkWriter, SinkMetric, MetricSink};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::usize;
@@ -77,7 +77,7 @@ impl SinkMetric for Arc<AggregateMetric> {
 pub struct AggregateWrite {
 }
 
-impl MetricWriter<Arc<AggregateMetric>> for AggregateWrite {
+impl SinkWriter<Arc<AggregateMetric>> for AggregateWrite {
     fn write(&self, metric: &Arc<AggregateMetric>, value: Value) {
         metric.write(value as usize);
     }
@@ -144,7 +144,7 @@ impl MetricSink for AggregateChannel {
 mod bench {
 
     use super::AggregateChannel;
-    use core::{MetricType, MetricSink, MetricWriter};
+    use core::{MetricType, MetricSink, SinkWriter};
     use test::Bencher;
 
     #[bench]

@@ -1,4 +1,4 @@
-use core::{MetricType, RateType, Value, MetricWriter, SinkMetric, MetricSink};
+use core::{MetricType, RateType, Value, SinkWriter, SinkMetric, MetricSink};
 use std::net::UdpSocket;
 use std::io::Result;
 use std::cell::RefCell;
@@ -28,7 +28,7 @@ fn flush(payload: &mut String, socket: &UdpSocket) {
     payload.clear();
 }
 
-impl MetricWriter<StatsdMetric> for StatsdWriter {
+impl SinkWriter<StatsdMetric> for StatsdWriter {
 
     fn write(&self, metric: &StatsdMetric, value: Value) {
         let value_str = value.to_string();
@@ -92,7 +92,7 @@ impl MetricSink for StatsdSink {
             MetricType::Time => "ms"
         });
 
-        if (sample < 1.0) {
+        if sample < 1.0 {
             suffix.push('@');
             suffix.push_str(&sample.to_string());
         }
