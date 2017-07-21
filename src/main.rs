@@ -36,6 +36,7 @@ use core::{MetricType, MetricSink, SinkWriter, MetricDispatch, ValueMetric, Time
 use std::thread::sleep;
 use scheduled_executor::{CoreExecutor};
 use std::time::Duration;
+use cache::MetricCache;
 
 fn main() {
     sample_scheduled_statsd_aggregation()
@@ -55,7 +56,7 @@ pub fn sample_scheduled_statsd_aggregation() {
     let timer = app_metrics.new_timer("timer_a");
 
     // send aggregated metrics to statsd
-    let statsd = StatsdSink::new("localhost:8125", "hello.").unwrap();
+    let statsd = MetricCache::new(StatsdSink::new("localhost:8125", "hello.").unwrap(), 512);
     let aggregate_metrics = AggregateSource::new(statsd, scores);
 
     // collect every three seconds
