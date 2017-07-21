@@ -1,15 +1,15 @@
 //// Aggregate Source
 
-use core::{MetricChannel, MetricType, MetricWrite, MetricPublish};
+use core::{MetricSink, MetricType, MetricWriter, MetricSource};
 use aggregate::sink::{ScoreIterator, AggregateScore};
 
 /// publisher from aggregate metrics to target channel
-pub struct AggregateSource<C: MetricChannel> {
+pub struct AggregateSource<C: MetricSink> {
     target: C,
     scores: ScoreIterator,
 }
 
-impl <C: MetricChannel> AggregateSource<C> {
+impl <C: MetricSink> AggregateSource<C> {
 
     /// create new publisher from aggregate metrics to target channel
     pub fn new(target: C, scores: ScoreIterator) -> AggregateSource<C> {
@@ -17,7 +17,7 @@ impl <C: MetricChannel> AggregateSource<C> {
     }
 }
 
-impl <C: MetricChannel> MetricPublish for AggregateSource<C> {
+impl <C: MetricSink> MetricSource for AggregateSource<C> {
 
     /// define and write metrics from aggregated scores to the target channel
     fn publish(&self) {

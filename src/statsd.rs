@@ -1,17 +1,14 @@
-use core::{MetricType, RateType, Value, MetricWrite, DefinedMetric, MetricChannel};
+use core::{MetricType, RateType, Value, MetricWriter, SinkMetric, MetricSink};
 use std::net::UdpSocket;
 use std::io::Result;
 use std::cell::RefCell;
 
-////////////
-
 pub struct StatsdMetric {
-    m_type: MetricType,
-    name: String,
-    sample: RateType
+    prefix: String,
+    suffix: String,
 }
 
-impl DefinedMetric for StatsdMetric {}
+impl SinkMetric for StatsdMetric {}
 
 /// Use a safe maximum size for UDP to prevent fragmentation.
 const MAX_UDP_PAYLOAD: usize = 576;
@@ -20,9 +17,8 @@ thread_local! {
     static SEND_BUFFER: RefCell<String> = RefCell::new(String::with_capacity(MAX_UDP_PAYLOAD));
 }
 
-pub struct StatsdWrite {
+pub struct StatsdWriter {
     socket: UdpSocket,
-    prefix: String,
 }
 
 fn flush(payload: &mut String, socket: &UdpSocket) {
@@ -32,61 +28,79 @@ fn flush(payload: &mut String, socket: &UdpSocket) {
     payload.clear();
 }
 
-impl MetricWrite<StatsdMetric> for StatsdWrite {
+impl MetricWriter<StatsdMetric> for StatsdWriter {
 
     fn write(&self, metric: &StatsdMetric, value: Value) {
-        // TODO add metric sample rate
-        // TODO preformat per metric
-        let entry = format!("{}{}:{}|{}", self.prefix, metric.name, value, match metric.m_type {
-            MetricType::Event | MetricType::Count => "c",
-            MetricType::Gauge => "g",
-            MetricType::Time => "ms"
-        });
+        let value_str = value.to_string();
+        let entry_len = metric.prefix.len() + value_str.len() + metric.suffix.len();
 
         SEND_BUFFER.with(|cell| {
             let ref mut buf = cell.borrow_mut();
-            if entry.len() > buf.capacity() {
+            if entry_len > buf.capacity() {
                 // TODO report entry too big to fit in buffer (!?)
                 return;
             }
 
             let remaining = buf.capacity() - buf.len();
-            if entry.len() + 1 > remaining {
+            if entry_len + 1 > remaining {
                 // buffer is full, flush before appending
                 flush(buf, &self.socket);
             } else {
                 if !buf.is_empty() {
+                    // separate from previous entry
                     buf.push('\n')
                 }
-                buf.push_str(&entry);
+                buf.push_str(&metric.prefix);
+                buf.push_str(&value_str);
+                buf.push_str(&metric.suffix);
             }
         });
     }
 }
 
-pub struct StatsdChannel {
-    write: StatsdWrite
+/// Allows sending metrics to a statsd server
+pub struct StatsdSink {
+    write: StatsdWriter,
+    prefix: String,
 }
 
-impl StatsdChannel {
-    /// Create a new statsd channel
-    pub fn new<S: AsRef<str>>(address: &str, prefix_str: S) -> Result<StatsdChannel> {
+impl StatsdSink {
+    /// Create a new statsd sink to the specified address with the specified prefix
+    pub fn new<S: AsRef<str>>(address: &str, prefix_str: S) -> Result<StatsdSink> {
         let socket = UdpSocket::bind("0.0.0.0:0")?; // NB: CLOEXEC by default
         socket.set_nonblocking(true)?;
         socket.connect(address)?;
 
-        Ok(StatsdChannel { write: StatsdWrite { socket, prefix: prefix_str.as_ref().to_string() }})
+        Ok(StatsdSink { write: StatsdWriter { socket }, prefix: prefix_str.as_ref().to_string()})
     }
 }
 
-impl MetricChannel for StatsdChannel {
+impl MetricSink for StatsdSink {
     type Metric = StatsdMetric;
 
     fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sample: RateType) -> StatsdMetric {
-        StatsdMetric {m_type, name: name.as_ref().to_string(), sample}
+        let mut prefix = String::with_capacity(32);
+        prefix.push_str(&self.prefix);
+        prefix.push_str(name.as_ref());
+        prefix.push(':');
+
+        let mut suffix = String::with_capacity(16);
+        suffix.push('|');
+        suffix.push_str(match m_type {
+            MetricType::Event | MetricType::Count => "c",
+            MetricType::Gauge => "g",
+            MetricType::Time => "ms"
+        });
+
+        if (sample < 1.0) {
+            suffix.push('@');
+            suffix.push_str(&sample.to_string());
+        }
+
+        StatsdMetric {prefix, suffix}
     }
 
-    type Write = StatsdWrite;
+    type Write = StatsdWriter;
 
     fn write<F>(&self, metrics: F ) where F: Fn(&Self::Write) {
         metrics(&self.write);

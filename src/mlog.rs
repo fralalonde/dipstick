@@ -1,4 +1,4 @@
-use core::{MetricType, RateType, Value, MetricWrite, DefinedMetric, MetricChannel};
+use core::{MetricType, RateType, Value, MetricWriter, SinkMetric, MetricSink};
 
 //////////// Log Channel
 
@@ -6,37 +6,37 @@ pub struct LogMetric {
     prefix: String
 }
 
-impl DefinedMetric for LogMetric {}
+impl SinkMetric for LogMetric {}
 
-pub struct LogWrite {}
+pub struct LogWriter {}
 
-impl MetricWrite<LogMetric> for LogWrite {
+impl MetricWriter<LogMetric> for LogWriter {
     fn write(&self, metric: &LogMetric, value: Value) {
         // TODO format faster
         info!("{}:{}", metric.prefix, value)
     }
 }
 
-pub struct LogChannel {
+pub struct LogSink {
     prefix: String,
-    write: LogWrite
+    write: LogWriter
 }
 
-impl LogChannel {
-    pub fn new<S: AsRef<str>>(prefix: S) -> LogChannel {
+impl LogSink {
+    pub fn new<S: AsRef<str>>(prefix: S) -> LogSink {
         let prefix = prefix.as_ref().to_string();
-        LogChannel { prefix, write: LogWrite {}}
+        LogSink { prefix, write: LogWriter {}}
     }
 }
 
-impl MetricChannel for LogChannel {
+impl MetricSink for LogSink {
     type Metric = LogMetric;
 
     fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sample: RateType) -> LogMetric {
         LogMetric { prefix: format!("{:?}:{}{}", m_type, self.prefix, name.as_ref())}
     }
 
-    type Write = LogWrite;
+    type Write = LogWriter;
 
     fn write<F>(&self, metrics: F ) where F: Fn(&Self::Write) {
         metrics(&self.write)

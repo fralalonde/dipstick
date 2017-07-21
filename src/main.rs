@@ -26,15 +26,14 @@ pub mod mlog;
 //pub mod cache;
 pub mod pcg32;
 
-use dual::DualChannel;
+use dual::DualSink;
 use dispatch::DirectDispatch;
-use sampling::SamplingChannel;
-use statsd::StatsdChannel;
-use mlog::LogChannel;
+use sampling::RandomSamplingSink;
+use statsd::StatsdSink;
+use mlog::LogSink;
 use aggregate::sink::{AggregateChannel};
 use aggregate::source::{AggregateSource};
-use core::{MetricType, MetricChannel, MetricWrite, MetricDispatch, ValueMetric, TimerMetric, MetricPublish};
-use std::sync::atomic::{Ordering};
+use core::{MetricType, MetricSink, MetricWriter, MetricDispatch, ValueMetric, TimerMetric, MetricSource};
 use std::thread::sleep;
 use scheduled_executor::{CoreExecutor};
 use std::time::Duration;
@@ -57,7 +56,7 @@ pub fn sample_scheduled_statsd_aggregation() {
     let timer = app_metrics.new_timer("timer_a");
 
     // send aggregated metrics to statsd
-    let statsd = StatsdChannel::new("localhost:8125", "hello.").unwrap();
+    let statsd = StatsdSink::new("localhost:8125", "hello.").unwrap();
     let aggregate_metrics = AggregateSource::new(statsd, scores);
 
     // collect every three seconds
@@ -79,17 +78,17 @@ pub fn sample_scheduled_statsd_aggregation() {
 
 pub fn logging_and_statsd() {
 
-    let statsd = StatsdChannel::new("localhost:8125", "goodbye.").unwrap();
-    let logging = LogChannel::new("metrics");
-    let logging_and_statsd = DualChannel::new( logging, statsd );
+    let statsd = StatsdSink::new("localhost:8125", "goodbye.").unwrap();
+    let logging = LogSink::new("metrics");
+    let logging_and_statsd = DualSink::new(logging, statsd );
     DirectDispatch::new(logging_and_statsd);
 
 }
 
 pub fn sampling_statsd() {
 
-    let statsd = StatsdChannel::new("localhost:8125", "goodbye.").unwrap();
-    let sampling_statsd = SamplingChannel::new(statsd, 0.1);
+    let statsd = StatsdSink::new("localhost:8125", "goodbye.").unwrap();
+    let sampling_statsd = RandomSamplingSink::new(statsd, 0.1);
     DirectDispatch::new(sampling_statsd);
 
 }
@@ -97,7 +96,7 @@ pub fn sampling_statsd() {
 
 pub fn raw_write() {
     // setup dual metric channels
-    let metrics_log = LogChannel::new("metrics");
+    let metrics_log = LogSink::new("metrics");
 
     // define and send metrics using raw channel API
     let counter = metrics_log.define(MetricType::Count, "count_a", 1.0);
@@ -105,7 +104,7 @@ pub fn raw_write() {
 }
 
 pub fn counter_to_log() {
-    let metrics_log = LogChannel::new("metrics");
+    let metrics_log = LogSink::new("metrics");
     let metrics = DirectDispatch::new(metrics_log);
     let counter = metrics.new_count("count_a");
     counter.value(1);
