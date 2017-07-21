@@ -84,13 +84,13 @@ macro_rules! time {
 
 pub trait SinkMetric {}
 
-pub trait MetricWriter<M: SinkMetric> {
+pub trait SinkWriter<M: SinkMetric> {
     fn write(&self, metric: &M, value: Value);
 }
 
 pub trait MetricSink {
     type Metric: SinkMetric;
-    type Write: MetricWriter<Self::Metric>;
+    type Write: SinkWriter<Self::Metric>;
     fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sample: RateType) -> Self::Metric;
     fn write<F>(&self, operations: F) where F: Fn(&Self::Write);
 }

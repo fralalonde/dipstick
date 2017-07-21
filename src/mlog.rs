@@ -1,4 +1,4 @@
-use core::{MetricType, RateType, Value, MetricWriter, SinkMetric, MetricSink};
+use core::{MetricType, RateType, Value, SinkWriter, SinkMetric, MetricSink};
 
 //////////// Log Channel
 
@@ -10,7 +10,7 @@ impl SinkMetric for LogMetric {}
 
 pub struct LogWriter {}
 
-impl MetricWriter<LogMetric> for LogWriter {
+impl SinkWriter<LogMetric> for LogWriter {
     fn write(&self, metric: &LogMetric, value: Value) {
         // TODO format faster
         info!("{}:{}", metric.prefix, value)

@@ -11,8 +11,7 @@ extern crate log;
 extern crate scheduled_executor;
 extern crate thread_local;
 
-//#[macro_use]
-//extern crate cached;
+extern crate cached;
 
 #[macro_use]
 pub mod core;
@@ -23,7 +22,7 @@ pub mod sampling;
 pub mod aggregate;
 pub mod statsd;
 pub mod mlog;
-//pub mod cache;
+pub mod cache;
 pub mod pcg32;
 
 use dual::DualSink;
@@ -33,7 +32,7 @@ use statsd::StatsdSink;
 use mlog::LogSink;
 use aggregate::sink::{AggregateChannel};
 use aggregate::source::{AggregateSource};
-use core::{MetricType, MetricSink, MetricWriter, MetricDispatch, ValueMetric, TimerMetric, MetricSource};
+use core::{MetricType, MetricSink, SinkWriter, MetricDispatch, ValueMetric, TimerMetric, MetricSource};
 use std::thread::sleep;
 use scheduled_executor::{CoreExecutor};
 use std::time::Duration;

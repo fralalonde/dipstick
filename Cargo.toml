@@ -5,7 +5,7 @@ authors = ["Francis Lalonde <fralalonde@gmail.com>"]
 
 [dependencies]
 #error-chain = "0.10"
-#cached = "0.4.1"
+cached = "0.4.1"
 #lazy_static = "0.2.8"
 log = "0.3.8"
 time = "0.1"

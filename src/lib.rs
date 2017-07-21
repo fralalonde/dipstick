@@ -19,7 +19,7 @@ extern crate test;
 
 extern crate time;
 
-//extern crate cached;
+extern crate cached;
 extern crate thread_local;
 
 #[macro_use]
@@ -33,4 +33,4 @@ pub mod aggregate;
 pub mod statsd;
 pub mod mlog;
 pub mod pcg32;
-//pub mod cache;
+pub mod cache;

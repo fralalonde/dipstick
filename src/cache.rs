@@ -1,38 +1,54 @@
-use core::{MetricType, RateType, Value, MetricWrite, DefinedMetric, MetricChannel};
-use cached::SizedCache;
+use core::{MetricType, RateType, Value, MetricSink, SinkMetric, SinkWriter};
+use cached::{SizedCache, Cached};
+use std::rc::Rc;
+use std::sync::RwLock;
 
-pub struct InstrumentCacheChannel<C: MetricChannel> {
-    target: C,
-    cache: SizedCache<String, C::Metric>,
-}
+// METRIC
 
-impl <C: MetricChannel> InstrumentCacheChannel<C> {
-    pub fn new(target: C) -> InstrumentCacheChannel<C> {
-        let cache = SizedCache::with_capacity(1024);
-        InstrumentCacheChannel { target, cache }
+impl <C: MetricSink> SinkMetric for Rc<C::Metric> {}
+
+// WRITER
+
+struct CachedMetricWriter<C: MetricSink> ( C::Write );
+
+impl <C: MetricSink> SinkWriter<Rc<C::Metric>> for CachedMetricWriter<C> {
+    fn write(&self, metric: &Rc<C::Metric>, value: Value) {
+        self.0.write(&metric, value)
     }
 }
 
-impl <C: MetricChannel> MetricChannel for InstrumentCacheChannel<C> {
-    type Metric = C::Metric;
-    type Write = C::Write;
+// SINK
 
-    fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sample: RateType) -> C::Metric {
+pub struct MetricCache<C: MetricSink> {
+    target: C,
+    cache: RwLock<SizedCache<String, Rc<C::Metric>>>,
+}
+
+impl <C: MetricSink> MetricCache<C> {
+    pub fn new(target: C, cache_size: usize) -> MetricCache<C> {
+        let cache = RwLock::new(SizedCache::with_capacity(cache_size));
+        MetricCache { target, cache }
+    }
+}
+
+impl <C: MetricSink> MetricSink for MetricCache<C> {
+    type Metric = Rc<C::Metric>;
+    type Write = CachedMetricWriter<C>;
+
+    fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sampling: RateType) -> Rc<C::Metric> {
         let key = name.as_ref().to_string();
         {
-            let mut cache = self.cache.lock().unwrap();
-            let res = cached::Cached::cache_get(&mut *cache, &key);
-            if let Some(res) = res { return res.clone(); }
+            let mut cache = self.cache.write().unwrap();
+            let cached_metric = cache.cache_get(&key);
+            if let Some(cached_metric) = cached_metric {
+                return cached_metric.clone();
+            }
         }
-        let val = (||$body)();
-        let mut cache = $cachename.lock().unwrap();
-        $crate::Cached::cache_set(&mut *cache, key, val.clone());
-        val
-
-
-        self.cache.cache_get(name).;
-        let pm = self.target.define(m_type, name, sample);
-        InstrumentCacheMetric { target: pm }
+        let target_metric = self.target.define(m_type, name, sampling);
+        let metric = Rc::new( target_metric );
+        let mut cache = self.cache.write().unwrap();
+        cache.cache_set(key, metric.clone());
+        metric
     }
 
     fn write<F>(&self, operations: F )

@@ -1,4 +1,4 @@
-use core::{MetricType, RateType, Value, MetricWriter, SinkMetric, MetricSink};
+use core::{MetricType, RateType, Value, SinkWriter, SinkMetric, MetricSink};
 
 pub struct DualMetric<M1: SinkMetric, M2: SinkMetric> {
     metric_1: M1,
@@ -12,7 +12,7 @@ pub struct DualWriter<C1: MetricSink, C2: MetricSink> {
     channel_b: C2,
 }
 
-impl <C1: MetricSink, C2: MetricSink> MetricWriter<DualMetric<<C1 as MetricSink>::Metric, <C2 as MetricSink>::Metric>> for DualWriter<C1, C2> {
+impl <C1: MetricSink, C2: MetricSink> SinkWriter<DualMetric<<C1 as MetricSink>::Metric, <C2 as MetricSink>::Metric>> for DualWriter<C1, C2> {
     fn write(&self, metric: &DualMetric<<C1 as MetricSink>::Metric, <C2 as MetricSink>::Metric>, value: Value) {
         self.channel_a.write(|scope| scope.write(&metric.metric_1, value));
         self.channel_b.write(|scope| scope.write(&metric.metric_2, value));

@@ -1,4 +1,4 @@
-use core::{MetricType, Value, MetricWriter, MetricSink, MetricDispatch, EventMetric, ValueMetric, TimerMetric, MetricScope};
+use core::{MetricType, Value, SinkWriter, MetricSink, MetricDispatch, EventMetric, ValueMetric, TimerMetric, MetricScope};
 use std::rc::Rc;
 use std::cell::RefCell;
 use thread_local::ThreadLocal;
