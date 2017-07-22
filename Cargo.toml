@@ -10,7 +10,8 @@ cached = "0.4.1"
 log = "0.3.8"
 time = "0.1"
 scheduled-executor = "0.3.0"
-thread_local = "0.3"
+#thread_local = "0.3"
+thread-local-object = { path = '../thread-local-object' }
 
 [features]
 bench = []

@@ -20,7 +20,7 @@ extern crate test;
 extern crate time;
 
 extern crate cached;
-extern crate thread_local;
+extern crate thread_local_object;
 
 #[macro_use]
 extern crate log;

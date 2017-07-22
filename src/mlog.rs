@@ -2,12 +2,14 @@ use core::{MetricType, RateType, Value, SinkWriter, SinkMetric, MetricSink};
 
 //////////// Log Channel
 
+#[derive(Debug)]
 pub struct LogMetric {
     prefix: String
 }
 
 impl SinkMetric for LogMetric {}
 
+#[derive(Debug)]
 pub struct LogWriter {}
 
 impl SinkWriter<LogMetric> for LogWriter {
@@ -17,6 +19,7 @@ impl SinkWriter<LogMetric> for LogWriter {
     }
 }
 
+#[derive(Debug)]
 pub struct LogSink {
     prefix: String,
     write: LogWriter
@@ -31,15 +34,14 @@ impl LogSink {
 
 impl MetricSink for LogSink {
     type Metric = LogMetric;
+    type Writer = LogWriter;
 
     fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sample: RateType) -> LogMetric {
         LogMetric { prefix: format!("{:?}:{}{}", m_type, self.prefix, name.as_ref())}
     }
 
-    type Write = LogWriter;
-
-    fn write<F>(&self, metrics: F ) where F: Fn(&Self::Write) {
-        metrics(&self.write)
+    fn new_writer(&self) -> LogWriter {
+        LogWriter {}
     }
 
 }

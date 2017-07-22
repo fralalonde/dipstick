@@ -14,39 +14,41 @@ use std::sync::RwLock;
 // one solution might require SinkMetric<PHANTOM> (everywhere!), not tried because it would be HORRIBLE
 // for now we use this "wrapping reification" of Arc<> which needs to be allocated on every cache miss or hit
 // if you know how to fix it that'd be great
+#[derive(Debug)]
 pub struct CachedMetric<C: MetricSink> (Arc<C::Metric>);
 
 impl <C: MetricSink> SinkMetric for CachedMetric<C> {}
 
 // WRITER
 
+#[derive(Debug)]
 pub struct CachedMetricWriter<C: MetricSink> {
-    target: C,
+    target: C::Writer,
 }
 
 impl <C: MetricSink> SinkWriter<CachedMetric<C>> for CachedMetricWriter<C> {
     fn write(&self, metric: &CachedMetric<C>, value: Value) {
-        self.target.write(|scope| scope.write(metric.0.as_ref(), value))
+        self.target.write(metric.0.as_ref(), value)
     }
 }
 
 // SINK
 
 pub struct MetricCache<C: MetricSink> {
-    writer: CachedMetricWriter<C>,
+    target: C,
     cache: RwLock<SizedCache<String, Arc<C::Metric>>>,
 }
 
 impl <C: MetricSink> MetricCache<C> {
     pub fn new(target: C, cache_size: usize) -> MetricCache<C> {
         let cache = RwLock::new(SizedCache::with_capacity(cache_size));
-        MetricCache { writer: CachedMetricWriter{ target }, cache,  }
+        MetricCache { target, cache }
     }
 }
 
 impl <C: MetricSink> MetricSink for MetricCache<C> {
     type Metric = CachedMetric<C>;
-    type Write = CachedMetricWriter<C>;
+    type Writer = CachedMetricWriter<C>;
 
     fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sampling: RateType) -> CachedMetric<C> {
         let key = name.as_ref().to_string();
@@ -59,14 +61,15 @@ impl <C: MetricSink> MetricSink for MetricCache<C> {
             }
         }
         println!("cache miss");
-        let target_metric = self.writer.target.define(m_type, name, sampling);
+        let target_metric = self.target.define(m_type, name, sampling);
         let new_metric = Arc::new( target_metric );
         let mut cache = self.cache.write().unwrap();
         cache.cache_set(key, new_metric.clone());
         CachedMetric(new_metric)
     }
 
-    fn write<F>(&self, operations: F ) where F: Fn(&Self::Write) {
-        operations(&self.writer)
+    fn new_writer(&self) -> CachedMetricWriter<C> {
+        CachedMetricWriter{ target: self.target.new_writer() }
     }
+
 }

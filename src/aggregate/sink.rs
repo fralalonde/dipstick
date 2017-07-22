@@ -3,17 +3,20 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::usize;
 
+#[derive(Debug)]
 enum AtomicScore {
     Event { hit: AtomicUsize },
     Value { hit: AtomicUsize, sum: AtomicUsize, max: AtomicUsize, min: AtomicUsize },
 }
 
 /// consumed aggregated values
+#[derive(Debug)]
 pub enum AggregateScore {
     Event { hit: u64 },
     Value { hit: u64, sum: u64, max: u64, min: u64 },
 }
 
+#[derive(Debug)]
 pub struct AggregateMetric {
     pub m_type: MetricType,
     pub name: String,
@@ -74,6 +77,7 @@ impl AggregateMetric {
 impl SinkMetric for Arc<AggregateMetric> {
 }
 
+#[derive(Debug)]
 pub struct AggregateWrite {
 }
 
@@ -83,6 +87,7 @@ impl SinkWriter<Arc<AggregateMetric>> for AggregateWrite {
     }
 }
 
+#[derive(Debug)]
 pub struct ScoreIterator {
     metrics: Arc<RwLock<Vec<Arc<AggregateMetric>>>>,
 }
@@ -95,6 +100,7 @@ impl ScoreIterator {
     }
 }
 
+#[derive(Debug)]
 pub struct AggregateChannel {
     write: AggregateWrite,
     metrics: Arc<RwLock<Vec<Arc<AggregateMetric>>>>,
@@ -114,7 +120,7 @@ impl AggregateChannel {
 
 impl MetricSink for AggregateChannel {
     type Metric = Arc<AggregateMetric>;
-    type Write = AggregateWrite;
+    type Writer = AggregateWrite;
 
     fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sampling: RateType) -> Arc<AggregateMetric> {
         let name = name.as_ref().to_string();
@@ -134,9 +140,10 @@ impl MetricSink for AggregateChannel {
         metric
     }
 
-    fn write<F>(&self, operations: F ) where F: Fn(&Self::Write) {
-        operations(&self.write)
+    fn new_writer(&self) -> AggregateWrite {
+        AggregateWrite{ }
     }
+
 }
 
 /// Run benchmarks with `cargo +nightly bench --features bench`
@@ -151,7 +158,8 @@ mod bench {
     fn time_bench_write_event(b: &mut Bencher) {
         let aggregate = &AggregateChannel::new();
         let metric = aggregate.define(MetricType::Event, "event_a", 1.0);
-        b.iter(|| aggregate.write(|scope| scope.write(&metric, 1)));
+        let writer = aggregate.new_writer();
+        b.iter(|| writer.write(&metric, 1));
     }
 
 
@@ -159,7 +167,8 @@ mod bench {
     fn time_bench_write_count(b: &mut Bencher) {
         let aggregate = &AggregateChannel::new();
         let metric = aggregate.define(MetricType::Count, "count_a", 1.0);
-        b.iter(|| aggregate.write(|scope| scope.write(&metric, 1)));
+        let writer = aggregate.new_writer();
+        b.iter(|| writer.write(&metric, 1));
     }
 
     #[bench]
@@ -168,7 +177,6 @@ mod bench {
         let metric = aggregate.define(MetricType::Event, "event_a", 1.0);
         b.iter(|| metric.read_and_reset());
     }
-
 
     #[bench]
     fn time_bench_read_count(b: &mut Bencher) {
