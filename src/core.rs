@@ -61,7 +61,7 @@ pub trait MetricDispatch {
     fn new_timer<S: AsRef<str>>(&self, name: S) -> Self::Timer;
     fn new_gauge<S: AsRef<str>>(&self, name: S) -> Self::Value;
 
-    fn scope<F>(&self, operations: F) where F: Fn(&Self::Scope);
+    fn scope<F>(&mut self, operations: F) where F: Fn(/*&Self::Scope*/);
 }
 
 pub trait MetricSource {
@@ -80,17 +80,18 @@ macro_rules! time {
     }};
 }
 
-// CHANNEL
+// SINK
 
 pub trait SinkMetric {}
 
-pub trait SinkWriter<M: SinkMetric> {
+pub trait SinkWriter<M: SinkMetric>: Send {
     fn write(&self, metric: &M, value: Value);
+    fn flush(&self) {}
 }
 
 pub trait MetricSink {
     type Metric: SinkMetric;
-    type Write: SinkWriter<Self::Metric>;
+    type Writer: SinkWriter<Self::Metric>;
     fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sample: RateType) -> Self::Metric;
-    fn write<F>(&self, operations: F) where F: Fn(&Self::Write);
+    fn new_writer(&self) -> Self::Writer;
 }

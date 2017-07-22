@@ -9,7 +9,7 @@ extern crate time;
 extern crate log;
 
 extern crate scheduled_executor;
-extern crate thread_local;
+extern crate thread_local_object;
 
 extern crate cached;
 
@@ -51,7 +51,7 @@ pub fn sample_scheduled_statsd_aggregation() {
     let scores = aggregate.scores();
 
     // define some application metrics
-    let app_metrics = DirectDispatch::new(aggregate);
+    let mut app_metrics = DirectDispatch::new(aggregate);
     let counter = app_metrics.new_count("counter_a");
     let timer = app_metrics.new_timer("timer_a");
 
@@ -69,9 +69,11 @@ pub fn sample_scheduled_statsd_aggregation() {
 
     // generate some metric values
     loop {
-        counter.value(11);
-        counter.value(22);
-        time!(timer, { sleep(Duration::from_millis(10)); });
+        app_metrics.scope(|| {
+            counter.value(11);
+            counter.value(22);
+            time!(timer, { sleep(Duration::from_millis(10)); });
+        });
     }
 
 }
@@ -100,7 +102,7 @@ pub fn raw_write() {
 
     // define and send metrics using raw channel API
     let counter = metrics_log.define(MetricType::Count, "count_a", 1.0);
-    metrics_log.write(|scope| scope.write(&counter, 1));
+    metrics_log.new_writer().write(&counter, 1);
 }
 
 pub fn counter_to_log() {

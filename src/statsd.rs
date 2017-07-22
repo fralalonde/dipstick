@@ -2,7 +2,9 @@ use core::{MetricType, RateType, Value, SinkWriter, SinkMetric, MetricSink};
 use std::net::UdpSocket;
 use std::io::Result;
 use std::cell::RefCell;
+use std::sync::Arc;
 
+#[derive(Debug)]
 pub struct StatsdMetric {
     prefix: String,
     suffix: String,
@@ -17,8 +19,9 @@ thread_local! {
     static SEND_BUFFER: RefCell<String> = RefCell::new(String::with_capacity(MAX_UDP_PAYLOAD));
 }
 
+#[derive(Debug)]
 pub struct StatsdWriter {
-    socket: UdpSocket,
+    socket: Arc<UdpSocket>,
 }
 
 fn flush(payload: &mut String, socket: &UdpSocket) {
@@ -28,7 +31,7 @@ fn flush(payload: &mut String, socket: &UdpSocket) {
     payload.clear();
 }
 
-impl SinkWriter<StatsdMetric> for StatsdWriter {
+impl  SinkWriter<StatsdMetric> for StatsdWriter {
 
     fn write(&self, metric: &StatsdMetric, value: Value) {
         let value_str = value.to_string();
@@ -56,27 +59,46 @@ impl SinkWriter<StatsdMetric> for StatsdWriter {
             }
         });
     }
+
+    fn flush(&self) {
+        SEND_BUFFER.with(|cell| {
+            let ref mut buf = cell.borrow_mut();
+            if !buf.is_empty() {
+                // operation complete, flush any metrics in buffer
+                flush(buf, &self.socket)
+            }
+        })
+    }
+
 }
 
-/// Allows sending metrics to a statsd server
-pub struct StatsdSink {
-    write: StatsdWriter,
-    prefix: String,
-}
-
-impl StatsdSink {
-    /// Create a new statsd sink to the specified address with the specified prefix
-    pub fn new<S: AsRef<str>>(address: &str, prefix_str: S) -> Result<StatsdSink> {
-        let socket = UdpSocket::bind("0.0.0.0:0")?; // NB: CLOEXEC by default
-        socket.set_nonblocking(true)?;
-        socket.connect(address)?;
-
-        Ok(StatsdSink { write: StatsdWriter { socket }, prefix: prefix_str.as_ref().to_string()})
+impl  Drop for StatsdWriter {
+    fn drop(&mut self) {
+        self.flush();
     }
 }
 
-impl MetricSink for StatsdSink {
+/// Allows sending metrics to a statsd server
+#[derive(Debug)]
+pub struct StatsdSink {
+    socket: Arc<UdpSocket>,
+    prefix: String,
+}
+
+impl  StatsdSink {
+    /// Create a new statsd sink to the specified address with the specified prefix
+    pub fn new<S: AsRef<str>>(address: &str, prefix_str: S) -> Result<StatsdSink> {
+        let socket = Arc::new(UdpSocket::bind("0.0.0.0:0")?); // NB: CLOEXEC by default
+        socket.set_nonblocking(true)?;
+        socket.connect(address)?;
+
+        Ok(StatsdSink { socket, prefix: prefix_str.as_ref().to_string()})
+    }
+}
+
+impl  MetricSink for StatsdSink {
     type Metric = StatsdMetric;
+    type Writer = StatsdWriter;
 
     fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sample: RateType) -> StatsdMetric {
         let mut prefix = String::with_capacity(32);
@@ -100,17 +122,8 @@ impl MetricSink for StatsdSink {
         StatsdMetric {prefix, suffix}
     }
 
-    type Write = StatsdWriter;
-
-    fn write<F>(&self, metrics: F ) where F: Fn(&Self::Write) {
-        metrics(&self.write);
-        SEND_BUFFER.with(|cell| {
-            let ref mut buf = cell.borrow_mut();
-            if !buf.is_empty() {
-                // operation complete, flush any metrics in buffer
-                flush(buf, &self.write.socket)
-            }
-        });
+    fn new_writer(&self) -> StatsdWriter {
+        StatsdWriter { socket: self.socket.clone() }
     }
 }
 
