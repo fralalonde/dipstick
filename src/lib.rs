@@ -25,6 +25,9 @@ extern crate thread_local_object;
 #[macro_use]
 extern crate log;
 
+#[macro_use]
+extern crate lazy_static;
+
 pub mod core;
 pub mod dual;
 pub mod dispatch;
@@ -34,3 +37,4 @@ pub mod statsd;
 pub mod mlog;
 pub mod pcg32;
 pub mod cache;
+

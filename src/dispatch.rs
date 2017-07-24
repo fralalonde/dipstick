@@ -1,36 +1,35 @@
 use core::{MetricType, Value, SinkWriter, MetricSink, MetricDispatch, EventMetric, ValueMetric, TimerMetric, MetricScope};
 use std::sync::Arc;
-use std::cell::RefCell;
 use thread_local_object::ThreadLocal;
 
-////////////
-
-pub struct DirectEvent<C: MetricSink + 'static> {
+/// Base struct for all direct dispatch metrics
+struct DirectMetric<C: MetricSink + 'static> {
     metric: <C as MetricSink>::Metric,
     dispatch_scope: Arc<DirectScope<C>>
 }
 
-pub struct DirectValue<C: MetricSink + 'static> {
-    metric: <C as MetricSink>::Metric,
-    dispatch_scope: Arc<DirectScope<C>>
-}
+/// An event marker that dispatches values directly to the metrics backend
+pub struct DirectEvent<C: MetricSink + 'static>( DirectMetric<C>);
 
-pub struct DirectTimer<C: MetricSink + 'static> {
-    metric: <C as MetricSink>::Metric,
-    dispatch_scope: Arc<DirectScope<C>>
-}
+/// A gauge or counter that dispatches values directly to the metrics backend
+pub struct DirectValue<C: MetricSink + 'static>( DirectMetric<C>);
 
+/// An timer that dispatches values directly to the metrics backend
+pub struct DirectTimer<C: MetricSink + 'static>( DirectMetric<C>);
+
+/// A scoped writer
 pub struct ScopeWriter<C: MetricSink> {
     writer: C::Writer
     // properties: hashmap
 }
 
 impl <C: MetricSink> MetricScope for ScopeWriter<C> {
-    fn set_property<S: AsRef<str>>(&self, key: S, value: S) -> &Self {
+/*    fn set_property<S: AsRef<str>>(&self, key: S, value: S) -> &Self {
         self
-    }
+    }*/
 }
 
+/// The shared scope-selector for all of a single Dispatcher metrics
 pub struct DirectScope<C: MetricSink + 'static> {
     default_scope: C::Writer,
     thread_scope: ThreadLocal<ScopeWriter<C>>,
@@ -48,20 +47,20 @@ impl <C: MetricSink> DirectScope<C> {
 }
 
 impl <C: MetricSink> EventMetric for DirectEvent<C>  {
-    fn event(&self) {
-        self.dispatch_scope.value(&self.metric, 1);
+    fn mark(&self) {
+        self.0.dispatch_scope.value(&self.0.metric, 1);
     }
 }
 
 impl <C: MetricSink> ValueMetric for DirectValue<C> {
     fn value(&self, value: Value) {
-        self.dispatch_scope.value(&self.metric, value);
+        self.0.dispatch_scope.value(&self.0.metric, value);
     }
 }
 
 impl <C: MetricSink> ValueMetric for DirectTimer<C> {
     fn value(&self, value: Value) {
-        self.dispatch_scope.value(&self.metric,value);
+        self.0.dispatch_scope.value(&self.0.metric,value);
     }
 }
 
@@ -69,9 +68,11 @@ impl <C: MetricSink> TimerMetric for DirectTimer<C> {
 }
 
 impl <C: MetricSink> MetricScope for DirectScope<C> {
+/*
     fn set_property<S: AsRef<str>>(&self, key: S, value: S) -> &Self {
         self
     }
+*/
 }
 
 pub struct DirectDispatch<C: MetricSink + 'static> {
@@ -94,27 +95,28 @@ impl <C: MetricSink> MetricDispatch for DirectDispatch<C> {
 
     fn new_event<S: AsRef<str>>(&self, name: S) -> Self::Event {
         let metric = self.target.define(MetricType::Event, name, 1.0);
-        DirectEvent { metric, dispatch_scope: self.dispatch_scope.clone() }
+        DirectEvent ( DirectMetric{ metric, dispatch_scope: self.dispatch_scope.clone() })
     }
 
     fn new_count<S: AsRef<str>>(&self, name: S) -> Self::Value {
         let metric = self.target.define(MetricType::Count, name, 1.0);
-        DirectValue { metric, dispatch_scope: self.dispatch_scope.clone() }
+        DirectValue ( DirectMetric { metric, dispatch_scope: self.dispatch_scope.clone() })
     }
 
     fn new_timer<S: AsRef<str>>(&self, name: S) -> Self::Timer {
         let metric = self.target.define(MetricType::Time, name, 1.0);
-        DirectTimer { metric, dispatch_scope: self.dispatch_scope.clone() }
+        DirectTimer ( DirectMetric { metric, dispatch_scope: self.dispatch_scope.clone() })
     }
 
     fn new_gauge<S: AsRef<str>>(&self, name: S) -> Self::Value {
         let metric = self.target.define(MetricType::Gauge, name, 1.0);
-        DirectValue { metric, dispatch_scope: self.dispatch_scope.clone() }
+        DirectValue ( DirectMetric { metric, dispatch_scope: self.dispatch_scope.clone() })
     }
 
     fn scope<F>(&mut self, operations: F) where F: Fn(/*&Self::Scope*/) {
         let new_writer = self.target.new_writer();
-        let mut scope = ScopeWriter{ writer: new_writer};
+        let scope = ScopeWriter{ writer: new_writer};
+        // TODO this should be done transactionally to make sure scope is always removed() even on panic
         self.dispatch_scope.thread_scope.set(scope);
         operations();
         self.dispatch_scope.thread_scope.remove();
@@ -125,16 +127,16 @@ impl <C: MetricSink> MetricDispatch for DirectDispatch<C> {
 #[cfg(feature="bench")]
 mod bench {
 
-    use aggregate::sink::AggregateChannel;
-    use core::{MetricType, MetricSink, SinkWriter, MetricDispatch, EventMetric};
+    use aggregate::sink::MetricAggregator;
+    use core::{MetricDispatch, EventMetric};
     use test::Bencher;
 
     #[bench]
     fn time_bench_direct_dispatch_event(b: &mut Bencher) {
-        let aggregate = AggregateChannel::new();
+        let aggregate = MetricAggregator::new().sink();
         let dispatch = super::DirectDispatch::new(aggregate);
-        let metric = dispatch.new_event("aaa");
-        b.iter(|| metric.event());
+        let event = dispatch.new_event("aaa");
+        b.iter(|| event.mark());
     }
 
 

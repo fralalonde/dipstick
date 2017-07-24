@@ -1,4 +1,4 @@
-use core::{MetricType, RateType, Value, SinkWriter, SinkMetric, MetricSink};
+use core::{MetricType, Rate, Value, SinkWriter, SinkMetric, MetricSink, FULL_SAMPLING_RATE};
 use std::net::UdpSocket;
 use std::io::Result;
 use std::cell::RefCell;
@@ -27,7 +27,7 @@ pub struct StatsdWriter {
 fn flush(payload: &mut String, socket: &UdpSocket) {
     // TODO check for and report any send() error
     debug!("statsd sending {} bytes", payload.len());
-    socket.send(payload.as_bytes());
+    socket.send(payload.as_bytes()).unwrap();
     payload.clear();
 }
 
@@ -100,7 +100,7 @@ impl  MetricSink for StatsdSink {
     type Metric = StatsdMetric;
     type Writer = StatsdWriter;
 
-    fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sample: RateType) -> StatsdMetric {
+    fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sampling: Rate) -> StatsdMetric {
         let mut prefix = String::with_capacity(32);
         prefix.push_str(&self.prefix);
         prefix.push_str(name.as_ref());
@@ -114,9 +114,9 @@ impl  MetricSink for StatsdSink {
             MetricType::Time => "ms"
         });
 
-        if sample < 1.0 {
+        if sampling < FULL_SAMPLING_RATE {
             suffix.push('@');
-            suffix.push_str(&sample.to_string());
+            suffix.push_str(&sampling.to_string());
         }
 
         StatsdMetric {prefix, suffix}

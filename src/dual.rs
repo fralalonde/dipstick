@@ -1,4 +1,4 @@
-use core::{MetricType, RateType, Value, SinkWriter, SinkMetric, MetricSink};
+use core::{MetricType, Rate, Value, SinkWriter, SinkMetric, MetricSink};
 
 #[derive(Debug)]
 pub struct DualMetric<M1: SinkMetric, M2: SinkMetric> {
@@ -37,9 +37,9 @@ impl <C1: MetricSink, C2: MetricSink> MetricSink for DualSink<C1, C2> {
     type Metric = DualMetric<C1::Metric, C2::Metric>;
     type Writer = DualWriter<C1, C2>;
 
-    fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sample: RateType) -> DualMetric<C1::Metric, C2::Metric> {
-        let metric_1 = self.channel_a.define(m_type, &name, sample);
-        let metric_2 = self.channel_b.define(m_type, &name, sample);
+    fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sampling: Rate) -> DualMetric<C1::Metric, C2::Metric> {
+        let metric_1 = self.channel_a.define(m_type, &name, sampling);
+        let metric_2 = self.channel_b.define(m_type, &name, sampling);
         DualMetric { metric_1, metric_2 }
     }
 

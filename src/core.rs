@@ -1,4 +1,5 @@
 use time;
+use std::result::Iter;
 
 //////////////////
 // DEFINITIONS
@@ -9,11 +10,18 @@ pub type Value = u64;
 pub struct TimeType (u64);
 
 impl TimeType {
-    pub fn now() -> TimeType { TimeType(time::precise_time_ns()) }
-    pub fn elapsed_ms(self) -> Value { (TimeType::now().0 - self.0) / 1_000_000 }
+    pub fn now() -> TimeType {
+        TimeType(time::precise_time_ns())
+    }
+
+    pub fn elapsed_ms(self) -> Value {
+        (TimeType::now().0 - self.0) / 1_000_000
+    }
 }
 
-pub type RateType = f64;
+pub type Rate = f64;
+
+pub const FULL_SAMPLING_RATE: Rate = 1.0;
 
 #[derive(Debug, Copy, Clone)]
 pub enum MetricType {
@@ -23,13 +31,10 @@ pub enum MetricType {
     Time,
 }
 
-//////////////////
-// CONTRACT
-
-// INSTRUMENTATION (API CONTRACT)
+// Application contract
 
 pub trait EventMetric {
-    fn event(&self);
+    fn mark(&self);
 }
 
 pub trait ValueMetric {
@@ -46,10 +51,13 @@ pub trait TimerMetric: ValueMetric {
     }
 }
 
+/// Identifies a metric dispatch scope.
 pub trait MetricScope {
-    fn set_property<S: AsRef<str>>(&self, key: S, value: S) -> &Self;
+    // TODO enable free-form scope properties
+    // fn set_property<S: AsRef<str>>(&self, key: S, value: S) -> &Self;
 }
 
+/// Main trait of the metrics API
 pub trait MetricDispatch {
     type Event: EventMetric;
     type Value: ValueMetric;
@@ -64,7 +72,10 @@ pub trait MetricDispatch {
     fn scope<F>(&mut self, operations: F) where F: Fn(/*&Self::Scope*/);
 }
 
-pub trait MetricSource {
+/// Metric sources allow a group of metrics to be defined and written as one.
+/// Source implementers may get their data from internally aggregated or buffered metrics
+/// or they may read existing metrics not defined by the app (OS counters, etc)
+pub trait MetricPublisher {
     fn publish(&self);
 }
 
@@ -80,18 +91,42 @@ macro_rules! time {
     }};
 }
 
-// SINK
-
-pub trait SinkMetric {}
-
-pub trait SinkWriter<M: SinkMetric>: Send {
-    fn write(&self, metric: &M, value: Value);
-    fn flush(&self) {}
-}
-
+/// Main trait of the metrics backend API.
+/// Defines a component that can be used when setting up a metrics backend stack.
+/// Intermediate sinks transform how metrics are defined and written:
+/// - Sampling
+/// - Dual
+/// - Cache
+/// Terminal sinks store or propagate metric values to other systems.
+/// - Statsd
+/// - Log
+/// - Aggregate
 pub trait MetricSink {
     type Metric: SinkMetric;
     type Writer: SinkWriter<Self::Metric>;
-    fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sample: RateType) -> Self::Metric;
+
+    /// Define a new sink-specific metric that can be used for writing values.
+    fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sampling: Rate) -> Self::Metric;
+
+    /// Open a metric writer to write metrics to.
+    /// Some sinks actually reuse the same writer while others allocate resources for every new writer.
     fn new_writer(&self) -> Self::Writer;
 }
+
+/// A metric identifier defined by a specific metric sink implementation.
+/// Passed back to when writing a metric value
+/// May carry state specific to the sink's implementation
+pub trait SinkMetric {}
+
+/// A sink-specific target for writing metrics to.
+pub trait SinkWriter<M: SinkMetric>: Send {
+    /// Write a single metric value
+    fn write(&self, metric: &M, value: Value);
+
+    /// Some sinks may have buffering capability.
+    /// Flushing makes sure all previously written metrics are propagated
+    /// down the sink chain and to any applicable external outputs.
+    fn flush(&self) {}
+}
+
+

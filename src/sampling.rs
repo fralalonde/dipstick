@@ -1,4 +1,4 @@
-use core::{MetricType, RateType, Value, SinkWriter, SinkMetric, MetricSink};
+use core::{MetricType, Rate, Value, SinkWriter, SinkMetric, MetricSink};
 use pcg32;
 
 #[derive(Debug)]
@@ -26,11 +26,11 @@ impl <C: MetricSink> SinkWriter<RandomSamplingMetric<<C as MetricSink>::Metric>>
 #[derive(Debug)]
 pub struct RandomSamplingSink<C: MetricSink> {
     target: C,
-    sampling_rate: RateType,
+    sampling_rate: Rate,
 }
 
 impl <C: MetricSink> RandomSamplingSink<C> {
-    pub fn new(target: C, sampling_rate: RateType) -> RandomSamplingSink<C> {
+    pub fn new(target: C, sampling_rate: Rate) -> RandomSamplingSink<C> {
         RandomSamplingSink { target, sampling_rate}
     }
 }
@@ -40,7 +40,7 @@ impl <C: MetricSink> MetricSink for RandomSamplingSink<C> {
     type Writer = RandomSamplingWriter<C>;
 
 
-    fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sample: RateType) -> RandomSamplingMetric<C::Metric> {
+    fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sampling: Rate) -> RandomSamplingMetric<C::Metric> {
         let pm = self.target.define(m_type, name, self.sampling_rate);
         RandomSamplingMetric { target: pm, int_sampling_rate: pcg32::to_int_rate(self.sampling_rate) }
     }
