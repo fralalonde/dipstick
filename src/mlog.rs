@@ -1,4 +1,4 @@
-use core::{MetricType, RateType, Value, SinkWriter, SinkMetric, MetricSink};
+use core::{MetricType, Rate, Value, SinkWriter, SinkMetric, MetricSink};
 
 //////////// Log Channel
 
@@ -36,7 +36,7 @@ impl MetricSink for LogSink {
     type Metric = LogMetric;
     type Writer = LogWriter;
 
-    fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sample: RateType) -> LogMetric {
+    fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sampling: Rate) -> LogMetric {
         LogMetric { prefix: format!("{:?}:{}{}", m_type, self.prefix, name.as_ref())}
     }
 

@@ -1,29 +1,35 @@
 //// Aggregate Source
 
-use core::{MetricSink, MetricType, SinkWriter, MetricSource};
-use aggregate::sink::{ScoreIterator, AggregateScore};
+use core::{MetricSink, MetricType, SinkWriter};
+use aggregate::sink::{AggregateSource, AggregateScore};
 
-/// publisher from aggregate metrics to target channel
-pub struct AggregateSource<C: MetricSink> {
+/// Publisher from aggregate metrics to target channel
+pub struct AggregatePublisher<C: MetricSink> {
+    source: AggregateSource,
     target: C,
-    scores: ScoreIterator,
 }
 
-impl <C: MetricSink> AggregateSource<C> {
+impl <C: MetricSink> AggregatePublisher<C> {
 
-    /// create new publisher from aggregate metrics to target channel
-    pub fn new(target: C, scores: ScoreIterator) -> AggregateSource<C> {
-        AggregateSource {target, scores}
+    /// Create new publisher from aggregate metrics to target channel
+    pub fn new(target: C, source: AggregateSource) -> AggregatePublisher<C> {
+        AggregatePublisher{ source, target }
     }
 }
 
-impl <C: MetricSink> MetricSource for AggregateSource<C> {
+impl <C: MetricSink> AggregatePublisher<C> {
 
-    /// define and write metrics from aggregated scores to the target channel
-    fn publish(&self) {
+    /// Define and write metrics from aggregated scores to the target channel
+    /// If this is called repeatedly it can be a good idea to use the metric cache
+    /// to prevent new metrics from being created every time.
+    pub fn publish(&self) {
         let scope = self.target.new_writer();
-        self.scores.for_each(|metric| {
+        self.source.for_each(|metric| {
             match metric.read_and_reset() {
+                AggregateScore::NoData => {
+                    // TODO repeat previous frame min/max ?
+                    // TODO update some canary metric ?
+                },
                 AggregateScore::Event {hit} => {
                     let name = format!("{}.hit", &metric.name);
                     let temp_metric = self.target.define(MetricType::Count, name, 1.0);
@@ -60,7 +66,7 @@ impl <C: MetricSink> MetricSource for AggregateSource<C> {
                     }
                 }
             }
-        });
+        })
     }
 
 }

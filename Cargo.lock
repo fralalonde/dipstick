@@ -3,9 +3,10 @@ name = "dipstick"
 version = "0.1.0"
 dependencies = [
  "cached 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lazy_static 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "scheduled-executor 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "thread-local-object 0.1.0",
+ "thread-local-object 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "time 0.1.38 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -161,8 +162,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "thread-local-object"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "lazy_static 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "unsafe-any 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -255,6 +256,7 @@ dependencies = [
 "checksum scheduled-executor 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "9e50853ff7d0b411f597d2ed9d4347b4a7583f3abced3e24d2b7fbfde492c901"
 "checksum scoped-tls 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "f417c22df063e9450888a7561788e9bd46d3bb3c1466435b4eccb903807f147d"
 "checksum slab 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "17b4fcaed89ab08ef143da37bc52adbcc04d4a69014f4c1208d6b51f0c47bc23"
+"checksum thread-local-object 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "7da3caa820d0308c84c8654f6cafd81cc3195d45433311cbe22fcf44fc8be071"
 "checksum time 0.1.38 (registry+https://github.com/rust-lang/crates.io-index)" = "d5d788d3aa77bc0ef3e9621256885555368b47bd495c13dd2e7413c89f845520"
 "checksum tokio-core 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)" = "6a20ba4738d283cac7495ca36e045c80c2a8df3e05dd0909b17a06646af5a7ed"
 "checksum tokio-io 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "c2c3ce9739f7387a0fa65b5421e81feae92e04d603f008898f4257790ce8c2db"
