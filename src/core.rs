@@ -10,7 +10,6 @@ pub type Value = u64;
 pub struct TimeHandle(u64);
 
 impl TimeHandle {
-
     /// Get a handle on current time.
     /// Used by the TimerMetric start_time() method.
     pub fn now() -> TimeHandle {
@@ -21,7 +20,6 @@ impl TimeHandle {
     pub fn elapsed_ms(self) -> Value {
         (TimeHandle::now().0 - self.0) / 1_000_000
     }
-
 }
 
 pub type Rate = f64;
@@ -56,13 +54,15 @@ pub trait ValueMetric {
 /// - with the time! macro, which wraps a block with start() / stop() calls.
 /// - as regular ValueMetric with value() where the value is a time interval in milliseconds.
 pub trait TimerMetric: ValueMetric {
-
     /// Obtain a opaque handle to the current time.
     /// The handle is passed back to the stop() method to record a time interval.
     /// This is actually a convenience method to the TimeHandle::now()
-    /// Beware, handles obtained here are not bound to this specific timer instance _for now_ but might be in the future for safety.
+    /// Beware, handles obtained here are not bound to this specific timer instance
+    /// _for now_ but might be in the future for safety.
     /// If you require safe multi-timer handles, get them through TimeType::now()
-    fn start(&self) -> TimeHandle { TimeHandle::now() }
+    fn start(&self) -> TimeHandle {
+        TimeHandle::now()
+    }
 
     /// Record the time elapsed since the start_time handle was obtained.
     /// This call can be performed multiple times using the same handle,
@@ -96,12 +96,21 @@ pub trait MetricDispatch {
     /// type of scope for this dispatch
     type Scope: DispatchScope;
 
+    /// define a new event metric
     fn new_event<S: AsRef<str>>(&self, name: S) -> Self::Event;
+
+    /// define a new count metric
     fn new_count<S: AsRef<str>>(&self, name: S) -> Self::Value;
+
+    /// define a new timer metric
     fn new_timer<S: AsRef<str>>(&self, name: S) -> Self::Timer;
+
+    /// define a new gauge metric
     fn new_gauge<S: AsRef<str>>(&self, name: S) -> Self::Value;
 
-    fn with_scope<F>(&mut self, operations: F) where F: Fn(&Self::Scope);
+    fn with_scope<F>(&mut self, operations: F)
+    where
+        F: Fn(&Self::Scope);
 }
 
 /// Metric sources allow a group of metrics to be defined and written as one.
@@ -138,10 +147,10 @@ pub trait MetricSink {
     type Writer: MetricWriter<Self::Metric>;
 
     /// Define a new sink-specific metric that can be used for writing values.
-    fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sampling: Rate) -> Self::Metric;
+    fn new_metric<S: AsRef<str>>(&self, m_type: MetricType, name: S, sampling: Rate) -> Self::Metric;
 
     /// Open a metric writer to write metrics to.
-    /// Some sinks actually reuse the same writer while others allocate resources for every new writer.
+    /// Some sinks reuse the same writer while others allocate resources for every new writer.
     fn new_writer(&self) -> Self::Writer;
 }
 
@@ -160,5 +169,3 @@ pub trait MetricWriter<M: MetricKey>: Send {
     /// down the sink chain and to any applicable external outputs.
     fn flush(&self) {}
 }
-
-

@@ -8,7 +8,12 @@ use std::slice::Iter;
 #[derive(Debug)]
 enum AtomicScore {
     Event { hit: AtomicUsize },
-    Value { hit: AtomicUsize, sum: AtomicUsize, max: AtomicUsize, min: AtomicUsize },
+    Value {
+        hit: AtomicUsize,
+        sum: AtomicUsize,
+        max: AtomicUsize,
+        min: AtomicUsize,
+    },
 }
 
 /// to-be-consumed aggregated values
@@ -16,7 +21,12 @@ enum AtomicScore {
 pub enum AggregateScore {
     NoData,
     Event { hit: u64 },
-    Value { hit: u64, sum: u64, max: u64, min: u64 },
+    Value {
+        hit: u64,
+        sum: u64,
+        max: u64,
+        min: u64,
+    },
 }
 
 /// A metric that holds aggregated values
@@ -28,18 +38,23 @@ pub struct AggregateMetricKey {
 }
 
 impl AggregateMetricKey {
-
     /// Update scores with value
     pub fn write(&self, value: usize) -> () {
         match &self.score {
-            &AtomicScore::Event {ref hit, ..} => {
+            &AtomicScore::Event { ref hit, .. } => {
                 hit.fetch_add(1, Ordering::SeqCst);
-            },
-            &AtomicScore::Value {ref hit, ref sum, ref max, ref min, ..} => {
+            }
+            &AtomicScore::Value {
+                ref hit,
+                ref sum,
+                ref max,
+                ref min,
+                ..
+            } => {
                 let mut try_max = max.load(Ordering::Acquire);
                 while value > try_max {
                     if max.compare_and_swap(try_max, value, Ordering::Release) == try_max {
-                        break
+                        break;
                     } else {
                         try_max = max.load(Ordering::Acquire);
                     }
@@ -48,7 +63,7 @@ impl AggregateMetricKey {
                 let mut try_min = min.load(Ordering::Acquire);
                 while value < try_min {
                     if min.compare_and_swap(try_min, value, Ordering::Release) == try_min {
-                        break
+                        break;
                     } else {
                         try_min = min.load(Ordering::Acquire);
                     }
@@ -63,13 +78,24 @@ impl AggregateMetricKey {
     /// reset aggregate values, return previous values
     pub fn read_and_reset(&self) -> AggregateScore {
         match self.score {
-            AtomicScore::Event {ref hit} => {
+            AtomicScore::Event { ref hit } => {
                 let hit = hit.swap(0, Ordering::Release) as u64;
-                if hit == 0 {AggregateScore::NoData} else { AggregateScore::Event { hit }}
-            },
-            AtomicScore::Value {ref hit, ref sum,ref max, ref min} => {
+                if hit == 0 {
+                    AggregateScore::NoData
+                } else {
+                    AggregateScore::Event { hit }
+                }
+            }
+            AtomicScore::Value {
+                ref hit,
+                ref sum,
+                ref max,
+                ref min,
+            } => {
                 let hit = hit.swap(0, Ordering::Release) as u64;
-                if hit == 0 {AggregateScore::NoData} else {
+                if hit == 0 {
+                    AggregateScore::NoData
+                } else {
                     AggregateScore::Value {
                         hit,
                         sum: sum.swap(0, Ordering::Release) as u64,
@@ -82,11 +108,10 @@ impl AggregateMetricKey {
     }
 }
 
-impl MetricKey for Arc<AggregateMetricKey> {
-}
+impl MetricKey for Arc<AggregateMetricKey> {}
 
 #[derive(Debug)]
-pub struct AggregateWrite ();
+pub struct AggregateWrite();
 
 impl MetricWriter<Arc<AggregateMetricKey>> for AggregateWrite {
     fn write(&self, metric: &Arc<AggregateMetricKey>, value: Value) {
@@ -100,10 +125,13 @@ lazy_static! {
 }
 
 #[derive(Debug)]
-pub struct AggregateSource ( Arc<RwLock<Vec<Arc<AggregateMetricKey>>>> );
+pub struct AggregateSource(Arc<RwLock<Vec<Arc<AggregateMetricKey>>>>);
 
 impl AggregateSource {
-    pub fn for_each<F>(&self, ops: F) where F: Fn(&AggregateMetricKey) {
+    pub fn for_each<F>(&self, ops: F)
+    where
+        F: Fn(&AggregateMetricKey),
+    {
         for metric in self.0.read().unwrap().iter() {
             ops(&metric)
         }
@@ -116,39 +144,44 @@ pub struct MetricAggregator {
 }
 
 impl MetricAggregator {
-
     pub fn new() -> MetricAggregator {
         MetricAggregator { metrics: Arc::new(RwLock::new(Vec::new())) }
     }
 
     pub fn source(&self) -> AggregateSource {
-        AggregateSource( self.metrics.clone() )
+        AggregateSource(self.metrics.clone())
     }
 
     pub fn sink(&self) -> AggregateSink {
-        AggregateSink( self.metrics.clone() )
+        AggregateSink(self.metrics.clone())
     }
-
 }
 
-pub struct AggregateSink ( Arc<RwLock<Vec<Arc<AggregateMetricKey>>>> );
+pub struct AggregateSink(Arc<RwLock<Vec<Arc<AggregateMetricKey>>>>);
 
 impl MetricSink for AggregateSink {
     type Metric = Arc<AggregateMetricKey>;
     type Writer = AggregateWrite;
 
-    fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sampling: Rate) -> Arc<AggregateMetricKey> {
+    fn new_metric<S: AsRef<str>>(
+        &self,
+        m_type: MetricType,
+        name: S,
+        sampling: Rate,
+    ) -> Arc<AggregateMetricKey> {
         let name = name.as_ref().to_string();
         let metric = Arc::new(AggregateMetricKey {
-            m_type, name, score: match m_type {
-                MetricType::Event => AtomicScore::Event {
-                        hit: AtomicUsize::new(0) },
+            m_type,
+            name,
+            score: match m_type {
+                MetricType::Event => AtomicScore::Event { hit: AtomicUsize::new(0) },
                 _ => AtomicScore::Value {
-                        hit: AtomicUsize::new(0),
-                        sum: AtomicUsize::new(0),
-                        max: AtomicUsize::new(usize::MIN),
-                        min: AtomicUsize::new(usize::MAX) },
-            }
+                    hit: AtomicUsize::new(0),
+                    sum: AtomicUsize::new(0),
+                    max: AtomicUsize::new(usize::MIN),
+                    min: AtomicUsize::new(usize::MAX),
+                },
+            },
         });
 
         self.0.write().unwrap().push(metric.clone());
@@ -159,11 +192,10 @@ impl MetricSink for AggregateSink {
         // TODO return AGGREGATE_WRITE
         AggregateWrite()
     }
-
 }
 
 /// Run benchmarks with `cargo +nightly bench --features bench`
-#[cfg(feature="bench")]
+#[cfg(feature = "bench")]
 mod bench {
 
     use super::MetricAggregator;
