@@ -14,7 +14,7 @@ variant_size_differences,
 
 #![feature(fn_traits)]
 
-#[cfg(feature="bench")]
+#[cfg(feature = "bench")]
 extern crate test;
 
 extern crate time;
@@ -37,4 +37,3 @@ pub mod statsd;
 pub mod logging;
 pub mod pcg32;
 pub mod cache;
-

@@ -4,7 +4,7 @@ use core::{MetricType, Rate, Value, MetricWriter, MetricKey, MetricSink};
 
 #[derive(Debug)]
 pub struct LoggingKey {
-    prefix: String
+    prefix: String,
 }
 
 impl MetricKey for LoggingKey {}
@@ -22,13 +22,16 @@ impl MetricWriter<LoggingKey> for LoggingWriter {
 #[derive(Debug)]
 pub struct LoggingSink {
     prefix: String,
-    write: LoggingWriter
+    write: LoggingWriter,
 }
 
 impl LoggingSink {
     pub fn new<S: AsRef<str>>(prefix: S) -> LoggingSink {
         let prefix = prefix.as_ref().to_string();
-        LoggingSink { prefix, write: LoggingWriter {}}
+        LoggingSink {
+            prefix,
+            write: LoggingWriter {},
+        }
     }
 }
 
@@ -36,12 +39,11 @@ impl MetricSink for LoggingSink {
     type Metric = LoggingKey;
     type Writer = LoggingWriter;
 
-    fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sampling: Rate) -> LoggingKey {
-        LoggingKey { prefix: format!("{:?}:{}{}", m_type, self.prefix, name.as_ref())}
+    fn new_metric<S: AsRef<str>>(&self, m_type: MetricType, name: S, sampling: Rate) -> LoggingKey {
+        LoggingKey { prefix: format!("{:?}:{}{}", m_type, self.prefix, name.as_ref()) }
     }
 
     fn new_writer(&self) -> LoggingWriter {
         LoggingWriter {}
     }
-
 }

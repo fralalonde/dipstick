@@ -32,7 +32,6 @@ fn flush(payload: &mut String, socket: &UdpSocket) {
 }
 
 impl MetricWriter<StatsdKey> for StatsdWriter {
-
     fn write(&self, metric: &StatsdKey, value: Value) {
         let value_str = value.to_string();
         let entry_len = metric.prefix.len() + value_str.len() + metric.suffix.len();
@@ -69,7 +68,6 @@ impl MetricWriter<StatsdKey> for StatsdWriter {
             }
         })
     }
-
 }
 
 impl Drop for StatsdWriter {
@@ -92,7 +90,10 @@ impl StatsdSink {
         socket.set_nonblocking(true)?;
         socket.connect(address)?;
 
-        Ok(StatsdSink { socket, prefix: prefix_str.as_ref().to_string()})
+        Ok(StatsdSink {
+            socket,
+            prefix: prefix_str.as_ref().to_string(),
+        })
     }
 }
 
@@ -100,7 +101,7 @@ impl MetricSink for StatsdSink {
     type Metric = StatsdKey;
     type Writer = StatsdWriter;
 
-    fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sampling: Rate) -> StatsdKey {
+    fn new_metric<S: AsRef<str>>(&self, m_type: MetricType, name: S, sampling: Rate) -> StatsdKey {
         let mut prefix = String::with_capacity(32);
         prefix.push_str(&self.prefix);
         prefix.push_str(name.as_ref());
@@ -111,7 +112,7 @@ impl MetricSink for StatsdSink {
         suffix.push_str(match m_type {
             MetricType::Event | MetricType::Count => "c",
             MetricType::Gauge => "g",
-            MetricType::Time => "ms"
+            MetricType::Time => "ms",
         });
 
         if sampling < FULL_SAMPLING_RATE {
@@ -119,11 +120,10 @@ impl MetricSink for StatsdSink {
             suffix.push_str(&sampling.to_string());
         }
 
-        StatsdKey {prefix, suffix}
+        StatsdKey { prefix, suffix }
     }
 
     fn new_writer(&self) -> StatsdWriter {
         StatsdWriter { socket: self.socket.clone() }
     }
 }
-

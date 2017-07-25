@@ -1,6 +1,6 @@
 #![cfg_attr(feature = "bench", feature(test))]
 
-#[cfg(feature="bench")]
+#[cfg(feature = "bench")]
 extern crate test;
 
 extern crate time;
@@ -33,11 +33,12 @@ use dispatch::DirectDispatch;
 use sampling::SamplingSink;
 use statsd::StatsdSink;
 use logging::LoggingSink;
-use aggregate::sink::{MetricAggregator};
-use aggregate::publish::{AggregatePublisher};
-use core::{MetricType, MetricSink, MetricWriter, MetricDispatch, ValueMetric, TimerMetric, EventMetric, DispatchScope};
+use aggregate::sink::MetricAggregator;
+use aggregate::publish::AggregatePublisher;
+use core::{MetricType, MetricSink, MetricWriter, MetricDispatch, ValueMetric, TimerMetric,
+           EventMetric, DispatchScope};
 use std::thread::sleep;
-use scheduled_executor::{CoreExecutor};
+use scheduled_executor::CoreExecutor;
 use std::time::Duration;
 use cache::MetricCache;
 
@@ -59,11 +60,9 @@ pub fn sample_scheduled_statsd_aggregation() {
     let aggregate_metrics = AggregatePublisher::new(statsd, aggregator.source());
     // TODO publisher should provide its own scheduler
     let exec = CoreExecutor::new().unwrap();
-    exec.schedule_fixed_rate(
-        Duration::from_secs(3),
-        Duration::from_secs(3),
-        move |_| aggregate_metrics.publish()
-    );
+    exec.schedule_fixed_rate(Duration::from_secs(3), Duration::from_secs(3), move |_| {
+        aggregate_metrics.publish()
+    });
 
     // SAMPLE METRICS USAGE
 
@@ -81,9 +80,14 @@ pub fn sample_scheduled_statsd_aggregation() {
 
         // use scope to update metrics as one (single log line, single network packet, etc.)
         app_metrics.with_scope(|scope| {
-            scope.set_property("http_method", "POST").set_property("user_id", "superdude");
+            scope.set_property("http_method", "POST").set_property(
+                "user_id",
+                "superdude",
+            );
             event.mark();
-            time!(timer, { sleep(Duration::from_millis(5)); });
+            time!(timer, {
+                sleep(Duration::from_millis(5));
+            });
         });
     }
 
@@ -93,7 +97,7 @@ pub fn logging_and_statsd() {
 
     let statsd = StatsdSink::new("localhost:8125", "goodbye.").unwrap();
     let logging = LoggingSink::new("metrics");
-    let logging_and_statsd = DualSink::new(logging, statsd );
+    let logging_and_statsd = DualSink::new(logging, statsd);
     DirectDispatch::new(logging_and_statsd);
 
 }
@@ -112,7 +116,7 @@ pub fn raw_write() {
     let metrics_log = LoggingSink::new("metrics");
 
     // define and send metrics using raw channel API
-    let counter = metrics_log.define(MetricType::Count, "count_a", 1.0);
+    let counter = metrics_log.new_metric(MetricType::Count, "count_a", core::FULL_SAMPLING_RATE);
     metrics_log.new_writer().write(&counter, 1);
 }
 
