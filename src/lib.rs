@@ -34,7 +34,7 @@ pub mod dispatch;
 pub mod sampling;
 pub mod aggregate;
 pub mod statsd;
-pub mod mlog;
+pub mod logging;
 pub mod pcg32;
 pub mod cache;
 

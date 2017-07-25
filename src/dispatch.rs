@@ -1,4 +1,4 @@
-use core::{MetricType, Value, SinkWriter, MetricSink, MetricDispatch, EventMetric, ValueMetric, TimerMetric, MetricScope};
+use core::{MetricType, Value, MetricWriter, MetricSink, MetricDispatch, EventMetric, ValueMetric, TimerMetric, DispatchScope};
 use std::sync::Arc;
 use thread_local_object::ThreadLocal;
 
@@ -9,24 +9,24 @@ struct DirectMetric<C: MetricSink + 'static> {
 }
 
 /// An event marker that dispatches values directly to the metrics backend
-pub struct DirectEvent<C: MetricSink + 'static>( DirectMetric<C>);
+pub struct DirectEvent<C: MetricSink + 'static>(DirectMetric<C>);
 
 /// A gauge or counter that dispatches values directly to the metrics backend
-pub struct DirectValue<C: MetricSink + 'static>( DirectMetric<C>);
+pub struct DirectValue<C: MetricSink + 'static>(DirectMetric<C>);
 
 /// An timer that dispatches values directly to the metrics backend
-pub struct DirectTimer<C: MetricSink + 'static>( DirectMetric<C>);
+pub struct DirectTimer<C: MetricSink + 'static>(DirectMetric<C>);
 
 /// A scoped writer
 pub struct ScopeWriter<C: MetricSink> {
     writer: C::Writer
-    // properties: hashmap
+//    properties: Hashmap;
 }
 
-impl <C: MetricSink> MetricScope for ScopeWriter<C> {
-/*    fn set_property<S: AsRef<str>>(&self, key: S, value: S) -> &Self {
+impl <C: MetricSink> DispatchScope for ScopeWriter<C> {
+    fn set_property<S: AsRef<str>>(&self, key: S, value: S) -> &Self {
         self
-    }*/
+    }
 }
 
 /// The shared scope-selector for all of a single Dispatcher metrics
@@ -67,12 +67,10 @@ impl <C: MetricSink> ValueMetric for DirectTimer<C> {
 impl <C: MetricSink> TimerMetric for DirectTimer<C> {
 }
 
-impl <C: MetricSink> MetricScope for DirectScope<C> {
-/*
+impl <C: MetricSink> DispatchScope for DirectScope<C> {
     fn set_property<S: AsRef<str>>(&self, key: S, value: S) -> &Self {
         self
     }
-*/
 }
 
 pub struct DirectDispatch<C: MetricSink + 'static> {
@@ -113,12 +111,14 @@ impl <C: MetricSink> MetricDispatch for DirectDispatch<C> {
         DirectValue ( DirectMetric { metric, dispatch_scope: self.dispatch_scope.clone() })
     }
 
-    fn scope<F>(&mut self, operations: F) where F: Fn(/*&Self::Scope*/) {
+    fn with_scope<F>(&mut self, operations: F) where F: Fn(&Self::Scope) {
         let new_writer = self.target.new_writer();
         let scope = ScopeWriter{ writer: new_writer};
-        // TODO this should be done transactionally to make sure scope is always removed() even on panic
+        // TODO add ThreadLocal with(T, FnOnce) method to replace these three
         self.dispatch_scope.thread_scope.set(scope);
-        operations();
+        self.dispatch_scope.thread_scope.get(|option_scope| {
+            operations(option_scope.unwrap())
+        });
         self.dispatch_scope.thread_scope.remove();
     }
 }

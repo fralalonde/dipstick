@@ -1,22 +1,22 @@
-use core::{MetricType, Rate, Value, SinkWriter, SinkMetric, MetricSink};
+use core::{MetricType, Rate, Value, MetricWriter, MetricKey, MetricSink};
 use pcg32;
 
 #[derive(Debug)]
-pub struct RandomSamplingMetric<M: SinkMetric> {
+pub struct SamplingKey<M: MetricKey> {
     target: M,
     int_sampling_rate: u32,
 }
 
-impl <M: SinkMetric> SinkMetric for RandomSamplingMetric<M> {}
+impl <M: MetricKey> MetricKey for SamplingKey<M> {}
 
 #[derive(Debug)]
-pub struct RandomSamplingWriter<C: MetricSink> {
+pub struct SamplingWriter<C: MetricSink> {
     target: C::Writer,
 }
 
-impl <C: MetricSink> SinkWriter<RandomSamplingMetric<<C as MetricSink>::Metric>> for RandomSamplingWriter<C> {
+impl <C: MetricSink> MetricWriter<SamplingKey<<C as MetricSink>::Metric>> for SamplingWriter<C> {
 
-    fn write(&self, metric: &RandomSamplingMetric<<C as MetricSink>::Metric>, value: Value) {
+    fn write(&self, metric: &SamplingKey<<C as MetricSink>::Metric>, value: Value) {
         if pcg32::accept_sample(metric.int_sampling_rate) {
             self.target.write(&metric.target, value)
         }
@@ -24,29 +24,29 @@ impl <C: MetricSink> SinkWriter<RandomSamplingMetric<<C as MetricSink>::Metric>>
 }
 
 #[derive(Debug)]
-pub struct RandomSamplingSink<C: MetricSink> {
+pub struct SamplingSink<C: MetricSink> {
     target: C,
     sampling_rate: Rate,
 }
 
-impl <C: MetricSink> RandomSamplingSink<C> {
-    pub fn new(target: C, sampling_rate: Rate) -> RandomSamplingSink<C> {
-        RandomSamplingSink { target, sampling_rate}
+impl <C: MetricSink> SamplingSink<C> {
+    pub fn new(target: C, sampling_rate: Rate) -> SamplingSink<C> {
+        SamplingSink { target, sampling_rate}
     }
 }
 
-impl <C: MetricSink> MetricSink for RandomSamplingSink<C> {
-    type Metric = RandomSamplingMetric<C::Metric>;
-    type Writer = RandomSamplingWriter<C>;
+impl <C: MetricSink> MetricSink for SamplingSink<C> {
+    type Metric = SamplingKey<C::Metric>;
+    type Writer = SamplingWriter<C>;
 
 
-    fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sampling: Rate) -> RandomSamplingMetric<C::Metric> {
+    fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sampling: Rate) -> SamplingKey<C::Metric> {
         let pm = self.target.define(m_type, name, self.sampling_rate);
-        RandomSamplingMetric { target: pm, int_sampling_rate: pcg32::to_int_rate(self.sampling_rate) }
+        SamplingKey { target: pm, int_sampling_rate: pcg32::to_int_rate(self.sampling_rate) }
     }
 
-    fn new_writer(&self) -> RandomSamplingWriter<C> {
-        RandomSamplingWriter { target: self.target.new_writer() }
+    fn new_writer(&self) -> SamplingWriter<C> {
+        SamplingWriter { target: self.target.new_writer() }
     }
 
 }
