@@ -5,7 +5,14 @@ Similar to popular logging frameworks, but with counters and timers.
 Enables multiple outputs (i.e. Log file _and_ Statsd) from a single set of instruments.
 Supports random sampling, local aggregation and periodical publication of collected metric values.
 
-Modular backend API for app configuration : 
+Configuration can be simple:
+
+```rust
+    let mut app_metrics = DirectDispatch::new(LogSink::new("metrics:"));
+    let timer = app_metrics.new_timer("timer_b");
+```
+
+Or it can be more involved if you require a more sophisticated setup:
 
 ```rust
     // send application metrics to both aggregator and to sampling log
@@ -22,13 +29,14 @@ Modular backend API for app configuration :
         Duration::from_secs(3),
         move |_| aggregate_metrics.publish()
     );
+    
+    let mut app_metrics = DirectDispatch::new(dual_sink);
 ```
 
-Ergonomic frontend API for application code :
+And here's a  API for app code starts with a MetricDispatch implementation wrapping over a previously defined chain of MetricSinks.
 
 ```rust
-    // define application metrics
-    let mut app_metrics = DirectDispatch::new(dual_sink);
+    // define application metrics    
     let counter = app_metrics.new_count("counter_a");
     let timer = app_metrics.new_timer("timer_b");
     let event = app_metrics.new_event("event_c");
@@ -50,6 +58,7 @@ Ergonomic frontend API for application code :
 ##TODO
 - generic publisher / sources
 - scope properties
+- microsecond-precision intervals 
 - log templates
 - more outputs
 - configurable aggregates

@@ -1,16 +1,16 @@
-use core::{MetricType, Rate, Value, SinkWriter, SinkMetric, MetricSink, FULL_SAMPLING_RATE};
+use core::{MetricType, Rate, Value, MetricWriter, MetricKey, MetricSink, FULL_SAMPLING_RATE};
 use std::net::UdpSocket;
 use std::io::Result;
 use std::cell::RefCell;
 use std::sync::Arc;
 
 #[derive(Debug)]
-pub struct StatsdMetric {
+pub struct StatsdKey {
     prefix: String,
     suffix: String,
 }
 
-impl SinkMetric for StatsdMetric {}
+impl MetricKey for StatsdKey {}
 
 /// Use a safe maximum size for UDP to prevent fragmentation.
 const MAX_UDP_PAYLOAD: usize = 576;
@@ -25,15 +25,15 @@ pub struct StatsdWriter {
 }
 
 fn flush(payload: &mut String, socket: &UdpSocket) {
-    // TODO check for and report any send() error
     debug!("statsd sending {} bytes", payload.len());
-    socket.send(payload.as_bytes()).unwrap();
+    // TODO check for and report any send() error
+    socket.send(payload.as_bytes())/*.unwrap()*/;
     payload.clear();
 }
 
-impl  SinkWriter<StatsdMetric> for StatsdWriter {
+impl MetricWriter<StatsdKey> for StatsdWriter {
 
-    fn write(&self, metric: &StatsdMetric, value: Value) {
+    fn write(&self, metric: &StatsdKey, value: Value) {
         let value_str = value.to_string();
         let entry_len = metric.prefix.len() + value_str.len() + metric.suffix.len();
 
@@ -72,7 +72,7 @@ impl  SinkWriter<StatsdMetric> for StatsdWriter {
 
 }
 
-impl  Drop for StatsdWriter {
+impl Drop for StatsdWriter {
     fn drop(&mut self) {
         self.flush();
     }
@@ -85,7 +85,7 @@ pub struct StatsdSink {
     prefix: String,
 }
 
-impl  StatsdSink {
+impl StatsdSink {
     /// Create a new statsd sink to the specified address with the specified prefix
     pub fn new<S: AsRef<str>>(address: &str, prefix_str: S) -> Result<StatsdSink> {
         let socket = Arc::new(UdpSocket::bind("0.0.0.0:0")?); // NB: CLOEXEC by default
@@ -96,11 +96,11 @@ impl  StatsdSink {
     }
 }
 
-impl  MetricSink for StatsdSink {
-    type Metric = StatsdMetric;
+impl MetricSink for StatsdSink {
+    type Metric = StatsdKey;
     type Writer = StatsdWriter;
 
-    fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sampling: Rate) -> StatsdMetric {
+    fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sampling: Rate) -> StatsdKey {
         let mut prefix = String::with_capacity(32);
         prefix.push_str(&self.prefix);
         prefix.push_str(name.as_ref());
@@ -119,7 +119,7 @@ impl  MetricSink for StatsdSink {
             suffix.push_str(&sampling.to_string());
         }
 
-        StatsdMetric {prefix, suffix}
+        StatsdKey {prefix, suffix}
     }
 
     fn new_writer(&self) -> StatsdWriter {

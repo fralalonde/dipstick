@@ -1,4 +1,4 @@
-use core::{MetricType, Rate, Value, MetricSink, SinkMetric, SinkWriter};
+use core::{MetricType, Rate, Value, MetricSink, MetricKey, MetricWriter};
 use cached::{SizedCache, Cached};
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -14,9 +14,9 @@ use std::sync::RwLock;
 // one solution might require SinkMetric<PHANTOM> (everywhere!), not tried because it would be HORRIBLE
 // for now we use this "wrapping reification" of Arc<> which needs to be allocated on every cache miss or hit
 // if you know how to fix it that'd be great
-pub struct CachedMetric<C: MetricSink> (Arc<C::Metric>);
+pub struct CachedKey<C: MetricSink> (Arc<C::Metric>);
 
-impl <C: MetricSink> SinkMetric for CachedMetric<C> {}
+impl <C: MetricSink> MetricKey for CachedKey<C> {}
 
 // WRITER
 
@@ -24,8 +24,8 @@ pub struct CachedMetricWriter<C: MetricSink> {
     target: C::Writer,
 }
 
-impl <C: MetricSink> SinkWriter<CachedMetric<C>> for CachedMetricWriter<C> {
-    fn write(&self, metric: &CachedMetric<C>, value: Value) {
+impl <C: MetricSink> MetricWriter<CachedKey<C>> for CachedMetricWriter<C> {
+    fn write(&self, metric: &CachedKey<C>, value: Value) {
         self.target.write(metric.0.as_ref(), value)
     }
 }
@@ -46,23 +46,23 @@ impl <C: MetricSink> MetricCache<C> {
 }
 
 impl <C: MetricSink> MetricSink for MetricCache<C> {
-    type Metric = CachedMetric<C>;
+    type Metric = CachedKey<C>;
     type Writer = CachedMetricWriter<C>;
 
-    fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sampling: Rate) -> CachedMetric<C> {
+    fn define<S: AsRef<str>>(&self, m_type: MetricType, name: S, sampling: Rate) -> CachedKey<C> {
         let key = name.as_ref().to_string();
         {
             let mut cache = self.cache.write().unwrap();
             let cached_metric = cache.cache_get(&key);
             if let Some(cached_metric) = cached_metric {
-                return CachedMetric(cached_metric.clone());
+                return CachedKey(cached_metric.clone());
             }
         }
         let target_metric = self.target.define(m_type, name, sampling);
         let new_metric = Arc::new( target_metric );
         let mut cache = self.cache.write().unwrap();
         cache.cache_set(key, new_metric.clone());
-        CachedMetric(new_metric)
+        CachedKey(new_metric)
     }
 
     fn new_writer(&self) -> CachedMetricWriter<C> {

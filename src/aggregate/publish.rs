@@ -1,6 +1,6 @@
 //// Aggregate Source
 
-use core::{MetricSink, MetricType, SinkWriter};
+use core::{MetricSink, MetricType, MetricWriter};
 use aggregate::sink::{AggregateSource, AggregateScore};
 
 /// Publisher from aggregate metrics to target channel
