@@ -41,16 +41,19 @@ pub enum MetricType {
 /// Since value is only ever increased by one, no value parameter is provided,
 /// preventing potential problems.
 pub trait EventMetric {
+    /// Record a single event occurence.
     fn mark(&self);
 }
 
 /// A trait for counters and gauges to report values.
 pub trait GaugeMetric {
+    /// Record a value point for this gauge.
     fn value<V>(&self, value: V) where V: ToPrimitive;
 }
 
 /// A trait for counters and gauges to report values.
 pub trait CountMetric {
+    /// Record a value count.
     fn count<V>(&self, count: V) where V: ToPrimitive;
 }
 
@@ -130,6 +133,8 @@ pub trait MetricDispatch {
     /// define a new timer metric
     fn new_timer<S: AsRef<str>>(&self, name: S) -> Self::Timer;
 
+    fn with_prefix<S: AsRef<str>>(&self, prefix: S) -> Self;
+
 //    fn with_scope<F>(&mut self, operations: F)
 //    where
 //        F: Fn(&Self::Scope);
@@ -138,7 +143,7 @@ pub trait MetricDispatch {
 /// Metric sources allow a group of metrics to be defined and written as one.
 /// Source implementers may get their data from internally aggregated or buffered metrics
 /// or they may read existing metrics not defined by the app (OS counters, etc)
-pub trait MetricPublisher {
+pub trait MetricPublish {
     fn publish(&self);
 }
 

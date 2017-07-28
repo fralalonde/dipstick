@@ -71,8 +71,10 @@ pub fn sample_scheduled_statsd_aggregation() {
     let mut app_metrics = DirectDispatch::new(dual_sink);
     let counter = app_metrics.new_count("counter_a");
     let timer = app_metrics.new_timer("timer_b");
-    let event = app_metrics.new_event("event_c");
-    let gauge = app_metrics.new_gauge("gauge_d");
+
+    let subsystem_metrics = app_metrics.with_prefix("subsystem.");
+    let event = subsystem_metrics.new_event("event_c");
+    let gauge = subsystem_metrics.new_gauge("gauge_d");
 
     loop {
         // report some metric values from our "application" loop
@@ -87,6 +89,7 @@ pub fn sample_scheduled_statsd_aggregation() {
 //            );
             event.mark();
             time!(timer, sleep(Duration::from_millis(5)));
+            timer.time(|| sleep(Duration::from_millis(5)));
 //        });
     }
 
