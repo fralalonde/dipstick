@@ -96,14 +96,6 @@ pub trait TimerMetric {
     }
 }
 
-///// A dispatch scope provides a way to group metric values
-///// for an operations (i.e. serving a request, processing a message)
-//pub trait DispatchScope {
-//    /// Free-form properties can be set fluently for the scope, providing downstream metric
-//    /// components with contextual information (i.e. user name, message id, etc)
-//    fn set_property<S: AsRef<str>>(&self, key: S, value: S) -> &Self;
-//}
-
 /// Main trait of the metrics API
 pub trait MetricDispatch {
     /// type of event metric for this dispatch
@@ -118,9 +110,6 @@ pub trait MetricDispatch {
     /// type of timer metric for this dispatch
     type Timer: TimerMetric;
 
-//    /// type of scope for this dispatch
-//    type Scope: DispatchScope;
-
     /// define a new event metric
     fn new_event<S: AsRef<str>>(&self, name: S) -> Self::Event;
 
@@ -134,10 +123,23 @@ pub trait MetricDispatch {
     fn new_timer<S: AsRef<str>>(&self, name: S) -> Self::Timer;
 
     fn with_prefix<S: AsRef<str>>(&self, prefix: S) -> Self;
+}
 
-//    fn with_scope<F>(&mut self, operations: F)
-//    where
-//        F: Fn(&Self::Scope);
+/// A dispatch scope provides a way to group metric values
+/// for an operations (i.e. serving a request, processing a message)
+pub trait DispatchScope {
+    /// Free-form properties can be set fluently for the scope, providing downstream metric
+    /// components with contextual information (i.e. user name, message id, etc)
+    fn set_property<S: AsRef<str>>(&self, key: S, value: S) -> &Self;
+}
+
+pub trait ScopingDispatch {
+    /// type of scope for this dispatch
+    type Scope: DispatchScope;
+
+    fn with_scope<F>(&mut self, operations: F)
+    where
+        F: Fn(&Self::Scope);
 }
 
 /// Metric sources allow a group of metrics to be defined and written as one.

@@ -1,13 +1,12 @@
-use core::{MetricType, Value, MetricWriter, MetricSink, MetricDispatch, EventMetric, CountMetric,
-           GaugeMetric, TimerMetric};
+use core::{MetricType, Value, MetricWriter, MetricSink, MetricDispatch,
+           EventMetric, CountMetric, GaugeMetric, TimerMetric};
 use std::sync::Arc;
-use thread_local_object::ThreadLocal;
 use num::ToPrimitive;
 
 /// Base struct for all direct dispatch metrics
 struct DirectMetric<C: MetricSink + 'static> {
     metric: <C as MetricSink>::Metric,
-    dispatch_scope: Arc<DirectDispatchWriter<C>>,
+    writer: Arc<DirectWriter<C>>,
 }
 
 /// An event marker that dispatches values directly to the metrics backend
@@ -22,78 +21,57 @@ pub struct DirectCount<C: MetricSink + 'static>(DirectMetric<C>);
 /// An timer that dispatches values directly to the metrics backend
 pub struct DirectTimer<C: MetricSink + 'static>(DirectMetric<C>);
 
-/// A scoped writer
-pub struct ScopeWriter<C: MetricSink> {
-    writer: C::Writer,
+pub struct DirectWriter<C: MetricSink + 'static> {
+    target_writer: C::Writer,
 }
 
-//impl<C: MetricSink> DispatchScope for ScopeWriter<C> {
-//    fn set_property<S: AsRef<str>>(&self, key: S, value: S) -> &Self {
-//        self
-//    }
-//}
-
-/// The shared scope-selector for all of a single Dispatcher metrics
-pub struct DirectDispatchWriter<C: MetricSink + 'static> {
-    default_scope: C::Writer,
-    thread_scope: ThreadLocal<ScopeWriter<C>>,
-}
-
-impl<C: MetricSink> DirectDispatchWriter<C> {
+impl<C: MetricSink> DirectWriter<C> {
     fn write(&self, metric: &C::Metric, value: Value) {
-        let scope = self.thread_scope.get(|scope| match scope {
-            Some(scoped) => scoped.writer.write(metric, value),
-            None => self.default_scope.write(metric, value),
-        });
+       self.target_writer.write(metric, value)
     }
 }
 
 impl<C: MetricSink> EventMetric for DirectEvent<C> {
     fn mark(&self) {
-        self.0.dispatch_scope.write(&self.0.metric, 1);
+        self.0.writer.write(&self.0.metric, 1);
     }
 }
 
 impl<C: MetricSink> CountMetric for DirectCount<C> {
     fn count<V>(&self, count: V) where V: ToPrimitive {
-        self.0.dispatch_scope.write(&self.0.metric, count.to_u64().unwrap());
+        self.0.writer.write(&self.0.metric, count.to_u64().unwrap());
     }
 }
 
 impl<C: MetricSink> GaugeMetric for DirectGauge<C> {
     fn value<V>(&self, value: V) where V: ToPrimitive {
-        self.0.dispatch_scope.write(&self.0.metric, value.to_u64().unwrap());
+        self.0.writer.write(&self.0.metric, value.to_u64().unwrap());
     }
 }
 
 impl<C: MetricSink> TimerMetric for DirectTimer<C> {
     fn interval_us<V>(&self, interval_us: V) -> V where V: ToPrimitive {
-        self.0.dispatch_scope.write(&self.0.metric, interval_us.to_u64().unwrap());
+        self.0.writer.write(&self.0.metric, interval_us.to_u64().unwrap());
         interval_us
     }
 }
 
-//impl<C: MetricSink> DispatchScope for DirectDispatchWriter<C> {
-//    fn set_property<S: AsRef<str>>(&self, key: S, value: S) -> &Self {
-//        self
-//    }
-//}
-
+/// A metric dispatch that writes directly to the metric backend (not queuing)
 pub struct DirectDispatch<C: MetricSink + 'static> {
     prefix: String,
     target: Arc<C>,
-    dispatch_scope: Arc<DirectDispatchWriter<C>>,
+    writer: Arc<DirectWriter<C>>,
 }
 
 impl<C: MetricSink> DirectDispatch<C> {
+    /// Create a new direct metric dispatch
     pub fn new(target: C) -> DirectDispatch<C> {
-        let default_scope = target.new_writer();
+        let target_writer = target.new_writer();
         DirectDispatch {
             prefix: "".to_string(),
             target: Arc::new(target),
-            dispatch_scope: Arc::new(DirectDispatchWriter {
-                default_scope,
-                thread_scope: ThreadLocal::new(),
+            writer: Arc::new(DirectWriter {
+                target_writer,
             }),
         }
     }
@@ -121,7 +99,7 @@ impl<C: MetricSink> MetricDispatch for DirectDispatch<C> {
         let metric = self.target.new_metric(MetricType::Event, self.add_prefix(name), 1.0);
         DirectEvent(DirectMetric {
             metric,
-            dispatch_scope: self.dispatch_scope.clone(),
+            writer: self.writer.clone(),
         })
     }
 
@@ -129,7 +107,7 @@ impl<C: MetricSink> MetricDispatch for DirectDispatch<C> {
         let metric = self.target.new_metric(MetricType::Count, self.add_prefix(name), 1.0);
         DirectCount(DirectMetric {
             metric,
-            dispatch_scope: self.dispatch_scope.clone(),
+            writer: self.writer.clone(),
         })
     }
 
@@ -137,7 +115,7 @@ impl<C: MetricSink> MetricDispatch for DirectDispatch<C> {
         let metric = self.target.new_metric(MetricType::Time, self.add_prefix(name), 1.0);
         DirectTimer(DirectMetric {
             metric,
-            dispatch_scope: self.dispatch_scope.clone(),
+            writer: self.writer.clone(),
         })
     }
 
@@ -145,7 +123,7 @@ impl<C: MetricSink> MetricDispatch for DirectDispatch<C> {
         let metric = self.target.new_metric(MetricType::Gauge, self.add_prefix(name), 1.0);
         DirectGauge(DirectMetric {
             metric,
-            dispatch_scope: self.dispatch_scope.clone(),
+            writer: self.writer.clone(),
         })
     }
 
@@ -153,23 +131,10 @@ impl<C: MetricSink> MetricDispatch for DirectDispatch<C> {
         DirectDispatch {
             prefix: prefix.as_ref().to_string(),
             target: self.target.clone(),
-            dispatch_scope: self.dispatch_scope.clone(),
+            writer: self.writer.clone(),
         }
     }
 
-//    fn with_scope<F>(&mut self, operations: F)
-//    where
-//        F: Fn(&Self::Scope),
-//    {
-//        let new_writer = self.target.new_writer();
-//        let scope = ScopeWriter { writer: new_writer };
-//        // TODO add ThreadLocal with(T, FnOnce) method to replace these three
-//        self.dispatch_scope.thread_scope.set(scope);
-//        self.dispatch_scope.thread_scope.get(|option_scope| {
-//            operations(option_scope.unwrap())
-//        });
-//        self.dispatch_scope.thread_scope.remove();
-//    }
 }
 
 /// Run benchmarks with `cargo +nightly bench --features bench`
