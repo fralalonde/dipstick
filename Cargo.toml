@@ -12,6 +12,7 @@ log = "0.3.8"
 time = "0.1"
 scheduled-executor = "0.3.0"
 thread-local-object = "0.1.0"
+num = "0.1.40"
 
 [features]
 bench = []

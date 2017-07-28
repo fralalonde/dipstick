@@ -1,5 +1,6 @@
 use time;
 use std::result::Iter;
+use num::ToPrimitive;
 
 //////////////////
 // DEFINITIONS
@@ -16,9 +17,9 @@ impl TimeHandle {
         TimeHandle(time::precise_time_ns())
     }
 
-    /// Get the elapsed time in milliseconds since TimeHandle was obtained.
-    pub fn elapsed_ms(self) -> Value {
-        (TimeHandle::now().0 - self.0) / 1_000_000
+    /// Get the elapsed time in microseconds since TimeHandle was obtained.
+    pub fn elapsed_us(self) -> Value {
+        (TimeHandle::now().0 - self.0) / 1_000
     }
 }
 
@@ -44,8 +45,13 @@ pub trait EventMetric {
 }
 
 /// A trait for counters and gauges to report values.
-pub trait ValueMetric {
-    fn value(&self, value: Value);
+pub trait GaugeMetric {
+    fn value<V>(&self, value: V) where V: ToPrimitive;
+}
+
+/// A trait for counters and gauges to report values.
+pub trait CountMetric {
+    fn count<V>(&self, count: V) where V: ToPrimitive;
 }
 
 /// A trait for timers to report values.
@@ -53,7 +59,7 @@ pub trait ValueMetric {
 /// - with start() / stop() methods wrapping aroung the operation to time
 /// - with the time! macro, which wraps a block with start() / stop() calls.
 /// - as regular ValueMetric with value() where the value is a time interval in milliseconds.
-pub trait TimerMetric: ValueMetric {
+pub trait TimerMetric {
     /// Obtain a opaque handle to the current time.
     /// The handle is passed back to the stop() method to record a time interval.
     /// This is actually a convenience method to the TimeHandle::now()
@@ -68,19 +74,22 @@ pub trait TimerMetric: ValueMetric {
     /// This call can be performed multiple times using the same handle,
     /// reporting distinct time intervals each time.
     fn stop(&self, start_time: TimeHandle) -> u64 {
-        let elapsed_ms = start_time.elapsed_ms();
-        self.value(elapsed_ms);
-        elapsed_ms
+        let elapsed_us = start_time.elapsed_us();
+        self.interval_us(elapsed_us)
     }
+
+    /// Record a microsecond interval for this timer
+    /// Can be used in place of start()/stop() if an external time interval source is used
+    fn interval_us<V>(&self, count: V) -> V where V: ToPrimitive;
 }
 
-/// A dispatch scope provides a way to group metric values
-/// for an operations (i.e. serving a request, processing a message)
-pub trait DispatchScope {
-    /// Free-form properties can be set fluently for the scope, providing downstream metric
-    /// components with contextual information (i.e. user name, message id, etc)
-    fn set_property<S: AsRef<str>>(&self, key: S, value: S) -> &Self;
-}
+///// A dispatch scope provides a way to group metric values
+///// for an operations (i.e. serving a request, processing a message)
+//pub trait DispatchScope {
+//    /// Free-form properties can be set fluently for the scope, providing downstream metric
+//    /// components with contextual information (i.e. user name, message id, etc)
+//    fn set_property<S: AsRef<str>>(&self, key: S, value: S) -> &Self;
+//}
 
 /// Main trait of the metrics API
 pub trait MetricDispatch {
@@ -88,29 +97,32 @@ pub trait MetricDispatch {
     type Event: EventMetric;
 
     /// type of value metric for this dispatch
-    type Value: ValueMetric;
+    type Count: CountMetric;
+
+    /// type of value metric for this dispatch
+    type Gauge: GaugeMetric;
 
     /// type of timer metric for this dispatch
     type Timer: TimerMetric;
 
-    /// type of scope for this dispatch
-    type Scope: DispatchScope;
+//    /// type of scope for this dispatch
+//    type Scope: DispatchScope;
 
     /// define a new event metric
     fn new_event<S: AsRef<str>>(&self, name: S) -> Self::Event;
 
     /// define a new count metric
-    fn new_count<S: AsRef<str>>(&self, name: S) -> Self::Value;
+    fn new_count<S: AsRef<str>>(&self, name: S) -> Self::Count;
+
+    /// define a new gauge metric
+    fn new_gauge<S: AsRef<str>>(&self, name: S) -> Self::Gauge;
 
     /// define a new timer metric
     fn new_timer<S: AsRef<str>>(&self, name: S) -> Self::Timer;
 
-    /// define a new gauge metric
-    fn new_gauge<S: AsRef<str>>(&self, name: S) -> Self::Value;
-
-    fn with_scope<F>(&mut self, operations: F)
-    where
-        F: Fn(&Self::Scope);
+//    fn with_scope<F>(&mut self, operations: F)
+//    where
+//        F: Fn(&Self::Scope);
 }
 
 /// Metric sources allow a group of metrics to be defined and written as one.
@@ -124,12 +136,13 @@ pub trait MetricPublisher {
 /// Elapsed time is sent to the supplied statsd client after the computation has been performed.
 /// Expression result (if any) is transparently returned.
 #[macro_export]
-macro_rules! time {
-    ($timer: expr, $body: block) => {{
+macro_rules! timer {
+    ($timer: expr, $body: expr) => {{
         let start_time = $timer.start();
-        $body
+        let value = $body;
         $timer.stop(start_time);
-    }};
+        value
+    }}
 }
 
 /// Main trait of the metrics backend API.

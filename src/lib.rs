@@ -27,6 +27,7 @@ extern crate log;
 
 #[macro_use]
 extern crate lazy_static;
+extern crate num;
 
 pub mod core;
 pub mod dual;

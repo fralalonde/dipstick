@@ -15,6 +15,7 @@ extern crate scheduled_executor;
 extern crate thread_local_object;
 
 extern crate cached;
+extern crate num;
 
 #[macro_use]
 pub mod core;
@@ -35,8 +36,8 @@ use statsd::StatsdSink;
 use logging::LoggingSink;
 use aggregate::sink::MetricAggregator;
 use aggregate::publish::AggregatePublisher;
-use core::{MetricType, MetricSink, MetricWriter, MetricDispatch, ValueMetric, TimerMetric,
-           EventMetric, DispatchScope};
+use core::{MetricType, MetricSink, MetricWriter, MetricDispatch, CountMetric, GaugeMetric,
+           TimerMetric, EventMetric};
 use std::thread::sleep;
 use scheduled_executor::CoreExecutor;
 use std::time::Duration;
@@ -75,20 +76,18 @@ pub fn sample_scheduled_statsd_aggregation() {
 
     loop {
         // report some metric values from our "application" loop
-        counter.value(11);
+        counter.count(11);
         gauge.value(22);
 
-        // use scope to update metrics as one (single log line, single network packet, etc.)
-        app_metrics.with_scope(|scope| {
-            scope.set_property("http_method", "POST").set_property(
-                "user_id",
-                "superdude",
-            );
+        // TODO use scope to update metrics as one (single log line, single network packet, etc.)
+//        app_metrics.with_scope(|scope| {
+//            scope.set_property("http_method", "POST").set_property(
+//                "user_id",
+//                "superdude",
+//            );
             event.mark();
-            time!(timer, {
-                sleep(Duration::from_millis(5));
-            });
-        });
+            timer!(timer, sleep(Duration::from_millis(5)));
+//        });
     }
 
 }
@@ -124,5 +123,5 @@ pub fn counter_to_log() {
     let metrics_log = LoggingSink::new("metrics");
     let metrics = DirectDispatch::new(metrics_log);
     let counter = metrics.new_count("count_a");
-    counter.value(1);
+    counter.count(10.2);
 }
