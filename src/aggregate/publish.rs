@@ -35,10 +35,11 @@ impl<C: MetricSink> AggregatePublisher<C> {
                 }
                 AggregateScore::Value { hit, sum, max, min } => {
                     if hit > 0 {
-                        // do not report gauges sum and hit, they are meaningless
                         match &metric.m_type {
+                            &MetricType::Count |
+                            &MetricType::Time |
                             &MetricType::Gauge => {
-                                // NOTE averaging badly
+                                // NOTE best-effort averaging
                                 // - hit and sum are not incremented nor read as one
                                 // - integer division is not rounding
                                 // assuming values will still be good enough to be useful
@@ -46,11 +47,20 @@ impl<C: MetricSink> AggregatePublisher<C> {
                                 let temp_metric = self.target.new_metric(metric.m_type, name, 1.0);
                                 scope.write(&temp_metric, sum / hit);
                             }
+                            _ => (),
+                        }
+
+                        match &metric.m_type {
+                            // do not report gauges sum and hit, they are meaningless
                             &MetricType::Count |
                             &MetricType::Time => {
                                 let name = format!("{}.sum", &metric.name);
                                 let temp_metric = self.target.new_metric(metric.m_type, name, 1.0);
                                 scope.write(&temp_metric, sum);
+
+                                let name = format!("{}.hit", &metric.name);
+                                let temp_metric = self.target.new_metric(metric.m_type, name, 1.0);
+                                scope.write(&temp_metric, hit);
                             }
                             _ => (),
                         }

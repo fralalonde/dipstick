@@ -1,5 +1,5 @@
 use core::{MetricType, Value, MetricWriter, MetricSink, MetricDispatch, EventMetric, CountMetric,
-            GaugeMetric, TimerMetric};
+           GaugeMetric, TimerMetric};
 use std::sync::Arc;
 use thread_local_object::ThreadLocal;
 use num::ToPrimitive;
@@ -80,7 +80,8 @@ impl<C: MetricSink> TimerMetric for DirectTimer<C> {
 //}
 
 pub struct DirectDispatch<C: MetricSink + 'static> {
-    target: C,
+    prefix: String,
+    target: Arc<C>,
     dispatch_scope: Arc<DirectDispatchWriter<C>>,
 }
 
@@ -88,12 +89,23 @@ impl<C: MetricSink> DirectDispatch<C> {
     pub fn new(target: C) -> DirectDispatch<C> {
         let default_scope = target.new_writer();
         DirectDispatch {
-            target,
+            prefix: "".to_string(),
+            target: Arc::new(target),
             dispatch_scope: Arc::new(DirectDispatchWriter {
                 default_scope,
                 thread_scope: ThreadLocal::new(),
             }),
         }
+    }
+
+    fn add_prefix<S: AsRef<str>>(&self, name: S) -> String {
+        // FIXME is there a way to return <S> in both cases?
+        if self.prefix.is_empty() {
+            return name.as_ref().to_string()
+        }
+        let mut buf:String = self.prefix.clone();
+        buf.push_str(name.as_ref());
+        buf.to_string()
     }
 }
 
@@ -106,7 +118,7 @@ impl<C: MetricSink> MetricDispatch for DirectDispatch<C> {
 //    type Scope = ScopeWriter<C>;
 
     fn new_event<S: AsRef<str>>(&self, name: S) -> Self::Event {
-        let metric = self.target.new_metric(MetricType::Event, name, 1.0);
+        let metric = self.target.new_metric(MetricType::Event, self.add_prefix(name), 1.0);
         DirectEvent(DirectMetric {
             metric,
             dispatch_scope: self.dispatch_scope.clone(),
@@ -114,7 +126,7 @@ impl<C: MetricSink> MetricDispatch for DirectDispatch<C> {
     }
 
     fn new_count<S: AsRef<str>>(&self, name: S) -> Self::Count {
-        let metric = self.target.new_metric(MetricType::Count, name, 1.0);
+        let metric = self.target.new_metric(MetricType::Count, self.add_prefix(name), 1.0);
         DirectCount(DirectMetric {
             metric,
             dispatch_scope: self.dispatch_scope.clone(),
@@ -122,7 +134,7 @@ impl<C: MetricSink> MetricDispatch for DirectDispatch<C> {
     }
 
     fn new_timer<S: AsRef<str>>(&self, name: S) -> Self::Timer {
-        let metric = self.target.new_metric(MetricType::Time, name, 1.0);
+        let metric = self.target.new_metric(MetricType::Time, self.add_prefix(name), 1.0);
         DirectTimer(DirectMetric {
             metric,
             dispatch_scope: self.dispatch_scope.clone(),
@@ -130,11 +142,19 @@ impl<C: MetricSink> MetricDispatch for DirectDispatch<C> {
     }
 
     fn new_gauge<S: AsRef<str>>(&self, name: S) -> Self::Gauge {
-        let metric = self.target.new_metric(MetricType::Gauge, name, 1.0);
+        let metric = self.target.new_metric(MetricType::Gauge, self.add_prefix(name), 1.0);
         DirectGauge(DirectMetric {
             metric,
             dispatch_scope: self.dispatch_scope.clone(),
         })
+    }
+
+    fn with_prefix<S: AsRef<str>>(&self, prefix: S) -> Self {
+        DirectDispatch {
+            prefix: prefix.as_ref().to_string(),
+            target: self.target.clone(),
+            dispatch_scope: self.dispatch_scope.clone(),
+        }
     }
 
 //    fn with_scope<F>(&mut self, operations: F)
