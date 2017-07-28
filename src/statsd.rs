@@ -8,6 +8,7 @@ use std::sync::Arc;
 pub struct StatsdKey {
     prefix: String,
     suffix: String,
+    scale: u64,
 }
 
 impl MetricKey for StatsdKey {}
@@ -33,7 +34,12 @@ fn flush(payload: &mut String, socket: &UdpSocket) {
 
 impl MetricWriter<StatsdKey> for StatsdWriter {
     fn write(&self, metric: &StatsdKey, value: Value) {
-        let value_str = value.to_string();
+        let scaled_value = if metric.scale != 1 {
+            value / metric.scale
+        } else {
+            value
+        };
+        let value_str = scaled_value.to_string();
         let entry_len = metric.prefix.len() + value_str.len() + metric.suffix.len();
 
         SEND_BUFFER.with(|cell| {
@@ -120,7 +126,12 @@ impl MetricSink for StatsdSink {
             suffix.push_str(&sampling.to_string());
         }
 
-        StatsdKey { prefix, suffix }
+        let scale = match m_type {
+            MetricType::Time => 1000,
+            _ => 1
+        };
+
+        StatsdKey { prefix, suffix, scale }
     }
 
     fn new_writer(&self) -> StatsdWriter {
