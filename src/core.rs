@@ -55,10 +55,11 @@ pub trait CountMetric {
 }
 
 /// A trait for timers to report values.
-/// Timers can be used :
-/// - with start() / stop() methods wrapping aroung the operation to time
-/// - with the time! macro, which wraps a block with start() / stop() calls.
-/// - as regular ValueMetric with value() where the value is a time interval in milliseconds.
+/// Timers can record time intervals in multiple ways :
+/// - with the time! macro, which wraps an expression or block with start() and stop() calls.
+/// - with the time(Fn) method, which wraps a closure with start() and stop() calls.
+/// - with start() and stop() methods, wrapping around the operation to time
+/// - with the interval_us() method, providing an externally determined microsecond interval
 pub trait TimerMetric {
     /// Obtain a opaque handle to the current time.
     /// The handle is passed back to the stop() method to record a time interval.
@@ -73,6 +74,7 @@ pub trait TimerMetric {
     /// Record the time elapsed since the start_time handle was obtained.
     /// This call can be performed multiple times using the same handle,
     /// reporting distinct time intervals each time.
+    /// Returns the microsecond interval value that was recorded.
     fn stop(&self, start_time: TimeHandle) -> u64 {
         let elapsed_us = start_time.elapsed_us();
         self.interval_us(elapsed_us)
@@ -81,6 +83,14 @@ pub trait TimerMetric {
     /// Record a microsecond interval for this timer
     /// Can be used in place of start()/stop() if an external time interval source is used
     fn interval_us<V>(&self, count: V) -> V where V: ToPrimitive;
+
+    /// Record the time taken to execute the provided closure
+    fn time<F, R>(&self, operations: F) -> R where F: FnOnce() -> R {
+        let start_time = self.start();
+        let value: R = operations();
+        self.stop(start_time);
+        value
+    }
 }
 
 ///// A dispatch scope provides a way to group metric values
@@ -136,7 +146,7 @@ pub trait MetricPublisher {
 /// Elapsed time is sent to the supplied statsd client after the computation has been performed.
 /// Expression result (if any) is transparently returned.
 #[macro_export]
-macro_rules! timer {
+macro_rules! time {
     ($timer: expr, $body: expr) => {{
         let start_time = $timer.start();
         let value = $body;

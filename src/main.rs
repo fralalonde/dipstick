@@ -30,7 +30,7 @@ pub mod cache;
 pub mod pcg32;
 
 use dual::DualSink;
-use dispatch::DirectDispatch;
+use dispatch::{DirectDispatch, DirectCount, DirectTimer};
 use sampling::SamplingSink;
 use statsd::StatsdSink;
 use logging::LoggingSink;
@@ -86,7 +86,7 @@ pub fn sample_scheduled_statsd_aggregation() {
 //                "superdude",
 //            );
             event.mark();
-            timer!(timer, sleep(Duration::from_millis(5)));
+            time!(timer, sleep(Duration::from_millis(5)));
 //        });
     }
 
@@ -124,4 +124,14 @@ pub fn counter_to_log() {
     let metrics = DirectDispatch::new(metrics_log);
     let counter = metrics.new_count("count_a");
     counter.count(10.2);
+}
+
+const STATSD_SAMPLING_RATE: f64 = 0.0001;
+
+lazy_static! {
+    pub static ref METRICS: DirectDispatch<SamplingSink<StatsdSink>> = DirectDispatch::new(
+        SamplingSink::new(StatsdSink::new("localhost:8125", env!("CARGO_PKG_NAME")).unwrap(), STATSD_SAMPLING_RATE));
+
+    pub static ref SERVICE_RESPONSE_TIME:     DirectTimer<SamplingSink<StatsdSink>>   = METRICS.new_timer("service.response.time");
+    pub static ref SERVICE_RESPONSE_BYTES:    DirectCount<SamplingSink<StatsdSink>>   = METRICS.new_count("service.response.bytes");
 }
