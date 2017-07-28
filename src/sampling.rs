@@ -41,13 +41,8 @@ impl<C: MetricSink> MetricSink for SamplingSink<C> {
     type Metric = SamplingKey<C::Metric>;
     type Writer = SamplingWriter<C>;
 
-
-    fn new_metric<S: AsRef<str>>(
-        &self,
-        m_type: MetricType,
-        name: S,
-        sampling: Rate,
-    ) -> SamplingKey<C::Metric> {
+    fn new_metric<S: AsRef<str>>(&self, m_type: MetricType, name: S, sampling: Rate)
+        -> SamplingKey<C::Metric> {
         let pm = self.target.new_metric(m_type, name, self.sampling_rate);
         SamplingKey {
             target: pm,
