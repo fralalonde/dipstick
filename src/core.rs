@@ -1,5 +1,4 @@
 use time;
-use std::result::Iter;
 use num::ToPrimitive;
 
 //////////////////

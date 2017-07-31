@@ -24,6 +24,7 @@ pub mod dual;
 pub mod dispatch;
 pub mod sampling;
 pub mod aggregate;
+pub mod publish;
 pub mod statsd;
 pub mod logging;
 pub mod cache;
@@ -34,8 +35,8 @@ use dispatch::{DirectDispatch, DirectCount, DirectTimer};
 use sampling::SamplingSink;
 use statsd::StatsdSink;
 use logging::LoggingSink;
-use aggregate::sink::MetricAggregator;
-use aggregate::publish::AggregatePublisher;
+use aggregate::MetricAggregator;
+use publish::AggregatePublisher;
 use core::{MetricType, MetricSink, MetricWriter, MetricDispatch, CountMetric, GaugeMetric,
            TimerMetric, EventMetric};
 use std::thread::sleep;
@@ -59,7 +60,7 @@ pub fn sample_scheduled_statsd_aggregation() {
     // schedule aggregated metrics to be sent to statsd every 3 seconds
     let statsd = MetricCache::new(StatsdSink::new("localhost:8125", "hello.").unwrap(), 512);
     let aggregate_metrics = AggregatePublisher::new(statsd, aggregator.source());
-    // TODO publisher should provide its own scheduler
+    // TODO use publisher publish_every() once it doesnt require 'static publisher
     let exec = CoreExecutor::new().unwrap();
     exec.schedule_fixed_rate(Duration::from_secs(3), Duration::from_secs(3), move |_| {
         aggregate_metrics.publish()

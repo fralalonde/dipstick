@@ -1,6 +1,7 @@
-use core::{MetricType, Rate, Value, MetricWriter, MetricKey, MetricSink, FULL_SAMPLING_RATE};
+pub use core::{MetricType, Rate, Value, MetricWriter, MetricKey, MetricSink, FULL_SAMPLING_RATE};
+pub use std::io::Result;
+
 use std::net::UdpSocket;
-use std::io::Result;
 use std::cell::RefCell;
 use std::sync::Arc;
 

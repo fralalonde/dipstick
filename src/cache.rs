@@ -1,4 +1,4 @@
-use core::{MetricType, Rate, Value, MetricSink, MetricKey, MetricWriter};
+pub use core::{MetricType, Rate, Value, MetricSink, MetricKey, MetricWriter};
 use cached::{SizedCache, Cached};
 use std::sync::Arc;
 use std::sync::RwLock;
