@@ -1,4 +1,4 @@
-use core::{MetricType, Rate, Value, MetricWriter, MetricKey, MetricSink};
+pub use core::{MetricType, Rate, Value, MetricWriter, MetricKey, MetricSink};
 
 #[derive(Debug)]
 pub struct DualKey<M1: MetricKey, M2: MetricKey> {

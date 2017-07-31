@@ -1,5 +1,4 @@
-use core::{MetricType, Rate, Value, MetricWriter, MetricKey, MetricSink};
-use pcg32;
+pub use core::{MetricType, Rate, Value, MetricWriter, MetricKey, MetricSink};
 
 #[derive(Debug)]
 pub struct ScopeKey<M: MetricKey> {

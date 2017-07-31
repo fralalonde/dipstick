@@ -1,9 +1,13 @@
 //// Aggregate Source
 
-use core::{MetricSink, MetricType, MetricWriter};
-use aggregate::sink::{AggregateSource, AggregateScore};
+pub use core::{MetricSink, MetricType, MetricWriter};
+pub use aggregate::{AggregateSource, AggregateScore};
+use std::time::Duration;
+use scheduled_executor::CoreExecutor;
+
 
 /// Publisher from aggregate metrics to target channel
+#[derive(Debug)]
 pub struct AggregatePublisher<C: MetricSink> {
     source: AggregateSource,
     target: C,
@@ -16,7 +20,19 @@ impl<C: MetricSink> AggregatePublisher<C> {
     }
 }
 
-impl<C: MetricSink> AggregatePublisher<C> {
+lazy_static! {
+    static ref EXEC: CoreExecutor = CoreExecutor::new().unwrap();
+}
+
+impl<C: MetricSink + Sync> AggregatePublisher<C> {
+
+    /// Schedules the publisher to run at recurrent intervals
+    pub fn publish_every(&'static self, duration: Duration) {
+        EXEC.schedule_fixed_rate(duration, duration, move |_| {
+            self.publish()
+        });
+    }
+
     /// Define and write metrics from aggregated scores to the target channel
     /// If this is called repeatedly it can be a good idea to use the metric cache
     /// to prevent new metrics from being created every time.

@@ -2,8 +2,6 @@ use core::{MetricType, Rate, Value, MetricWriter, MetricKey, MetricSink};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::usize;
-use std::slice::Iter;
-
 
 #[derive(Debug)]
 enum AtomicScore {

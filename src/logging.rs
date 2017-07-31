@@ -1,4 +1,4 @@
-use core::{MetricType, Rate, Value, MetricWriter, MetricKey, MetricSink};
+pub use core::{MetricType, Rate, Value, MetricWriter, MetricKey, MetricSink};
 
 //////////// Log Channel
 

@@ -1,7 +1,7 @@
-use core::{MetricType, Value, MetricWriter, MetricSink, MetricDispatch,
+pub use core::{MetricType, Value, MetricWriter, MetricSink, MetricDispatch,
            EventMetric, CountMetric, GaugeMetric, TimerMetric};
 use std::sync::Arc;
-use num::ToPrimitive;
+pub use num::ToPrimitive;
 
 /// Base struct for all direct dispatch metrics
 struct DirectMetric<C: MetricSink + 'static> {
@@ -93,8 +93,6 @@ impl<C: MetricSink> MetricDispatch for DirectDispatch<C> {
     type Gauge = DirectGauge<C>;
     type Timer = DirectTimer<C>;
 
-//    type Scope = ScopeWriter<C>;
-
     fn new_event<S: AsRef<str>>(&self, name: S) -> Self::Event {
         let metric = self.target.new_metric(MetricType::Event, self.add_prefix(name), 1.0);
         DirectEvent(DirectMetric {
@@ -141,7 +139,7 @@ impl<C: MetricSink> MetricDispatch for DirectDispatch<C> {
 #[cfg(feature = "bench")]
 mod bench {
 
-    use aggregate::sink::MetricAggregator;
+    use aggregate::MetricAggregator;
     use core::{MetricDispatch, EventMetric};
     use test::Bencher;
 

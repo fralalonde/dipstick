@@ -28,12 +28,14 @@ extern crate log;
 #[macro_use]
 extern crate lazy_static;
 extern crate num;
+extern crate scheduled_executor;
 
 pub mod core;
 pub mod dual;
 pub mod dispatch;
 pub mod sampling;
 pub mod aggregate;
+pub mod publish;
 pub mod statsd;
 pub mod logging;
 pub mod pcg32;
