@@ -1,4 +1,4 @@
-pub use core::{MetricType, Rate, Value, MetricWriter, MetricKey, MetricSink};
+use super::{MetricKind, Rate, Value, MetricWriter, MetricKey, MetricSink};
 
 #[derive(Debug)]
 pub struct DualKey<M1: MetricKey, M2: MetricKey> {
@@ -48,18 +48,15 @@ impl<C1: MetricSink, C2: MetricSink> MetricSink for DualSink<C1, C2> {
     type Metric = DualKey<C1::Metric, C2::Metric>;
     type Writer = DualWriter<C1, C2>;
 
-    fn new_metric<S: AsRef<str>>(
-        &self,
-        m_type: MetricType,
-        name: S,
-        sampling: Rate,
-    ) -> DualKey<C1::Metric, C2::Metric> {
-        let metric_1 = self.channel_a.new_metric(m_type, &name, sampling);
-        let metric_2 = self.channel_b.new_metric(m_type, &name, sampling);
+    #[allow(unused_variables)]
+    fn new_metric<S: AsRef<str>>(&self, kind: MetricKind, name: S, sampling: Rate)
+                                 -> Self::Metric {
+        let metric_1 = self.channel_a.new_metric(kind, &name, sampling);
+        let metric_2 = self.channel_b.new_metric(kind, &name, sampling);
         DualKey { metric_1, metric_2 }
     }
 
-    fn new_writer(&self) -> DualWriter<C1, C2> {
+    fn new_writer(&self) -> Self::Writer {
         DualWriter {
             channel_a: self.channel_a.new_writer(),
             channel_b: self.channel_b.new_writer(),

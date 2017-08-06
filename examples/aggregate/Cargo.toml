@@ -1,0 +1,9 @@
+[package]
+name = "aggregate"
+version = "0.0.0"
+workspace = "../../"
+
+[dependencies]
+dipstick = { path = '../../lib' }
+scheduled-executor = "0.3.0"
+

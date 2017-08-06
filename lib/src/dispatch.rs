@@ -1,7 +1,7 @@
-pub use core::{MetricType, Value, MetricWriter, MetricSink, MetricDispatch,
-           EventMetric, CountMetric, GaugeMetric, TimerMetric};
+use super::{MetricKind, Value, MetricWriter, MetricSink, MetricDispatch,
+            EventMetric, CountMetric, GaugeMetric, TimerMetric};
 use std::sync::Arc;
-pub use num::ToPrimitive;
+use num::ToPrimitive;
 
 /// Base struct for all direct dispatch metrics
 struct DirectMetric<C: MetricSink + 'static> {
@@ -94,7 +94,7 @@ impl<C: MetricSink> MetricDispatch for DirectDispatch<C> {
     type Timer = DirectTimer<C>;
 
     fn new_event<S: AsRef<str>>(&self, name: S) -> Self::Event {
-        let metric = self.target.new_metric(MetricType::Event, self.add_prefix(name), 1.0);
+        let metric = self.target.new_metric(MetricKind::Event, self.add_prefix(name), 1.0);
         DirectEvent(DirectMetric {
             metric,
             writer: self.writer.clone(),
@@ -102,7 +102,7 @@ impl<C: MetricSink> MetricDispatch for DirectDispatch<C> {
     }
 
     fn new_count<S: AsRef<str>>(&self, name: S) -> Self::Count {
-        let metric = self.target.new_metric(MetricType::Count, self.add_prefix(name), 1.0);
+        let metric = self.target.new_metric(MetricKind::Count, self.add_prefix(name), 1.0);
         DirectCount(DirectMetric {
             metric,
             writer: self.writer.clone(),
@@ -110,7 +110,7 @@ impl<C: MetricSink> MetricDispatch for DirectDispatch<C> {
     }
 
     fn new_timer<S: AsRef<str>>(&self, name: S) -> Self::Timer {
-        let metric = self.target.new_metric(MetricType::Time, self.add_prefix(name), 1.0);
+        let metric = self.target.new_metric(MetricKind::Time, self.add_prefix(name), 1.0);
         DirectTimer(DirectMetric {
             metric,
             writer: self.writer.clone(),
@@ -118,7 +118,7 @@ impl<C: MetricSink> MetricDispatch for DirectDispatch<C> {
     }
 
     fn new_gauge<S: AsRef<str>>(&self, name: S) -> Self::Gauge {
-        let metric = self.target.new_metric(MetricType::Gauge, self.add_prefix(name), 1.0);
+        let metric = self.target.new_metric(MetricKind::Gauge, self.add_prefix(name), 1.0);
         DirectGauge(DirectMetric {
             metric,
             writer: self.writer.clone(),

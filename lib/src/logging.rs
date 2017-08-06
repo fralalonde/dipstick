@@ -1,4 +1,4 @@
-pub use core::{MetricType, Rate, Value, MetricWriter, MetricKey, MetricSink};
+use super::{MetricKind, Rate, Value, MetricWriter, MetricKey, MetricSink};
 
 //////////// Log Channel
 
@@ -39,11 +39,13 @@ impl MetricSink for LoggingSink {
     type Metric = LoggingKey;
     type Writer = LoggingWriter;
 
-    fn new_metric<S: AsRef<str>>(&self, m_type: MetricType, name: S, sampling: Rate) -> LoggingKey {
-        LoggingKey { prefix: format!("{:?}:{}{}", m_type, self.prefix, name.as_ref()) }
+    #[allow(unused_variables)]
+    fn new_metric<S: AsRef<str>>(&self, kind: MetricKind, name: S, sampling: Rate)
+                                 -> Self::Metric {
+        LoggingKey { prefix: format!("{:?}:{}{}", kind, self.prefix, name.as_ref()) }
     }
 
-    fn new_writer(&self) -> LoggingWriter {
+    fn new_writer(&self) -> Self::Writer {
         LoggingWriter {}
     }
 }

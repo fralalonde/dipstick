@@ -1,5 +1,5 @@
-pub use core::{MetricType, Rate, Value, MetricWriter, MetricKey, MetricSink, FULL_SAMPLING_RATE};
-pub use std::io::Result;
+use super::{MetricKind, Rate, Value, MetricWriter, MetricKey, MetricSink, FULL_SAMPLING_RATE};
+use std::io::Result;
 
 use std::net::UdpSocket;
 use std::cell::RefCell;
@@ -108,7 +108,8 @@ impl MetricSink for StatsdSink {
     type Metric = StatsdKey;
     type Writer = StatsdWriter;
 
-    fn new_metric<S: AsRef<str>>(&self, m_type: MetricType, name: S, sampling: Rate) -> StatsdKey {
+    fn new_metric<S: AsRef<str>>(&self, kind: MetricKind, name: S, sampling: Rate)
+                                 -> Self::Metric {
         let mut prefix = String::with_capacity(32);
         prefix.push_str(&self.prefix);
         prefix.push_str(name.as_ref());
@@ -116,10 +117,10 @@ impl MetricSink for StatsdSink {
 
         let mut suffix = String::with_capacity(16);
         suffix.push('|');
-        suffix.push_str(match m_type {
-            MetricType::Event | MetricType::Count => "c",
-            MetricType::Gauge => "g",
-            MetricType::Time => "ms",
+        suffix.push_str(match kind {
+            MetricKind::Event | MetricKind::Count => "c",
+            MetricKind::Gauge => "g",
+            MetricKind::Time => "ms",
         });
 
         if sampling < FULL_SAMPLING_RATE {
@@ -127,15 +128,15 @@ impl MetricSink for StatsdSink {
             suffix.push_str(&sampling.to_string());
         }
 
-        let scale = match m_type {
-            MetricType::Time => 1000,
+        let scale = match kind {
+            MetricKind::Time => 1000,
             _ => 1
         };
 
         StatsdKey { prefix, suffix, scale }
     }
 
-    fn new_writer(&self) -> StatsdWriter {
+    fn new_writer(&self) -> Self::Writer {
         StatsdWriter { socket: self.socket.clone() }
     }
 }

@@ -1,7 +1,7 @@
 //// Aggregate Source
 
-pub use core::{MetricSink, MetricType, MetricWriter};
-pub use aggregate::{AggregateSource, AggregateScore};
+use super::{MetricSink, MetricKind, MetricWriter};
+use aggregate::{AggregateSource, AggregateScore};
 use std::time::Duration;
 use scheduled_executor::CoreExecutor;
 
@@ -46,47 +46,47 @@ impl<C: MetricSink + Sync> AggregatePublisher<C> {
                 }
                 AggregateScore::Event { hit } => {
                     let name = format!("{}.hit", &metric.name);
-                    let temp_metric = self.target.new_metric(MetricType::Count, name, 1.0);
+                    let temp_metric = self.target.new_metric(MetricKind::Count, name, 1.0);
                     scope.write(&temp_metric, hit);
                 }
                 AggregateScore::Value { hit, sum, max, min } => {
                     if hit > 0 {
-                        match &metric.m_type {
-                            &MetricType::Count |
-                            &MetricType::Time |
-                            &MetricType::Gauge => {
+                        match &metric.kind {
+                            &MetricKind::Count |
+                            &MetricKind::Time |
+                            &MetricKind::Gauge => {
                                 // NOTE best-effort averaging
                                 // - hit and sum are not incremented nor read as one
                                 // - integer division is not rounding
                                 // assuming values will still be good enough to be useful
                                 let name = format!("{}.avg", &metric.name);
-                                let temp_metric = self.target.new_metric(metric.m_type, name, 1.0);
+                                let temp_metric = self.target.new_metric(metric.kind, name, 1.0);
                                 scope.write(&temp_metric, sum / hit);
                             }
                             _ => (),
                         }
 
-                        match &metric.m_type {
+                        match &metric.kind {
                             // do not report gauges sum and hit, they are meaningless
-                            &MetricType::Count |
-                            &MetricType::Time => {
+                            &MetricKind::Count |
+                            &MetricKind::Time => {
                                 let name = format!("{}.sum", &metric.name);
-                                let temp_metric = self.target.new_metric(metric.m_type, name, 1.0);
+                                let temp_metric = self.target.new_metric(metric.kind, name, 1.0);
                                 scope.write(&temp_metric, sum);
 
                                 let name = format!("{}.hit", &metric.name);
-                                let temp_metric = self.target.new_metric(metric.m_type, name, 1.0);
+                                let temp_metric = self.target.new_metric(metric.kind, name, 1.0);
                                 scope.write(&temp_metric, hit);
                             }
                             _ => (),
                         }
 
                         let name = format!("{}.max", &metric.name);
-                        let temp_metric = self.target.new_metric(MetricType::Gauge, name, 1.0);
+                        let temp_metric = self.target.new_metric(MetricKind::Gauge, name, 1.0);
                         scope.write(&temp_metric, max);
 
                         let name = format!("{}.min", &metric.name);
-                        let temp_metric = self.target.new_metric(MetricType::Gauge, name, 1.0);
+                        let temp_metric = self.target.new_metric(MetricKind::Gauge, name, 1.0);
                         scope.write(&temp_metric, min);
                     }
                 }

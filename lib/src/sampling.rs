@@ -1,4 +1,4 @@
-pub use core::{MetricType, Rate, Value, MetricWriter, MetricKey, MetricSink};
+use super::{MetricKind, Rate, Value, MetricWriter, MetricKey, MetricSink, FULL_SAMPLING_RATE};
 use pcg32;
 
 #[derive(Debug)]
@@ -41,16 +41,20 @@ impl<C: MetricSink> MetricSink for SamplingSink<C> {
     type Metric = SamplingKey<C::Metric>;
     type Writer = SamplingWriter<C>;
 
-    fn new_metric<S: AsRef<str>>(&self, m_type: MetricType, name: S, sampling: Rate)
-        -> SamplingKey<C::Metric> {
-        let pm = self.target.new_metric(m_type, name, self.sampling_rate);
+    #[allow(unused_variables)]
+    fn new_metric<S: AsRef<str>>(&self, kind: MetricKind, name: S, sampling: Rate)
+                                 -> Self::Metric {
+        // TODO override only if FULL_SAMPLING else warn!()
+        assert_eq!(sampling, FULL_SAMPLING_RATE, "Overriding previously set sampling rate");
+
+        let pm = self.target.new_metric(kind, name, self.sampling_rate);
         SamplingKey {
             target: pm,
             int_sampling_rate: pcg32::to_int_rate(self.sampling_rate),
         }
     }
 
-    fn new_writer(&self) -> SamplingWriter<C> {
+    fn new_writer(&self) -> Self::Writer {
         SamplingWriter { target: self.target.new_writer() }
     }
 }

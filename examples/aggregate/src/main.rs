@@ -1,48 +1,19 @@
-#![cfg_attr(feature = "bench", feature(test))]
-
-#[cfg(feature = "bench")]
-extern crate test;
-
-extern crate time;
-
-#[macro_use]
-extern crate log;
-
-#[macro_use]
-extern crate lazy_static;
-
+#[macro_use] extern crate dipstick;
 extern crate scheduled_executor;
-extern crate thread_local_object;
 
-extern crate cached;
-extern crate num;
-
-#[macro_use]
-pub mod core;
-
-pub mod dual;
-pub mod dispatch;
-pub mod sampling;
-pub mod aggregate;
-pub mod publish;
-pub mod statsd;
-pub mod logging;
-pub mod cache;
-pub mod pcg32;
-
-use dual::DualSink;
-use dispatch::{DirectDispatch, DirectCount, DirectTimer};
-use sampling::SamplingSink;
-use statsd::StatsdSink;
-use logging::LoggingSink;
-use aggregate::MetricAggregator;
-use publish::AggregatePublisher;
-use core::{MetricType, MetricSink, MetricWriter, MetricDispatch, CountMetric, GaugeMetric,
+use dipstick::dual::DualSink;
+use dipstick::dispatch::{DirectDispatch, DirectCount, DirectTimer};
+use dipstick::sampling::SamplingSink;
+use dipstick::statsd::StatsdSink;
+use dipstick::logging::LoggingSink;
+use dipstick::aggregate::MetricAggregator;
+use dipstick::publish::AggregatePublisher;
+use dipstick::{MetricKind, MetricSink, MetricWriter, MetricDispatch, CountMetric, GaugeMetric,
            TimerMetric, EventMetric};
 use std::thread::sleep;
 use scheduled_executor::CoreExecutor;
 use std::time::Duration;
-use cache::MetricCache;
+use dipstick::cache::MetricCache;
 
 fn main() {
     sample_scheduled_statsd_aggregation()
@@ -119,7 +90,7 @@ pub fn raw_write() {
     let metrics_log = LoggingSink::new("metrics");
 
     // define and send metrics using raw channel API
-    let counter = metrics_log.new_metric(MetricType::Count, "count_a", core::FULL_SAMPLING_RATE);
+    let counter = metrics_log.new_metric(MetricKind::Count, "count_a", dipstick::FULL_SAMPLING_RATE);
     metrics_log.new_writer().write(&counter, 1);
 }
 
@@ -132,10 +103,10 @@ pub fn counter_to_log() {
 
 const STATSD_SAMPLING_RATE: f64 = 0.0001;
 
-lazy_static! {
-    pub static ref METRICS: DirectDispatch<SamplingSink<StatsdSink>> = DirectDispatch::new(
-        SamplingSink::new(StatsdSink::new("localhost:8125", env!("CARGO_PKG_NAME")).unwrap(), STATSD_SAMPLING_RATE));
-
-    pub static ref SERVICE_RESPONSE_TIME:     DirectTimer<SamplingSink<StatsdSink>>   = METRICS.new_timer("service.response.time");
-    pub static ref SERVICE_RESPONSE_BYTES:    DirectCount<SamplingSink<StatsdSink>>   = METRICS.new_count("service.response.bytes");
-}
+//lazy_static! {
+//    pub static ref METRICS: DirectDispatch<SamplingSink<StatsdSink>> = DirectDispatch::new(
+//        SamplingSink::new(StatsdSink::new("localhost:8125", env!("CARGO_PKG_NAME")).unwrap(), STATSD_SAMPLING_RATE));
+//
+//    pub static ref SERVICE_RESPONSE_TIME:     DirectTimer<SamplingSink<StatsdSink>>   = METRICS.new_timer("service.response.time");
+//    pub static ref SERVICE_RESPONSE_BYTES:    DirectCount<SamplingSink<StatsdSink>>   = METRICS.new_count("service.response.bytes");
+//}
