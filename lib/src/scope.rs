@@ -1,4 +1,4 @@
-pub use core::{MetricType, Rate, Value, MetricWriter, MetricKey, MetricSink};
+use super::{MetricType, Rate, Value, MetricWriter, MetricKey, MetricSink};
 
 #[derive(Debug)]
 pub struct ScopeKey<M: MetricKey> {
@@ -72,16 +72,16 @@ impl<C: MetricSink> MetricSink for ScopeSink<C> {
     type Metric = ScopeKey<C::Metric>;
     type Writer = ScopeWriter<C>;
 
-
-    fn new_metric<S: AsRef<str>>(&self, m_type: MetricType, name: S, sampling: Rate)
-            -> ScopeKey<C::Metric> {
-        let pm = self.target.new_metric(m_type, name, self.sampling_rate);
+    #[allow(unused_variables)]
+    fn new_metric<S: AsRef<str>>(&self, kind: MetricType, name: S, sampling: Rate)
+            -> Self::Metric {
+        let pm = self.target.new_metric(kind, name, self.sampling_rate);
         ScopeKey {
             target: pm,
         }
     }
 
-    fn new_writer(&self) -> ScopeWriter<C> {
+    fn new_writer(&self) -> Self::Writer {
         self.writer.thread_writer.set(self.target.new_writer())
         // TODO drop target_writer on scope_writer drop (or something)
     }

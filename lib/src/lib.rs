@@ -1,4 +1,45 @@
-use time;
+#![cfg_attr(feature = "bench", feature(test))]
+
+#![warn(
+missing_copy_implementations,
+missing_debug_implementations,
+missing_docs,
+trivial_casts,
+trivial_numeric_casts,
+unused_extern_crates,
+unused_import_braces,
+unused_qualifications,
+variant_size_differences,
+)]
+
+#![feature(fn_traits)]
+
+#[cfg(feature = "bench")]
+extern crate test;
+
+extern crate time;
+
+extern crate cached;
+extern crate thread_local_object;
+
+#[macro_use]
+extern crate log;
+
+#[macro_use]
+extern crate lazy_static;
+extern crate num;
+extern crate scheduled_executor;
+
+pub mod dual;
+pub mod dispatch;
+pub mod sampling;
+pub mod aggregate;
+pub mod publish;
+pub mod statsd;
+pub mod logging;
+pub mod pcg32;
+pub mod cache;
+
 use num::ToPrimitive;
 
 //////////////////
@@ -27,7 +68,7 @@ pub type Rate = f64;
 pub const FULL_SAMPLING_RATE: Rate = 1.0;
 
 #[derive(Debug, Copy, Clone)]
-pub enum MetricType {
+pub enum MetricKind {
     Event,
     Count,
     Gauge,
@@ -137,8 +178,8 @@ pub trait ScopingDispatch {
     type Scope: DispatchScope;
 
     fn with_scope<F>(&mut self, operations: F)
-    where
-        F: Fn(&Self::Scope);
+        where
+            F: Fn(&Self::Scope);
 }
 
 /// Metric sources allow a group of metrics to be defined and written as one.
@@ -176,7 +217,7 @@ pub trait MetricSink {
     type Writer: MetricWriter<Self::Metric>;
 
     /// Define a new sink-specific metric that can be used for writing values.
-    fn new_metric<S: AsRef<str>>(&self, m_type: MetricType, name: S, sampling: Rate) -> Self::Metric;
+    fn new_metric<S: AsRef<str>>(&self, kind: MetricKind, name: S, sampling: Rate) -> Self::Metric;
 
     /// Open a metric writer to write metrics to.
     /// Some sinks reuse the same writer while others allocate resources for every new writer.

@@ -1,4 +1,4 @@
-pub use core::{MetricType, Rate, Value, MetricSink, MetricKey, MetricWriter};
+use super::{MetricKind, Rate, Value, MetricSink, MetricKey, MetricWriter};
 use cached::{SizedCache, Cached};
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -51,26 +51,26 @@ impl<C: MetricSink> MetricSink for MetricCache<C> {
     type Metric = CachedKey<C>;
     type Writer = CachedMetricWriter<C>;
 
-    fn new_metric<S>(&self, m_type: MetricType, name: S, sampling: Rate) -> CachedKey<C>
-    where
-        S: AsRef<str>,
-    {
+    #[allow(unused_variables)]
+    fn new_metric<S>(&self, kind: MetricKind, name: S, sampling: Rate) -> Self::Metric
+            where S: AsRef<str>    {
+
+        // TODO use ref for key, not owned
         let key = name.as_ref().to_string();
-        {
-            let mut cache = self.cache.write().unwrap();
-            let cached_metric = cache.cache_get(&key);
-            if let Some(cached_metric) = cached_metric {
-                return CachedKey(cached_metric.clone());
-            }
+        let mut cache = self.cache.write().unwrap();
+        let cached_metric = cache.cache_get(&key);
+        if let Some(cached_metric) = cached_metric {
+            return CachedKey(cached_metric.clone());
         }
-        let target_metric = self.target.new_metric(m_type, name, sampling);
+
+        let target_metric = self.target.new_metric(kind, name, sampling);
         let new_metric = Arc::new(target_metric);
         let mut cache = self.cache.write().unwrap();
         cache.cache_set(key, new_metric.clone());
         CachedKey(new_metric)
     }
 
-    fn new_writer(&self) -> CachedMetricWriter<C> {
+    fn new_writer(&self) -> Self::Writer {
         CachedMetricWriter { target: self.target.new_writer() }
     }
 }

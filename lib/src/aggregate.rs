@@ -1,4 +1,4 @@
-use core::{MetricType, Rate, Value, MetricWriter, MetricKey, MetricSink};
+use super::{MetricKind, Rate, Value, MetricWriter, MetricKey, MetricSink};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::usize;
@@ -29,13 +29,13 @@ pub enum AggregateScore {
 
 /// A metric that holds aggregated values
 #[derive(Debug)]
-pub struct AggregateMetricKey {
-    pub m_type: MetricType,
+pub struct AggregateKey {
+    pub kind: MetricKind,
     pub name: String,
     score: AtomicScore,
 }
 
-impl AggregateMetricKey {
+impl AggregateKey {
     /// Update scores with value
     pub fn write(&self, value: usize) -> () {
         match &self.score {
@@ -106,13 +106,13 @@ impl AggregateMetricKey {
     }
 }
 
-impl MetricKey for Arc<AggregateMetricKey> {}
+impl MetricKey for Arc<AggregateKey> {}
 
 #[derive(Debug)]
 pub struct AggregateWrite();
 
-impl MetricWriter<Arc<AggregateMetricKey>> for AggregateWrite {
-    fn write(&self, metric: &Arc<AggregateMetricKey>, value: Value) {
+impl MetricWriter<Arc<AggregateKey>> for AggregateWrite {
+    fn write(&self, metric: &Arc<AggregateKey>, value: Value) {
         metric.write(value as usize);
     }
 }
@@ -123,12 +123,12 @@ lazy_static! {
 }
 
 #[derive(Debug)]
-pub struct AggregateSource(Arc<RwLock<Vec<Arc<AggregateMetricKey>>>>);
+pub struct AggregateSource(Arc<RwLock<Vec<Arc<AggregateKey>>>>);
 
 impl AggregateSource {
     pub fn for_each<F>(&self, ops: F)
     where
-        F: Fn(&AggregateMetricKey),
+        F: Fn(&AggregateKey),
     {
         for metric in self.0.read().unwrap().iter() {
             ops(&metric)
@@ -138,7 +138,7 @@ impl AggregateSource {
 
 #[derive(Debug)]
 pub struct MetricAggregator {
-    metrics: Arc<RwLock<Vec<Arc<AggregateMetricKey>>>>,
+    metrics: Arc<RwLock<Vec<Arc<AggregateKey>>>>,
 }
 
 impl MetricAggregator {
@@ -155,24 +155,21 @@ impl MetricAggregator {
     }
 }
 
-pub struct AggregateSink(Arc<RwLock<Vec<Arc<AggregateMetricKey>>>>);
+pub struct AggregateSink(Arc<RwLock<Vec<Arc<AggregateKey>>>>);
 
 impl MetricSink for AggregateSink {
-    type Metric = Arc<AggregateMetricKey>;
+    type Metric = Arc<AggregateKey>;
     type Writer = AggregateWrite;
 
-    fn new_metric<S: AsRef<str>>(
-        &self,
-        m_type: MetricType,
-        name: S,
-        sampling: Rate,
-    ) -> Arc<AggregateMetricKey> {
+    #[allow(unused_variables)]
+    fn new_metric<S: AsRef<str>>(&self, kind: MetricKind, name: S, sampling: Rate)
+                                 -> Self::Metric {
         let name = name.as_ref().to_string();
-        let metric = Arc::new(AggregateMetricKey {
-            m_type,
+        let metric = Arc::new(AggregateKey {
+            kind,
             name,
-            score: match m_type {
-                MetricType::Event => AtomicScore::Event { hit: AtomicUsize::new(0) },
+            score: match kind {
+                MetricKind::Event => AtomicScore::Event { hit: AtomicUsize::new(0) },
                 _ => AtomicScore::Value {
                     hit: AtomicUsize::new(0),
                     sum: AtomicUsize::new(0),
@@ -186,8 +183,8 @@ impl MetricSink for AggregateSink {
         metric
     }
 
-    fn new_writer(&self) -> AggregateWrite {
-        // TODO return AGGREGATE_WRITE
+    fn new_writer(&self) -> Self::Writer {
+        // TODO return AGGREGATE_WRITE or a immutable field at least
         AggregateWrite()
     }
 }

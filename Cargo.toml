@@ -1,18 +1,5 @@
-[package]
-name = "dipstick"
-version = "0.2.0"
-authors = ["Francis Lalonde <fralalonde@gmail.com>"]
-
-[dependencies]
-# not yet required
-#error-chain = "0.10"
-lazy_static = "0.2.8"
-cached = "0.4.1"
-log = "0.3.8"
-time = "0.1"
-scheduled-executor = "0.3.0"
-thread-local-object = "0.1.0"
-num = "0.1.40"
-
-[features]
-bench = []
+[workspace]
+members = [
+  "lib/",
+  "examples/aggregate",
+]
