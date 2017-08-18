@@ -3,6 +3,20 @@ name = "dipstick"
 version = "0.2.0"
 authors = ["Francis Lalonde <fralalonde@gmail.com>"]
 
+description = """A fast and modular metrics library decoupling app instrumentation from reporting backend.
+ Similar to popular logging frameworks, but with counters and timers.
+ Can be configured for combined outputs (log + statsd), random sampling, local aggregation of metrics, recurrent background publication, etc."""
+
+documentation = "https://docs.rs/dipstick"
+homepage = "https://github.com/fralalonde/dipstick"
+repository = "https://github.com/fralalonde/dipstick"
+readme = "../README.md"
+keywords = ["metrics", "statsd", "timer", "counter", "monitoring"]
+license-file = "../LICENSE"
+
+[badges]
+travis-ci = { repository = "fralalonde/dipstick", branch = "master" }
+
 [dependencies]
 lazy_static = "0.2.8"
 cached = "0.4.1"
