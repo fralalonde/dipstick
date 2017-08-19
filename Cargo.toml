@@ -6,7 +6,7 @@ members = [
 
 [package]
 name = "dipstick"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Francis Lalonde <fralalonde@gmail.com>"]
 
 description = """A fast and modular metrics library decoupling app instrumentation from reporting backend.
@@ -16,9 +16,9 @@ description = """A fast and modular metrics library decoupling app instrumentati
 documentation = "https://docs.rs/dipstick"
 homepage = "https://github.com/fralalonde/dipstick"
 repository = "https://github.com/fralalonde/dipstick"
-readme = "../README.md"
+readme = "README.md"
 keywords = ["metrics", "statsd", "timer", "counter", "monitoring"]
-license-file = "../LICENSE"
+license-file = "LICENSE"
 
 [badges]
 travis-ci = { repository = "fralalonde/dipstick", branch = "master" }
