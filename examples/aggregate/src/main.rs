@@ -40,18 +40,20 @@ pub fn sample_scheduled_statsd_aggregation() {
     // SAMPLE METRICS USAGE
 
     // define application metrics
-    let mut app_metrics = DirectDispatch::new(dual_sink);
-    let counter = app_metrics.new_count("counter_a");
-    let timer = app_metrics.new_timer("timer_b");
+    let mut metrics = DirectDispatch::new(dual_sink);
+    let counter = metrics.counter("counter_a");
+    let timer = metrics.timer("timer_b");
 
-    let subsystem_metrics = app_metrics.with_prefix("subsystem.");
-    let event = subsystem_metrics.new_event("event_c");
-    let gauge = subsystem_metrics.new_gauge("gauge_d");
+    let subsystem_metrics = metrics.with_prefix("subsystem.");
+    let event = subsystem_metrics.event("event_c");
+    let gauge = subsystem_metrics.gauge("gauge_d");
 
     loop {
         // report some metric values from our "application" loop
         counter.count(11);
         gauge.value(22);
+
+        metrics.counter("ad_hoc").count(4);
 
         // TODO use scope to update metrics as one (single log line, single network packet, etc.)
 //        app_metrics.with_scope(|scope| {
@@ -97,7 +99,7 @@ pub fn raw_write() {
 pub fn counter_to_log() {
     let metrics_log = LoggingSink::new("metrics");
     let metrics = DirectDispatch::new(metrics_log);
-    let counter = metrics.new_count("count_a");
+    let counter = metrics.counter("count_a");
     counter.count(10.2);
 }
 
