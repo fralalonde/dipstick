@@ -4,6 +4,6 @@ version = "0.0.0"
 workspace = "../../"
 
 [dependencies]
-dipstick = { path = '../../lib' }
+dipstick = { path = '../../' }
 scheduled-executor = "0.3.0"
 
