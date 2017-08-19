@@ -93,7 +93,7 @@ impl<C: MetricSink> MetricDispatch for DirectDispatch<C> {
     type Gauge = DirectGauge<C>;
     type Timer = DirectTimer<C>;
 
-    fn new_event<S: AsRef<str>>(&self, name: S) -> Self::Event {
+    fn event<S: AsRef<str>>(&self, name: S) -> Self::Event {
         let metric = self.target.new_metric(MetricKind::Event, self.add_prefix(name), 1.0);
         DirectEvent(DirectMetric {
             metric,
@@ -101,7 +101,7 @@ impl<C: MetricSink> MetricDispatch for DirectDispatch<C> {
         })
     }
 
-    fn new_count<S: AsRef<str>>(&self, name: S) -> Self::Count {
+    fn counter<S: AsRef<str>>(&self, name: S) -> Self::Count {
         let metric = self.target.new_metric(MetricKind::Count, self.add_prefix(name), 1.0);
         DirectCount(DirectMetric {
             metric,
@@ -109,7 +109,7 @@ impl<C: MetricSink> MetricDispatch for DirectDispatch<C> {
         })
     }
 
-    fn new_timer<S: AsRef<str>>(&self, name: S) -> Self::Timer {
+    fn timer<S: AsRef<str>>(&self, name: S) -> Self::Timer {
         let metric = self.target.new_metric(MetricKind::Time, self.add_prefix(name), 1.0);
         DirectTimer(DirectMetric {
             metric,
@@ -117,7 +117,7 @@ impl<C: MetricSink> MetricDispatch for DirectDispatch<C> {
         })
     }
 
-    fn new_gauge<S: AsRef<str>>(&self, name: S) -> Self::Gauge {
+    fn gauge<S: AsRef<str>>(&self, name: S) -> Self::Gauge {
         let metric = self.target.new_metric(MetricKind::Gauge, self.add_prefix(name), 1.0);
         DirectGauge(DirectMetric {
             metric,
@@ -147,7 +147,7 @@ mod bench {
     fn time_bench_direct_dispatch_event(b: &mut Bencher) {
         let aggregate = MetricAggregator::new().sink();
         let dispatch = super::DirectDispatch::new(aggregate);
-        let event = dispatch.new_event("aaa");
+        let event = dispatch.event("aaa");
         b.iter(|| event.mark());
     }
 

@@ -151,16 +151,16 @@ pub trait MetricDispatch {
     type Timer: TimerMetric;
 
     /// define a new event metric
-    fn new_event<S: AsRef<str>>(&self, name: S) -> Self::Event;
+    fn event<S: AsRef<str>>(&self, name: S) -> Self::Event;
 
     /// define a new count metric
-    fn new_count<S: AsRef<str>>(&self, name: S) -> Self::Count;
+    fn counter<S: AsRef<str>>(&self, name: S) -> Self::Count;
 
     /// define a new gauge metric
-    fn new_gauge<S: AsRef<str>>(&self, name: S) -> Self::Gauge;
+    fn gauge<S: AsRef<str>>(&self, name: S) -> Self::Gauge;
 
     /// define a new timer metric
-    fn new_timer<S: AsRef<str>>(&self, name: S) -> Self::Timer;
+    fn timer<S: AsRef<str>>(&self, name: S) -> Self::Timer;
 
     fn with_prefix<S: AsRef<str>>(&self, prefix: S) -> Self;
 }
