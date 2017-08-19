@@ -12,8 +12,6 @@ unused_qualifications,
 variant_size_differences,
 )]
 
-#![feature(fn_traits)]
-
 #[cfg(feature = "bench")]
 extern crate test;
 
