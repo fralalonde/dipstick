@@ -33,7 +33,7 @@ pub fn sample_scheduled_statsd_aggregation() {
     let mut metrics = metrics(combine(
         aggregator.sink(),
         sample(0.1, log("metrics:"))));
-    
+
     let counter = metrics.counter("counter_a");
     let timer = metrics.timer("timer_b");
 
@@ -71,12 +71,9 @@ pub fn logging_and_statsd() {
 
 }
 
-pub fn sampling_statsd() {
-
-    let statsd = statsd("localhost:8125", "goodbye.").unwrap();
-    let sampling_statsd = sample(0.1, statsd);
-    metrics(sampling_statsd);
-
+pub fn sampling_statsd() -> dipstick::error::Result<()> {
+    metrics(sample(0.1, statsd("localhost:8125", "goodbye.")?));
+    Ok(())
 }
 
 

@@ -31,7 +31,7 @@ extern crate scheduled_executor;
 #[macro_use]
 extern crate error_chain;
 
-mod errors {
+pub mod error {
     error_chain! {
         foreign_links {
             Io(::std::io::Error);
@@ -39,7 +39,7 @@ mod errors {
     }
 }
 
-use errors::*;
+//use error::*;
 
 pub mod dual;
 pub mod dispatch;
@@ -53,6 +53,14 @@ pub mod cache;
 
 pub use num::ToPrimitive;
 pub use std::net::ToSocketAddrs;
+
+pub use aggregate::*;
+pub use dispatch::*;
+pub use dual::*;
+pub use publish::*;
+pub use statsd::*;
+pub use logging::*;
+pub use cache::*;
 
 //////////////////
 // DEFINITIONS
@@ -259,7 +267,7 @@ pub trait MetricWriter<M: MetricKey>: Send {
 }
 
 pub trait Builder<T> {
-    fn build(&self) -> Result<T>;
+    fn build(&self) -> error::Result<T>;
 }
 
 pub fn metrics<S>(sink: S) -> dispatch::DirectDispatch<S> where S: MetricSink {
@@ -278,7 +286,7 @@ pub fn log<S: AsRef<str>>(log: S) -> logging::LoggingSink {
     logging::LoggingSink::new(log)
 }
 
-pub fn statsd<S: AsRef<str>, A: ToSocketAddrs>(connection: A, prefix: S) -> Result<statsd::StatsdSink> {
+pub fn statsd<S: AsRef<str>, A: ToSocketAddrs>(connection: A, prefix: S) -> error::Result<statsd::StatsdSink> {
     Ok(statsd::StatsdSink::new(connection, prefix)?)
 }
 
