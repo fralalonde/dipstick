@@ -1,7 +1,7 @@
 use super::{MetricKind, Rate, Value, MetricWriter, MetricKey, MetricSink, FULL_SAMPLING_RATE};
 use std::io::Result;
 
-use std::net::UdpSocket;
+use std::net::{UdpSocket,ToSocketAddrs};
 use std::cell::RefCell;
 use std::sync::Arc;
 
@@ -92,7 +92,7 @@ pub struct StatsdSink {
 
 impl StatsdSink {
     /// Create a new statsd sink to the specified address with the specified prefix
-    pub fn new<S: AsRef<str>>(address: &str, prefix_str: S) -> Result<StatsdSink> {
+    pub fn new<S: AsRef<str>, A: ToSocketAddrs>(address: A, prefix_str: S) -> Result<StatsdSink> {
         let socket = Arc::new(UdpSocket::bind("0.0.0.0:0")?); // NB: CLOEXEC by default
         socket.set_nonblocking(true)?;
         socket.connect(address)?;

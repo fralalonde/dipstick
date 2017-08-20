@@ -28,6 +28,19 @@ extern crate lazy_static;
 extern crate num;
 extern crate scheduled_executor;
 
+#[macro_use]
+extern crate error_chain;
+
+mod errors {
+    error_chain! {
+        foreign_links {
+            Io(::std::io::Error);
+        }
+    }
+}
+
+use errors::*;
+
 pub mod dual;
 pub mod dispatch;
 pub mod sampling;
@@ -38,7 +51,8 @@ pub mod logging;
 pub mod pcg32;
 pub mod cache;
 
-use num::ToPrimitive;
+pub use num::ToPrimitive;
+pub use std::net::ToSocketAddrs;
 
 //////////////////
 // DEFINITIONS
@@ -187,6 +201,9 @@ pub trait MetricPublish {
     fn publish(&self);
 }
 
+///////////
+//// MACROS
+
 /// A convenience macro to wrap a block or an expression with a start / stop timer.
 /// Elapsed time is sent to the supplied statsd client after the computation has been performed.
 /// Expression result (if any) is transparently returned.
@@ -199,6 +216,9 @@ macro_rules! time {
         value
     }}
 }
+
+////////////
+//// BACKEND
 
 /// Main trait of the metrics backend API.
 /// Defines a component that can be used when setting up a metrics backend stack.
@@ -236,4 +256,40 @@ pub trait MetricWriter<M: MetricKey>: Send {
     /// Flushing makes sure all previously written metrics are propagated
     /// down the sink chain and to any applicable external outputs.
     fn flush(&self) {}
+}
+
+pub trait Builder<T> {
+    fn build(&self) -> Result<T>;
+}
+
+pub fn metrics<S>(sink: S) -> dispatch::DirectDispatch<S> where S: MetricSink {
+    dispatch::DirectDispatch::new(sink)
+}
+
+pub fn sample<S>(rate: Rate, sink: S) -> sampling::SamplingSink<S> where S: MetricSink {
+    sampling::SamplingSink::new(sink, rate)
+}
+
+pub fn cache<S>(size: usize, sink: S) -> cache::MetricCache<S> where S: MetricSink {
+    cache::MetricCache::new(sink, size)
+}
+
+pub fn log<S: AsRef<str>>(log: S) -> logging::LoggingSink {
+    logging::LoggingSink::new(log)
+}
+
+pub fn statsd<S: AsRef<str>, A: ToSocketAddrs>(connection: A, prefix: S) -> Result<statsd::StatsdSink> {
+    Ok(statsd::StatsdSink::new(connection, prefix)?)
+}
+
+pub fn combine<S1: MetricSink, S2: MetricSink>(s1: S1, s2: S2) -> dual::DualSink<S1, S2> {
+    dual::DualSink::new(s1, s2)
+}
+
+pub fn aggregate() -> aggregate::MetricAggregator {
+    aggregate::MetricAggregator::new()
+}
+
+pub fn publish<S1: MetricSink>(source: aggregate::AggregateSource, s1: S1) -> publish::AggregatePublisher<S1> {
+    publish::AggregatePublisher::new(s1, source)
 }
