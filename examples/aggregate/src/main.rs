@@ -1,19 +1,10 @@
 #[macro_use] extern crate dipstick;
 extern crate scheduled_executor;
 
-use dipstick::dual::DualSink;
-use dipstick::dispatch::{DirectDispatch, DirectCount, DirectTimer};
-use dipstick::sampling::SamplingSink;
-use dipstick::statsd::StatsdSink;
-use dipstick::logging::LoggingSink;
-use dipstick::aggregate::MetricAggregator;
-use dipstick::publish::AggregatePublisher;
-use dipstick::{MetricKind, MetricSink, MetricWriter, MetricDispatch, CountMetric, GaugeMetric,
-           TimerMetric, EventMetric};
 use std::thread::sleep;
 use scheduled_executor::CoreExecutor;
 use std::time::Duration;
-use dipstick::cache::MetricCache;
+use dipstick::*;
 
 fn main() {
     sample_scheduled_statsd_aggregation()
@@ -24,13 +15,12 @@ pub fn sample_scheduled_statsd_aggregation() {
     // SAMPLE METRICS SETUP
 
     // send application metrics to both aggregator and to sampling log
-    let aggregator = MetricAggregator::new();
-    let sampling_log = SamplingSink::new(LoggingSink::new("metrics:"), 0.1);
-    let dual_sink = DualSink::new(aggregator.sink(), sampling_log);
+    let aggregator = aggregate();
 
     // schedule aggregated metrics to be sent to statsd every 3 seconds
-    let statsd = MetricCache::new(StatsdSink::new("localhost:8125", "hello.").unwrap(), 512);
-    let aggregate_metrics = AggregatePublisher::new(statsd, aggregator.source());
+    let statsd = cache(512, statsd("localhost:8125", "hello.").expect("no statsd"));
+    let aggregate_metrics = publish(aggregator.source(), statsd);
+
     // TODO use publisher publish_every() once it doesnt require 'static publisher
     let exec = CoreExecutor::new().unwrap();
     exec.schedule_fixed_rate(Duration::from_secs(3), Duration::from_secs(3), move |_| {
@@ -40,7 +30,10 @@ pub fn sample_scheduled_statsd_aggregation() {
     // SAMPLE METRICS USAGE
 
     // define application metrics
-    let mut metrics = DirectDispatch::new(dual_sink);
+    let mut metrics = metrics(combine(
+        aggregator.sink(),
+        sample(0.1, log("metrics:"))));
+    
     let counter = metrics.counter("counter_a");
     let timer = metrics.timer("timer_b");
 
@@ -71,25 +64,25 @@ pub fn sample_scheduled_statsd_aggregation() {
 
 pub fn logging_and_statsd() {
 
-    let statsd = StatsdSink::new("localhost:8125", "goodbye.").unwrap();
-    let logging = LoggingSink::new("metrics");
-    let logging_and_statsd = DualSink::new(logging, statsd);
-    DirectDispatch::new(logging_and_statsd);
+    let statsd = statsd("localhost:8125", "goodbye.").unwrap();
+    let logging = log("metrics");
+    let logging_and_statsd = combine(logging, statsd);
+    metrics(logging_and_statsd);
 
 }
 
 pub fn sampling_statsd() {
 
-    let statsd = StatsdSink::new("localhost:8125", "goodbye.").unwrap();
-    let sampling_statsd = SamplingSink::new(statsd, 0.1);
-    DirectDispatch::new(sampling_statsd);
+    let statsd = statsd("localhost:8125", "goodbye.").unwrap();
+    let sampling_statsd = sample(0.1, statsd);
+    metrics(sampling_statsd);
 
 }
 
 
 pub fn raw_write() {
     // setup dual metric channels
-    let metrics_log = LoggingSink::new("metrics");
+    let metrics_log = log("metrics");
 
     // define and send metrics using raw channel API
     let counter = metrics_log.new_metric(MetricKind::Count, "count_a", dipstick::FULL_SAMPLING_RATE);
@@ -97,8 +90,8 @@ pub fn raw_write() {
 }
 
 pub fn counter_to_log() {
-    let metrics_log = LoggingSink::new("metrics");
-    let metrics = DirectDispatch::new(metrics_log);
+    let metrics_log = log("metrics");
+    let metrics = metrics(metrics_log);
     let counter = metrics.counter("count_a");
     counter.count(10.2);
 }
