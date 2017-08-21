@@ -33,6 +33,8 @@ Although already usable, Dipstick is still under heavy development and makes no 
 of any kind at this point. See the following list for any potential caveats :
 - generic publisher / sources
 - dispatch scopes
+- feature flags
+- late builders
 - microsecond-precision intervals
 - heartbeat metric on publish
 - log templates
