@@ -274,34 +274,72 @@ pub trait AsSink<S: MetricSink> {
     fn as_sink(&self) -> S;
 }
 
+/// Wrap the metrics backend to provide an application-friendly interface.
 pub fn metrics<S>(sink: S) -> dispatch::DirectDispatch<S> where S: MetricSink {
     dispatch::DirectDispatch::new(sink)
 }
 
+/// Perform random sampling of values according to the specified rate.
 pub fn sample<S>(rate: Rate, sink: S) -> sampling::SamplingSink<S> where S: MetricSink {
     sampling::SamplingSink::new(sink, rate)
 }
 
+/// Cache metrics to prevent them from being re-defined on every use.
+/// Use of this should be transparent, this has no effect on the values.
+/// Stateful sinks (i.e. Aggregate) may naturally cache their definitions.
 pub fn cache<S>(size: usize, sink: S) -> cache::MetricCache<S> where S: MetricSink {
     cache::MetricCache::new(sink, size)
 }
 
+/// Send metric to a logger.
+/// This uses the basic log crate as it is configured for the application.
 pub fn log<S: AsRef<str>>(log: S) -> logging::LoggingSink {
     logging::LoggingSink::new(log)
 }
 
-pub fn statsd<S: AsRef<str>, A: ToSocketAddrs>(connection: A, prefix: S) -> error::Result<statsd::StatsdSink> {
-    Ok(statsd::StatsdSink::new(connection, prefix)?)
+/// Send metrics to a statsd server at the address and port provided.
+pub fn statsd<S: AsRef<str>, A: ToSocketAddrs>(address: A, prefix: S) -> error::Result<statsd::StatsdSink> {
+    Ok(statsd::StatsdSink::new(address, prefix)?)
 }
 
+/// Sends metrics to separate backends.
+/// Nested combine() can be used if more than two destinations are required.
 pub fn combine<S1: MetricSink, S2: MetricSink>(s1: S1, s2: S2) -> dual::DualSink<S1, S2> {
     dual::DualSink::new(s1, s2)
 }
 
+/// Aggregate metrics in memory.
+/// Depending on the type of metric, count, sum, minimum and maximum of values will be tracked.
+/// Needs to be connected to a publish to be useful.
+///
+/// ```
+/// use dipstick::*;
+///
+/// let aggregate = aggregate();
+/// let metrics = metrics(aggregate.as_sink());
+/// let publisher = publish(aggregate.as_source(), log("aggregated"));
+///
+/// metrics.event("my_event").mark();
+/// metrics.event("my_event").mark();
+/// publisher.publish()
+/// ```
 pub fn aggregate() -> aggregate::MetricAggregator {
     MetricAggregator::new()
 }
 
+/// Publishes all metrics from a source to a backend.
+///
+/// ```
+/// use dipstick::*;
+///
+/// let aggregate = aggregate();
+/// let metrics = metrics(aggregate.as_sink());
+/// let publisher = publish(aggregate.as_source(), log("aggregated"));
+///
+/// metrics.event("my_event").mark();
+/// metrics.event("my_event").mark();
+/// publisher.publish()
+/// ```
 pub fn publish<S: MetricSink>(source: AggregateSource, sink: S) -> AggregatePublisher<S> {
     publish::AggregatePublisher::new(source, sink,)
 }
