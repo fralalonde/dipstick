@@ -17,7 +17,8 @@ Dipstick's design goals are to:
 ## Code
 Here's a short example of sending timer values to the log showing both closure and macro syntax
 ```rust
-let mut metrics = metrics(log("app_metrics"));
+use dipstick::*;
+let metrics = metrics(log("app_metrics"));
 let timer = metrics.timer("timer_b");
 let value1 = timer.time(||, compute_value1());
 let value2 = time!(timer, compute_value2());
