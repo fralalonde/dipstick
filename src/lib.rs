@@ -266,8 +266,12 @@ pub trait MetricWriter<M: MetricKey>: Send {
     fn flush(&self) {}
 }
 
-pub trait Builder<T> {
-    fn build(&self) -> error::Result<T>;
+pub trait AsSource {
+    fn as_source(&self) -> AggregateSource;
+}
+
+pub trait AsSink<S: MetricSink> {
+    fn as_sink(&self) -> S;
 }
 
 pub fn metrics<S>(sink: S) -> dispatch::DirectDispatch<S> where S: MetricSink {
@@ -295,9 +299,9 @@ pub fn combine<S1: MetricSink, S2: MetricSink>(s1: S1, s2: S2) -> dual::DualSink
 }
 
 pub fn aggregate() -> aggregate::MetricAggregator {
-    aggregate::MetricAggregator::new()
+    MetricAggregator::new()
 }
 
-pub fn publish<S1: MetricSink>(source: aggregate::AggregateSource, s1: S1) -> publish::AggregatePublisher<S1> {
-    publish::AggregatePublisher::new(s1, source)
+pub fn publish<S: MetricSink>(source: AggregateSource, sink: S) -> AggregatePublisher<S> {
+    publish::AggregatePublisher::new(source, sink,)
 }

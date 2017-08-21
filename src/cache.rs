@@ -1,9 +1,6 @@
-use super::{MetricKind, Rate, Value, MetricSink, MetricKey, MetricWriter};
+use ::*;
 use cached::{SizedCache, Cached};
-use std::sync::Arc;
-use std::sync::RwLock;
-
-// METRIC
+use std::sync::{Arc,RwLock};
 
 // TODO get rid of this struct+impl, replace it with
 // impl <C: MetricSink> SinkMetric for Arc<C::Metric> {}

@@ -1,4 +1,4 @@
-use super::{MetricKind, Rate, Value, MetricWriter, MetricKey, MetricSink};
+use ::*;
 
 #[derive(Debug)]
 pub struct DualKey<M1: MetricKey, M2: MetricKey> {

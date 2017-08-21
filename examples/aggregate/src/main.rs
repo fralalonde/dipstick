@@ -19,7 +19,7 @@ pub fn sample_scheduled_statsd_aggregation() {
 
     // schedule aggregated metrics to be sent to statsd every 3 seconds
     let statsd = cache(512, statsd("localhost:8125", "hello.").expect("no statsd"));
-    let aggregate_metrics = publish(aggregator.source(), statsd);
+    let aggregate_metrics = publish(aggregator.as_source(), statsd);
 
     // TODO use publisher publish_every() once it doesnt require 'static publisher
     let exec = CoreExecutor::new().unwrap();
@@ -30,8 +30,8 @@ pub fn sample_scheduled_statsd_aggregation() {
     // SAMPLE METRICS USAGE
 
     // define application metrics
-    let mut metrics = metrics(combine(
-        aggregator.sink(),
+    let metrics = metrics(combine(
+        aggregator.as_sink(),
         sample(0.1, log("metrics:"))));
 
     let counter = metrics.counter("counter_a");
@@ -76,7 +76,6 @@ pub fn sampling_statsd() -> dipstick::error::Result<()> {
     Ok(())
 }
 
-
 pub fn raw_write() {
     // setup dual metric channels
     let metrics_log = log("metrics");
@@ -92,13 +91,3 @@ pub fn counter_to_log() {
     let counter = metrics.counter("count_a");
     counter.count(10.2);
 }
-
-const STATSD_SAMPLING_RATE: f64 = 0.0001;
-
-//lazy_static! {
-//    pub static ref METRICS: DirectDispatch<SamplingSink<StatsdSink>> = DirectDispatch::new(
-//        SamplingSink::new(StatsdSink::new("localhost:8125", env!("CARGO_PKG_NAME")).unwrap(), STATSD_SAMPLING_RATE));
-//
-//    pub static ref SERVICE_RESPONSE_TIME:     DirectTimer<SamplingSink<StatsdSink>>   = METRICS.new_timer("service.response.time");
-//    pub static ref SERVICE_RESPONSE_BYTES:    DirectCount<SamplingSink<StatsdSink>>   = METRICS.new_count("service.response.bytes");
-//}

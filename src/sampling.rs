@@ -1,4 +1,4 @@
-use super::{MetricKind, Rate, Value, MetricWriter, MetricKey, MetricSink, FULL_SAMPLING_RATE};
+use ::*;
 use pcg32;
 
 #[derive(Debug)]

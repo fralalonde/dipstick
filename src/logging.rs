@@ -1,6 +1,4 @@
-use super::{MetricKind, Rate, Value, MetricWriter, MetricKey, MetricSink};
-
-//////////// Log Channel
+use ::*;
 
 #[derive(Debug)]
 pub struct LoggingKey {
