@@ -194,13 +194,13 @@ impl MetricSink for AggregateSink {
 mod bench {
 
     use super::MetricAggregator;
-    use core::{MetricType, MetricSink, MetricWriter};
+    use ::*;
     use test::Bencher;
 
     #[bench]
     fn time_bench_write_event(b: &mut Bencher) {
-        let aggregate = &MetricAggregator::new().sink();
-        let metric = aggregate.new_metric(MetricType::Event, "event_a", 1.0);
+        let aggregate = &aggregate().sink();
+        let metric = aggregate.new_metric(MetricKind::Event, "event_a", 1.0);
         let writer = aggregate.new_writer();
         b.iter(|| writer.write(&metric, 1));
     }
@@ -208,23 +208,23 @@ mod bench {
 
     #[bench]
     fn time_bench_write_count(b: &mut Bencher) {
-        let aggregate = &MetricAggregator::new().sink();
-        let metric = aggregate.new_metric(MetricType::Count, "count_a", 1.0);
+        let aggregate = &aggregate().sink();
+        let metric = aggregate.new_metric(MetricKind::Count, "count_a", 1.0);
         let writer = aggregate.new_writer();
         b.iter(|| writer.write(&metric, 1));
     }
 
     #[bench]
     fn time_bench_read_event(b: &mut Bencher) {
-        let aggregate = &MetricAggregator::new().sink();
-        let metric = aggregate.new_metric(MetricType::Event, "event_a", 1.0);
+        let aggregate = &aggregate().sink();
+        let metric = aggregate.new_metric(MetricKind::Event, "event_a", 1.0);
         b.iter(|| metric.read_and_reset());
     }
 
     #[bench]
     fn time_bench_read_count(b: &mut Bencher) {
-        let aggregate = &MetricAggregator::new().sink();
-        let metric = aggregate.new_metric(MetricType::Count, "count_a", 1.0);
+        let aggregate = &aggregate().sink();
+        let metric = aggregate.new_metric(MetricKind::Count, "count_a", 1.0);
         b.iter(|| metric.read_and_reset());
     }
 

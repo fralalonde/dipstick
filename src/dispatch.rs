@@ -140,13 +140,13 @@ impl<C: MetricSink> MetricDispatch for DirectDispatch<C> {
 mod bench {
 
     use aggregate::MetricAggregator;
-    use core::{MetricDispatch, EventMetric};
+    use ::*;
     use test::Bencher;
 
     #[bench]
     fn time_bench_direct_dispatch_event(b: &mut Bencher) {
-        let aggregate = MetricAggregator::new().sink();
-        let dispatch = super::DirectDispatch::new(aggregate);
+        let aggregate = aggregate().sink();
+        let dispatch = metrics(aggregate);
         let event = dispatch.event("aaa");
         b.iter(|| event.mark());
     }
