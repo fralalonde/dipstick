@@ -1,4 +1,4 @@
-use super::{MetricKind, Rate, Value, MetricWriter, MetricKey, MetricSink};
+use ::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::usize;
@@ -145,12 +145,16 @@ impl MetricAggregator {
     pub fn new() -> MetricAggregator {
         MetricAggregator { metrics: Arc::new(RwLock::new(Vec::new())) }
     }
+}
 
-    pub fn source(&self) -> AggregateSource {
+impl AsSource for MetricAggregator {
+    fn as_source(&self) -> AggregateSource {
         AggregateSource(self.metrics.clone())
     }
+}
 
-    pub fn sink(&self) -> AggregateSink {
+impl AsSink<AggregateSink> for MetricAggregator {
+    fn as_sink(&self) -> AggregateSink {
         AggregateSink(self.metrics.clone())
     }
 }

@@ -1,5 +1,4 @@
-use super::{MetricKind, Value, MetricWriter, MetricSink, MetricDispatch,
-            EventMetric, CountMetric, GaugeMetric, TimerMetric};
+use ::*;
 use std::sync::Arc;
 use num::ToPrimitive;
 

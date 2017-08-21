@@ -1,4 +1,4 @@
-use super::{MetricType, Rate, Value, MetricWriter, MetricKey, MetricSink};
+use ::*;
 
 #[derive(Debug)]
 pub struct ScopeKey<M: MetricKey> {

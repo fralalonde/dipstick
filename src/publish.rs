@@ -1,10 +1,7 @@
-//// Aggregate Source
-
-use super::{MetricSink, MetricKind, MetricWriter};
+use ::*;
 use aggregate::{AggregateSource, AggregateScore};
 use std::time::Duration;
 use scheduled_executor::CoreExecutor;
-
 
 /// Publisher from aggregate metrics to target channel
 #[derive(Debug)]
@@ -15,7 +12,7 @@ pub struct AggregatePublisher<C: MetricSink> {
 
 impl<C: MetricSink> AggregatePublisher<C> {
     /// Create new publisher from aggregate metrics to target channel
-    pub fn new(target: C, source: AggregateSource) -> AggregatePublisher<C> {
+    pub fn new(source: AggregateSource, target: C,) -> AggregatePublisher<C> {
         AggregatePublisher { source, target }
     }
 }
