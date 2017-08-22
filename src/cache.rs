@@ -54,10 +54,12 @@ impl<C: MetricSink> MetricSink for MetricCache<C> {
 
         // TODO use ref for key, not owned
         let key = name.as_ref().to_string();
-        let mut cache = self.cache.write().unwrap();
-        let cached_metric = cache.cache_get(&key);
-        if let Some(cached_metric) = cached_metric {
-            return CachedKey(cached_metric.clone());
+        {
+            let mut cache = self.cache.write().unwrap();
+            let cached_metric = cache.cache_get(&key);
+            if let Some(cached_metric) = cached_metric {
+                return CachedKey(cached_metric.clone());
+            }
         }
 
         let target_metric = self.target.new_metric(kind, name, sampling);

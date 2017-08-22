@@ -42,7 +42,6 @@ pub mod error {
 //use error::*;
 
 pub mod dual;
-pub mod dispatch;
 pub mod sampling;
 pub mod aggregate;
 pub mod publish;
@@ -55,12 +54,12 @@ pub use num::ToPrimitive;
 pub use std::net::ToSocketAddrs;
 
 pub use aggregate::*;
-pub use dispatch::*;
 pub use dual::*;
 pub use publish::*;
 pub use statsd::*;
 pub use logging::*;
 pub use cache::*;
+use std::sync::Arc;
 
 //////////////////
 // DEFINITIONS
@@ -87,50 +86,73 @@ pub type Rate = f64;
 
 pub const FULL_SAMPLING_RATE: Rate = 1.0;
 
-#[derive(Debug, Copy, Clone)]
-pub enum MetricKind {
-    Event,
-    Count,
-    Gauge,
-    Time,
-}
-
-// Application contract
-
-/// A monotonic counter metric trait.
+/// A monotonic counter metric.
 /// Since value is only ever increased by one, no value parameter is provided,
 /// preventing potential problems.
-pub trait EventMetric {
+pub struct Event<C: MetricSink + 'static> {
+    metric: <C as MetricSink>::Metric,
+    target_writer: Arc<<C as MetricSink>::Writer>,
+}
+
+impl<C: MetricSink> Event<C> {
     /// Record a single event occurence.
-    fn mark(&self);
+    pub fn mark(&self) {
+        self.target_writer.write(&self.metric, 1);
+    }
 }
 
-/// A trait for counters and gauges to report values.
-pub trait GaugeMetric {
+/// A counter that sends values to the metrics backend
+pub struct Gauge<C: MetricSink + 'static> {
+    metric: <C as MetricSink>::Metric,
+    target_writer: Arc<<C as MetricSink>::Writer>,
+}
+
+impl<C: MetricSink> Gauge<C> {
     /// Record a value point for this gauge.
-    fn value<V>(&self, value: V) where V: ToPrimitive;
+    pub fn value<V>(&self, value: V) where V: ToPrimitive {
+        self.target_writer.write(&self.metric, value.to_u64().unwrap());
+    }
 }
 
-/// A trait for counters and gauges to report values.
-pub trait CountMetric {
+/// A gauge that sends values to the metrics backend
+pub struct Count<C: MetricSink + 'static> {
+    metric: <C as MetricSink>::Metric,
+    target_writer: Arc<<C as MetricSink>::Writer>,
+}
+
+impl<C: MetricSink> Count<C> {
     /// Record a value count.
-    fn count<V>(&self, count: V) where V: ToPrimitive;
+    pub fn count<V>(&self, count: V) where V: ToPrimitive {
+        self.target_writer.write(&self.metric, count.to_u64().unwrap());
+    }
 }
 
-/// A trait for timers to report values.
+/// A timer that sends values to the metrics backend
 /// Timers can record time intervals in multiple ways :
 /// - with the time! macro, which wraps an expression or block with start() and stop() calls.
 /// - with the time(Fn) method, which wraps a closure with start() and stop() calls.
 /// - with start() and stop() methods, wrapping around the operation to time
 /// - with the interval_us() method, providing an externally determined microsecond interval
-pub trait TimerMetric {
+pub struct Timer<C: MetricSink + 'static> {
+    metric: <C as MetricSink>::Metric,
+    target_writer: Arc<<C as MetricSink>::Writer>,
+}
+
+impl<C: MetricSink> Timer<C> {
+    /// Record a microsecond interval for this timer
+    /// Can be used in place of start()/stop() if an external time interval source is used
+    pub fn interval_us<V>(&self, interval_us: V) -> V where V: ToPrimitive {
+        self.target_writer.write(&self.metric, interval_us.to_u64().unwrap());
+        interval_us
+    }
+
     /// Obtain a opaque handle to the current time.
     /// The handle is passed back to the stop() method to record a time interval.
     /// This is actually a convenience method to the TimeHandle::now()
     /// Beware, handles obtained here are not bound to this specific timer instance
     /// _for now_ but might be in the future for safety.
     /// If you require safe multi-timer handles, get them through TimeType::now()
-    fn start(&self) -> TimeHandle {
+    pub fn start(&self) -> TimeHandle {
         TimeHandle::now()
     }
 
@@ -138,17 +160,13 @@ pub trait TimerMetric {
     /// This call can be performed multiple times using the same handle,
     /// reporting distinct time intervals each time.
     /// Returns the microsecond interval value that was recorded.
-    fn stop(&self, start_time: TimeHandle) -> u64 {
+    pub fn stop(&self, start_time: TimeHandle) -> u64 {
         let elapsed_us = start_time.elapsed_us();
         self.interval_us(elapsed_us)
     }
 
-    /// Record a microsecond interval for this timer
-    /// Can be used in place of start()/stop() if an external time interval source is used
-    fn interval_us<V>(&self, count: V) -> V where V: ToPrimitive;
-
     /// Record the time taken to execute the provided closure
-    fn time<F, R>(&self, operations: F) -> R where F: FnOnce() -> R {
+    pub fn time<F, R>(&self, operations: F) -> R where F: FnOnce() -> R {
         let start_time = self.start();
         let value: R = operations();
         self.stop(start_time);
@@ -156,57 +174,91 @@ pub trait TimerMetric {
     }
 }
 
-/// Main trait of the metrics API
-pub trait MetricDispatch {
-    /// type of event metric for this dispatch
-    type Event: EventMetric;
-
-    /// type of value metric for this dispatch
-    type Count: CountMetric;
-
-    /// type of value metric for this dispatch
-    type Gauge: GaugeMetric;
-
-    /// type of timer metric for this dispatch
-    type Timer: TimerMetric;
-
-    /// define a new event metric
-    fn event<S: AsRef<str>>(&self, name: S) -> Self::Event;
-
-    /// define a new count metric
-    fn counter<S: AsRef<str>>(&self, name: S) -> Self::Count;
-
-    /// define a new gauge metric
-    fn gauge<S: AsRef<str>>(&self, name: S) -> Self::Gauge;
-
-    /// define a new timer metric
-    fn timer<S: AsRef<str>>(&self, name: S) -> Self::Timer;
-
-    fn with_prefix<S: AsRef<str>>(&self, prefix: S) -> Self;
+/// A metric dispatch that writes directly to the metric backend (not queuing)
+pub struct Metrics<C: MetricSink + 'static> {
+    prefix: String,
+    target: Arc<C>,
+    writer: Arc<<C as MetricSink>::Writer>,
 }
 
-/// A dispatch scope provides a way to group metric values
-/// for an operations (i.e. serving a request, processing a message)
-pub trait DispatchScope {
-    /// Free-form properties can be set fluently for the scope, providing downstream metric
-    /// components with contextual information (i.e. user name, message id, etc)
-    fn set_property<S: AsRef<str>>(&self, key: S, value: S) -> &Self;
+impl<C: MetricSink> Metrics<C> {
+    /// Create a new direct metric dispatch
+    pub fn new(target: C) -> Metrics<C> {
+        let target_writer = target.new_writer();
+        Metrics {
+            prefix: "".to_string(),
+            target: Arc::new(target),
+            writer: Arc::new(target_writer),
+        }
+    }
+
+    fn add_prefix<S: AsRef<str>>(&self, name: S) -> String {
+        // FIXME is there a way to return <S> in both cases?
+        if self.prefix.is_empty() {
+            return name.as_ref().to_string()
+        }
+        let mut buf:String = self.prefix.clone();
+        buf.push_str(name.as_ref());
+        buf.to_string()
+    }
+
+    pub fn event<S: AsRef<str>>(&self, name: S) -> Event<C> {
+        let metric = self.target.new_metric(MetricKind::Event, self.add_prefix(name), 1.0);
+        Event {
+            metric,
+            target_writer: self.writer.clone(),
+        }
+    }
+
+    pub fn counter<S: AsRef<str>>(&self, name: S) -> Count<C> {
+        let metric = self.target.new_metric(MetricKind::Count, self.add_prefix(name), 1.0);
+        Count{
+            metric,
+            target_writer: self.writer.clone(),
+        }
+    }
+
+    pub fn timer<S: AsRef<str>>(&self, name: S) -> Timer<C> {
+        let metric = self.target.new_metric(MetricKind::Time, self.add_prefix(name), 1.0);
+        Timer{
+            metric,
+            target_writer: self.writer.clone(),
+        }
+    }
+
+    pub fn gauge<S: AsRef<str>>(&self, name: S) -> Gauge<C> {
+        let metric = self.target.new_metric(MetricKind::Gauge, self.add_prefix(name), 1.0);
+        Gauge{
+            metric,
+            target_writer: self.writer.clone(),
+        }
+    }
+
+    pub fn with_prefix<S: AsRef<str>>(&self, prefix: S) -> Self {
+        Metrics {
+            prefix: prefix.as_ref().to_string(),
+            target: self.target.clone(),
+            writer: self.writer.clone(),
+        }
+    }
 }
 
-pub trait ScopingDispatch {
-    /// type of scope for this dispatch
-    type Scope: DispatchScope;
+/// Run benchmarks with `cargo +nightly bench --features bench`
+#[cfg(feature = "bench")]
+mod bench {
 
-    fn with_scope<F>(&mut self, operations: F)
-        where
-            F: Fn(&Self::Scope);
-}
+    use aggregate::MetricAggregator;
+    use ::*;
+    use test::Bencher;
 
-/// Metric sources allow a group of metrics to be defined and written as one.
-/// Source implementers may get their data from internally aggregated or buffered metrics
-/// or they may read existing metrics not defined by the app (OS counters, etc)
-pub trait MetricPublish {
-    fn publish(&self);
+    #[bench]
+    fn time_bench_direct_dispatch_event(b: &mut Bencher) {
+        let aggregate = aggregate().as_sink();
+        let dispatch = metrics(aggregate);
+        let event = dispatch.event("aaa");
+        b.iter(|| event.mark());
+    }
+
 }
 
 ///////////
@@ -227,6 +279,15 @@ macro_rules! time {
 
 ////////////
 //// BACKEND
+
+/// Used to differentiate between metric kinds in the backend.
+#[derive(Debug, Copy, Clone)]
+pub enum MetricKind {
+    Event,
+    Count,
+    Gauge,
+    Time,
+}
 
 /// Main trait of the metrics backend API.
 /// Defines a component that can be used when setting up a metrics backend stack.
@@ -275,8 +336,8 @@ pub trait AsSink<S: MetricSink> {
 }
 
 /// Wrap the metrics backend to provide an application-friendly interface.
-pub fn metrics<S>(sink: S) -> dispatch::DirectDispatch<S> where S: MetricSink {
-    dispatch::DirectDispatch::new(sink)
+pub fn metrics<S: MetricSink>(sink: S) -> Metrics<S> {
+    Metrics::new(sink)
 }
 
 /// Perform random sampling of values according to the specified rate.
@@ -340,6 +401,6 @@ pub fn aggregate() -> aggregate::MetricAggregator {
 /// metrics.event("my_event").mark();
 /// publisher.publish()
 /// ```
-pub fn publish<S: MetricSink>(source: AggregateSource, sink: S) -> AggregatePublisher<S> {
+pub fn publish<S: MetricSink + Sync>(source: AggregateSource, sink: S) -> AggregatePublisher<S> {
     publish::AggregatePublisher::new(source, sink,)
 }
