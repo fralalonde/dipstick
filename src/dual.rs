@@ -14,16 +14,12 @@ pub struct DualWriter<C1: MetricSink, C2: MetricSink> {
     sink_b: C2::Writer,
 }
 
-impl<
-    C1: MetricSink,
-    C2: MetricSink,
-> MetricWriter<DualKey<<C1 as MetricSink>::Metric, <C2 as MetricSink>::Metric>>
+impl<C1: MetricSink, C2: MetricSink,>
+    MetricWriter<DualKey<<C1 as MetricSink>::Metric, <C2 as MetricSink>::Metric>>
     for DualWriter<C1, C2> {
-    fn write(
-        &self,
-        metric: &DualKey<<C1 as MetricSink>::Metric, <C2 as MetricSink>::Metric>,
-        value: Value,
-    ) {
+    fn write(&self,
+            metric: &DualKey<<C1 as MetricSink>::Metric, <C2 as MetricSink>::Metric>,
+            value: Value,) {
         self.sink_a.write(&metric.metric_1, value);
         self.sink_b.write(&metric.metric_2, value);
     }

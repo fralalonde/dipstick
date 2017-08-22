@@ -10,18 +10,16 @@ pub struct AggregatePublisher<C: MetricSink> {
     target: C,
 }
 
-impl<C: MetricSink> AggregatePublisher<C> {
-    /// Create new publisher from aggregate metrics to target channel
-    pub fn new(source: AggregateSource, target: C,) -> AggregatePublisher<C> {
-        AggregatePublisher { source, target }
-    }
-}
-
 lazy_static! {
     static ref EXEC: CoreExecutor = CoreExecutor::new().unwrap();
 }
 
 impl<C: MetricSink + Sync> AggregatePublisher<C> {
+
+    /// Create new publisher from aggregate metrics to target channel
+    pub fn new(source: AggregateSource, target: C,) -> AggregatePublisher<C> {
+        AggregatePublisher { source, target }
+    }
 
     /// Schedules the publisher to run at recurrent intervals
     pub fn publish_every(&'static self, duration: Duration) {
