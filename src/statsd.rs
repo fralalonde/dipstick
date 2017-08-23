@@ -95,6 +95,7 @@ impl StatsdSink {
         let socket = Arc::new(UdpSocket::bind("0.0.0.0:0")?); // NB: CLOEXEC by default
         socket.set_nonblocking(true)?;
         socket.connect(address)?;
+        info!("statsd connected");
 
         Ok(StatsdSink {
             socket,

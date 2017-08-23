@@ -62,7 +62,7 @@ pub use cache::*;
 use std::sync::Arc;
 
 //////////////////
-// DEFINITIONS
+// TYPES
 
 pub type Value = u64;
 
@@ -85,6 +85,9 @@ impl TimeHandle {
 pub type Rate = f64;
 
 pub const FULL_SAMPLING_RATE: Rate = 1.0;
+
+//////////////////
+// FRONTEND
 
 /// A monotonic counter metric.
 /// Since value is only ever increased by one, no value parameter is provided,
@@ -115,12 +118,12 @@ impl<C: MetricSink> Gauge<C> {
 }
 
 /// A gauge that sends values to the metrics backend
-pub struct Count<C: MetricSink + 'static> {
+pub struct Counter<C: MetricSink + 'static> {
     metric: <C as MetricSink>::Metric,
     target_writer: Arc<<C as MetricSink>::Writer>,
 }
 
-impl<C: MetricSink> Count<C> {
+impl<C: MetricSink> Counter<C> {
     /// Record a value count.
     pub fn count<V>(&self, count: V) where V: ToPrimitive {
         self.target_writer.write(&self.metric, count.to_u64().unwrap());
@@ -210,9 +213,9 @@ impl<C: MetricSink> Metrics<C> {
         }
     }
 
-    pub fn counter<S: AsRef<str>>(&self, name: S) -> Count<C> {
+    pub fn counter<S: AsRef<str>>(&self, name: S) -> Counter<C> {
         let metric = self.target.new_metric(MetricKind::Count, self.add_prefix(name), 1.0);
-        Count{
+        Counter {
             metric,
             target_writer: self.writer.clone(),
         }
