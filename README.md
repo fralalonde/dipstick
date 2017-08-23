@@ -1,7 +1,7 @@
 dipstick
 --------
 
-[![Build Status](https://travis-ci.org/fralalonde/dipstick.svg?branch=master)](https://travis-ci.org/fralalonde/dipstick.svg?branch=master)
+[![Build Status](https://travis-ci.org/fralalonde/dipstick.svg?branch=master)](https://travis-ci.org/fralalonde/dipstick)
 
 A fast and modular metrics library decoupling app instrumentation from reporting backend.
 Similar to popular logging frameworks, but with counters and timers.
