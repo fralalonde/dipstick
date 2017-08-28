@@ -1,8 +1,6 @@
 language: rust
 rust:
   - stable
-  - nightly
 cache: cargo
 script:
 - cargo test
-- cargo +nightly bench --features bench
