@@ -18,7 +18,7 @@ homepage = "https://github.com/fralalonde/dipstick"
 repository = "https://github.com/fralalonde/dipstick"
 readme = "README.md"
 keywords = ["metrics", "statsd", "timer", "counter", "monitoring"]
-license-file = "LICENSE"
+license = "MIT/Apache-2.0"
 
 [badges]
 travis-ci = { repository = "fralalonde/dipstick", branch = "master" }
