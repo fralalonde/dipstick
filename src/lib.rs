@@ -286,9 +286,13 @@ macro_rules! time {
 /// Used to differentiate between metric kinds in the backend.
 #[derive(Debug, Copy, Clone)]
 pub enum MetricKind {
+    /// Is one item handled?
     Event,
+    /// How many items are handled?
     Count,
+    /// How much are we using or do we have left?
     Gauge,
+    /// How long does this take?
     Time,
 }
 
@@ -303,7 +307,10 @@ pub enum MetricKind {
 /// - Log
 /// - Aggregate
 pub trait MetricSink {
+    /// Metric identifier type of this sink.
     type Metric: MetricKey;
+
+    /// Metric writer type of this sink.
     type Writer: MetricWriter<Self::Metric>;
 
     /// Define a new sink-specific metric that can be used for writing values.
@@ -330,11 +337,15 @@ pub trait MetricWriter<M: MetricKey>: Send {
     fn flush(&self) {}
 }
 
+/// Metric source trait
 pub trait AsSource {
+    /// Get the metric source.
     fn as_source(&self) -> AggregateSource;
 }
 
+/// Metric sink trait
 pub trait AsSink<S: MetricSink> {
+    /// Get the metric sink.
     fn as_sink(&self) -> S;
 }
 
@@ -381,11 +392,9 @@ pub fn combine<S1: MetricSink, S2: MetricSink>(s1: S1, s2: S2) -> dual::DualSink
 ///
 /// let aggregate = aggregate();
 /// let metrics = metrics(aggregate.as_sink());
-/// let publisher = publish(aggregate.as_source(), log("aggregated"));
 ///
 /// metrics.event("my_event").mark();
 /// metrics.event("my_event").mark();
-/// publisher.publish()
 /// ```
 pub fn aggregate() -> aggregate::MetricAggregator {
     MetricAggregator::new()
@@ -397,11 +406,8 @@ pub fn aggregate() -> aggregate::MetricAggregator {
 /// use dipstick::*;
 ///
 /// let aggregate = aggregate();
-/// let metrics = metrics(aggregate.as_sink());
 /// let publisher = publish(aggregate.as_source(), log("aggregated"));
 ///
-/// metrics.event("my_event").mark();
-/// metrics.event("my_event").mark();
 /// publisher.publish()
 /// ```
 pub fn publish<S: MetricSink + Sync>(source: AggregateSource, sink: S) -> AggregatePublisher<S> {
