@@ -1,3 +1,5 @@
+//! Publish metrics from a source to a sink.
+
 use ::*;
 use aggregate::{AggregateSource, AggregateScore};
 use std::time::Duration;

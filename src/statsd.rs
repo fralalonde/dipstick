@@ -1,3 +1,5 @@
+//! Send metrics to a statsd server.
+
 use ::*;
 use std::io::Result;
 use std::net::{UdpSocket,ToSocketAddrs};
@@ -20,6 +22,7 @@ thread_local! {
     static SEND_BUFFER: RefCell<String> = RefCell::new(String::with_capacity(MAX_UDP_PAYLOAD));
 }
 
+/// The statsd writer formats metrics to statsd protocol and writes them to a UDP socket.
 #[derive(Debug)]
 pub struct StatsdWriter {
     socket: Arc<UdpSocket>,
@@ -28,7 +31,10 @@ pub struct StatsdWriter {
 fn flush(payload: &mut String, socket: &UdpSocket) {
     debug!("statsd sending {} bytes", payload.len());
     // TODO check for and report any send() error
-    socket.send(payload.as_bytes())/*.unwrap()*/;
+    match socket.send(payload.as_bytes()) {
+        Ok(size) => { /* TODO inner metrics */ },
+        Err(e) => { /* TODO metric faults */ }
+    };
     payload.clear();
 }
 

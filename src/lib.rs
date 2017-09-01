@@ -1,3 +1,8 @@
+//! A fast and modular metrics library decoupling app instrumentation from reporting backend.
+//! Similar to popular logging frameworks, but with counters and timers.
+//! Can be configured for combined outputs (log + statsd), random sampling, local aggregation
+//! of metrics, recurrent background publication, etc.
+
 #![cfg_attr(feature = "bench", feature(test))]
 
 #![warn(
@@ -39,6 +44,8 @@ pub mod error {
     }
 }
 
+mod pcg32;
+
 //use error::*;
 
 pub mod dual;
@@ -47,7 +54,6 @@ pub mod aggregate;
 pub mod publish;
 pub mod statsd;
 pub mod logging;
-pub mod pcg32;
 pub mod cache;
 
 pub use num::ToPrimitive;
@@ -59,14 +65,20 @@ pub use publish::*;
 pub use statsd::*;
 pub use logging::*;
 pub use cache::*;
+
 use std::sync::Arc;
+use std::fmt::Debug;
 
 //////////////////
 // TYPES
 
+/// Base type for recorded metric values.
+// TODO should this be f64? or impl AsValue and drop num crate
 pub type Value = u64;
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
+/// A handle to the start time of a counter.
+/// Wrapped so it may be changed safely later.
 pub struct TimeHandle(u64);
 
 impl TimeHandle {
@@ -82,8 +94,13 @@ impl TimeHandle {
     }
 }
 
+/// Base type for sampling rate.
+/// 1.0 takes everything.
+/// 0.5 takes one sample every two measures.
+/// 0.0 takes nothing.
 pub type Rate = f64;
 
+/// Do not sample, use all data.
 pub const FULL_SAMPLING_RATE: Rate = 1.0;
 
 //////////////////
@@ -92,6 +109,7 @@ pub const FULL_SAMPLING_RATE: Rate = 1.0;
 /// A monotonic counter metric.
 /// Since value is only ever increased by one, no value parameter is provided,
 /// preventing potential problems.
+#[derive(Debug)]
 pub struct Event<C: MetricSink + 'static> {
     metric: <C as MetricSink>::Metric,
     target_writer: Arc<<C as MetricSink>::Writer>,
@@ -105,6 +123,7 @@ impl<C: MetricSink> Event<C> {
 }
 
 /// A counter that sends values to the metrics backend
+#[derive(Debug)]
 pub struct Gauge<C: MetricSink + 'static> {
     metric: <C as MetricSink>::Metric,
     target_writer: Arc<<C as MetricSink>::Writer>,
@@ -118,6 +137,7 @@ impl<C: MetricSink> Gauge<C> {
 }
 
 /// A gauge that sends values to the metrics backend
+#[derive(Debug)]
 pub struct Counter<C: MetricSink + 'static> {
     metric: <C as MetricSink>::Metric,
     target_writer: Arc<<C as MetricSink>::Writer>,
@@ -136,6 +156,7 @@ impl<C: MetricSink> Counter<C> {
 /// - with the time(Fn) method, which wraps a closure with start() and stop() calls.
 /// - with start() and stop() methods, wrapping around the operation to time
 /// - with the interval_us() method, providing an externally determined microsecond interval
+#[derive(Debug)]
 pub struct Timer<C: MetricSink + 'static> {
     metric: <C as MetricSink>::Metric,
     target_writer: Arc<<C as MetricSink>::Writer>,
@@ -177,7 +198,8 @@ impl<C: MetricSink> Timer<C> {
     }
 }
 
-/// A metric dispatch that writes directly to the metric backend (not queuing)
+/// Application metrics are defined here.
+#[derive(Debug)]
 pub struct Metrics<C: MetricSink + 'static> {
     prefix: String,
     target: Arc<C>,
@@ -195,51 +217,57 @@ impl<C: MetricSink> Metrics<C> {
         }
     }
 
-    fn add_prefix<S: AsRef<str>>(&self, name: S) -> String {
+    fn qualified_name<S: Into<String> + AsRef<str>>(&self, name: S) -> String {
         // FIXME is there a way to return <S> in both cases?
         if self.prefix.is_empty() {
-            return name.as_ref().to_string()
+            return name.into()
         }
         let mut buf:String = self.prefix.clone();
         buf.push_str(name.as_ref());
         buf.to_string()
     }
 
-    pub fn event<S: AsRef<str>>(&self, name: S) -> Event<C> {
-        let metric = self.target.new_metric(MetricKind::Event, self.add_prefix(name), 1.0);
+    /// Get an event counter of the provided name.
+    pub fn event<S: Into<String> + AsRef<str>>(&self, name: S) -> Event<C> {
+        let metric = self.target.new_metric(MetricKind::Event, self.qualified_name(name), 1.0);
         Event {
             metric,
             target_writer: self.writer.clone(),
         }
     }
 
-    pub fn counter<S: AsRef<str>>(&self, name: S) -> Counter<C> {
-        let metric = self.target.new_metric(MetricKind::Count, self.add_prefix(name), 1.0);
+    /// Get a counter of the provided name.
+    pub fn counter<S: Into<String> + AsRef<str>>(&self, name: S) -> Counter<C> {
+        let metric = self.target.new_metric(MetricKind::Count, self.qualified_name(name), 1.0);
         Counter {
             metric,
             target_writer: self.writer.clone(),
         }
     }
 
-    pub fn timer<S: AsRef<str>>(&self, name: S) -> Timer<C> {
-        let metric = self.target.new_metric(MetricKind::Time, self.add_prefix(name), 1.0);
+    /// Get a timer of the provided name.
+    pub fn timer<S: Into<String> + AsRef<str>>(&self, name: S) -> Timer<C> {
+        let metric = self.target.new_metric(MetricKind::Time, self.qualified_name(name), 1.0);
         Timer{
             metric,
             target_writer: self.writer.clone(),
         }
     }
 
-    pub fn gauge<S: AsRef<str>>(&self, name: S) -> Gauge<C> {
-        let metric = self.target.new_metric(MetricKind::Gauge, self.add_prefix(name), 1.0);
+    /// Get a gauge of the provided name.
+    pub fn gauge<S: Into<String> + AsRef<str>>(&self, name: S) -> Gauge<C> {
+        let metric = self.target.new_metric(MetricKind::Gauge, self.qualified_name(name), 1.0);
         Gauge{
             metric,
             target_writer: self.writer.clone(),
         }
     }
 
-    pub fn with_prefix<S: AsRef<str>>(&self, prefix: S) -> Self {
+    /// Prepend the metrics name with a prefix.
+    /// Does not affect metrics that were already obtained.
+    pub fn with_prefix<S: Into<String>>(&self, prefix: S) -> Self {
         Metrics {
-            prefix: prefix.as_ref().to_string(),
+            prefix: prefix.into(),
             target: self.target.clone(),
             writer: self.writer.clone(),
         }
@@ -306,9 +334,9 @@ pub enum MetricKind {
 /// - Statsd
 /// - Log
 /// - Aggregate
-pub trait MetricSink {
+pub trait MetricSink: Debug {
     /// Metric identifier type of this sink.
-    type Metric: MetricKey;
+    type Metric: MetricKey + Debug;
 
     /// Metric writer type of this sink.
     type Writer: MetricWriter<Self::Metric>;
@@ -324,10 +352,10 @@ pub trait MetricSink {
 /// A metric identifier defined by a specific metric sink implementation.
 /// Passed back to when writing a metric value
 /// May carry state specific to the sink's implementation
-pub trait MetricKey {}
+pub trait MetricKey: Debug {}
 
 /// A sink-specific target for writing metrics to.
-pub trait MetricWriter<M: MetricKey>: Send {
+pub trait MetricWriter<M: MetricKey>: Send + Debug {
     /// Write a single metric value
     fn write(&self, metric: &M, value: Value);
 
