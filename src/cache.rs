@@ -1,6 +1,9 @@
+//! Cache defined metrics.
+
 use ::*;
 use cached::{SizedCache, Cached};
 use std::sync::{Arc,RwLock};
+use std::fmt;
 
 // TODO get rid of this struct+impl, replace it with
 // impl <C: MetricSink> SinkMetric for Arc<C::Metric> {}
@@ -13,12 +16,14 @@ use std::sync::{Arc,RwLock};
 // not tried because it would be HORRIBLE
 // for now we use this "wrapping reification" of Arc<> which needs to be allocated everytime
 // if you know how to fix it that'd be great
+#[derive(Debug)]
+/// The cache key copies the target key.
 pub struct CachedKey<C: MetricSink>(Arc<C::Metric>);
 
 impl<C: MetricSink> MetricKey for CachedKey<C> {}
 
-// WRITER
-
+/// The cache writer is transparent.
+#[derive(Debug)]
 pub struct CachedMetricWriter<C: MetricSink> {
     target: C::Writer,
 }
@@ -34,6 +39,12 @@ impl<C: MetricSink> MetricWriter<CachedKey<C>> for CachedMetricWriter<C> {
 pub struct MetricCache<C: MetricSink> {
     target: C,
     cache: RwLock<SizedCache<String, Arc<C::Metric>>>,
+}
+
+impl<C: MetricSink> fmt::Debug for MetricCache<C> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        Ok(self.target.fmt(f)?)
+    }
 }
 
 impl<C: MetricSink> MetricCache<C> {

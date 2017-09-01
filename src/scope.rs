@@ -1,3 +1,6 @@
+//! Associate thread-local metadata to application metrics being reported.
+//! **not yet implemented**
+
 use ::*;
 
 #[derive(Debug)]

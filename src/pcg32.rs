@@ -1,4 +1,5 @@
-/// PCG32 random number generation for fast sampling
+//! PCG32 random number generation for fast sampling
+
 // TODO use https://github.com/codahale/pcg instead?
 use std::cell::RefCell;
 use time;

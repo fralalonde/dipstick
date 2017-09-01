@@ -1,13 +1,17 @@
+//! Write metrics to log
+
 use ::*;
 
 #[derive(Debug)]
+/// Write metrics to log
 pub struct LoggingKey {
     prefix: String,
 }
 
 impl MetricKey for LoggingKey {}
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
+/// Write metrics to log
 pub struct LoggingWriter {}
 
 impl MetricWriter<LoggingKey> for LoggingWriter {
@@ -18,12 +22,14 @@ impl MetricWriter<LoggingKey> for LoggingWriter {
 }
 
 #[derive(Debug)]
+/// Write metrics to the standard log with a prefix
 pub struct LoggingSink {
     prefix: String,
     write: LoggingWriter,
 }
 
 impl LoggingSink {
+    /// Create a new logging sink.
     pub fn new<S: AsRef<str>>(prefix: S) -> LoggingSink {
         let prefix = prefix.as_ref().to_string();
         LoggingSink {

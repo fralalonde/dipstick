@@ -1,3 +1,5 @@
+//! Maintain aggregated metrics for deferred reporting,
+
 use ::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
@@ -17,12 +19,21 @@ enum AtomicScore {
 /// to-be-consumed aggregated values
 #[derive(Debug)]
 pub enum AggregateScore {
+    /// No data was reported (yet) for this metric.
     NoData,
+
+    /// Simple score for event counters
     Event { hit: u64 },
+
+    /// Score structure for counters, timers and gauges.
     Value {
+        /// Number of times the metric was used.
         hit: u64,
+        /// Sum of metric values reported.
         sum: u64,
+        /// Biggest value reported.
         max: u64,
+        /// Smallest value reported.
         min: u64,
     },
 }
@@ -127,8 +138,7 @@ pub struct AggregateSource(Arc<RwLock<Vec<Arc<AggregateKey>>>>);
 
 impl AggregateSource {
     pub fn for_each<F>(&self, ops: F)
-    where
-        F: Fn(&AggregateKey),
+    where F: Fn(&AggregateKey),
     {
         for metric in self.0.read().unwrap().iter() {
             ops(&metric)
@@ -159,6 +169,7 @@ impl AsSink<AggregateSink> for MetricAggregator {
     }
 }
 
+#[derive(Debug)]
 pub struct AggregateSink(Arc<RwLock<Vec<Arc<AggregateKey>>>>);
 
 impl MetricSink for AggregateSink {

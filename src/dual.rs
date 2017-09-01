@@ -1,3 +1,5 @@
+//! Copy metrics across multiple sinks.
+
 use ::*;
 
 #[derive(Debug)]

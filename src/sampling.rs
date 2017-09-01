@@ -1,3 +1,5 @@
+//! Reduce the amount of data by dropping some of it.
+
 use ::*;
 use pcg32;
 
