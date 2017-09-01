@@ -6,7 +6,7 @@ members = [
 
 [package]
 name = "dipstick"
-version = "0.3.3"
+version = "0.3.4-pre"
 authors = ["Francis Lalonde <fralalonde@gmail.com>"]
 
 description = """A fast and modular metrics library decoupling app instrumentation from reporting backend.
