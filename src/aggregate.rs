@@ -17,13 +17,16 @@ enum AtomicScore {
 }
 
 /// to-be-consumed aggregated values
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum AggregateScore {
     /// No data was reported (yet) for this metric.
     NoData,
 
     /// Simple score for event counters
-    Event { hit: u64 },
+    Event {
+        /// Number of times the metric was used.
+        hit: u64
+    },
 
     /// Score structure for counters, timers and gauges.
     Value {
@@ -41,7 +44,9 @@ pub enum AggregateScore {
 /// A metric that holds aggregated values
 #[derive(Debug)]
 pub struct AggregateKey {
+    /// The kind of metric.
     pub kind: MetricKind,
+    /// The metric's name.
     pub name: String,
     score: AtomicScore,
 }
@@ -119,7 +124,8 @@ impl AggregateKey {
 
 impl MetricKey for Arc<AggregateKey> {}
 
-#[derive(Debug)]
+/// Since aggregation negates any scope, there only needs to be a single writer ever.
+#[derive(Debug, Clone, Copy)]
 pub struct AggregateWrite();
 
 impl MetricWriter<Arc<AggregateKey>> for AggregateWrite {
@@ -133,12 +139,14 @@ lazy_static! {
     static ref AGGREGATE_WRITE: AggregateWrite = AggregateWrite();
 }
 
-#[derive(Debug)]
+/// Enumerate the metrics being aggregated and their scores.
+#[derive(Debug, Clone)]
 pub struct AggregateSource(Arc<RwLock<Vec<Arc<AggregateKey>>>>);
 
 impl AggregateSource {
-    pub fn for_each<F>(&self, ops: F)
-    where F: Fn(&AggregateKey),
+
+    /// Iterate over every aggregated metric.
+    pub fn for_each<F>(&self, ops: F) where F: Fn(&AggregateKey),
     {
         for metric in self.0.read().unwrap().iter() {
             ops(&metric)
@@ -146,12 +154,16 @@ impl AggregateSource {
     }
 }
 
+/// Central aggregation structure.
+/// Since `AggregateKey`s themselves contain scores, the aggregator simply maintains
+/// a shared list of metrics for enumeration when used as source.
 #[derive(Debug)]
 pub struct MetricAggregator {
     metrics: Arc<RwLock<Vec<Arc<AggregateKey>>>>,
 }
 
 impl MetricAggregator {
+    /// Build a new metric aggregation point.
     pub fn new() -> MetricAggregator {
         MetricAggregator { metrics: Arc::new(RwLock::new(Vec::new())) }
     }
@@ -169,7 +181,10 @@ impl AsSink<AggregateSink> for MetricAggregator {
     }
 }
 
-#[derive(Debug)]
+/// A sink where to send metrics for aggregation.
+/// The parameters of aggregation may be set upon creation.
+/// Just `clone()` to use as a shared aggregator.
+#[derive(Debug, Clone)]
 pub struct AggregateSink(Arc<RwLock<Vec<Arc<AggregateKey>>>>);
 
 impl MetricSink for AggregateSink {
@@ -214,32 +229,32 @@ mod bench {
 
     #[bench]
     fn time_bench_write_event(b: &mut Bencher) {
-        let aggregate = &aggregate().as_sink();
-        let metric = aggregate.new_metric(MetricKind::Event, "event_a", 1.0);
-        let writer = aggregate.new_writer();
+        let (sink, source) = aggregate();
+        let metric = sink.new_metric(MetricKind::Event, "event_a", 1.0);
+        let writer = sink.new_writer();
         b.iter(|| writer.write(&metric, 1));
     }
 
 
     #[bench]
     fn time_bench_write_count(b: &mut Bencher) {
-        let aggregate = &aggregate().as_sink();
-        let metric = aggregate.new_metric(MetricKind::Count, "count_a", 1.0);
-        let writer = aggregate.new_writer();
+        let (sink, source) = aggregate();
+        let metric = sink.new_metric(MetricKind::Count, "count_a", 1.0);
+        let writer = sink.new_writer();
         b.iter(|| writer.write(&metric, 1));
     }
 
     #[bench]
     fn time_bench_read_event(b: &mut Bencher) {
-        let aggregate = &aggregate().as_sink();
-        let metric = aggregate.new_metric(MetricKind::Event, "event_a", 1.0);
+        let (sink, source) = aggregate();
+        let metric = sink.new_metric(MetricKind::Event, "event_a", 1.0);
         b.iter(|| metric.read_and_reset());
     }
 
     #[bench]
     fn time_bench_read_count(b: &mut Bencher) {
-        let aggregate = &aggregate().as_sink();
-        let metric = aggregate.new_metric(MetricKind::Count, "count_a", 1.0);
+        let (sink, source) = aggregate();
+        let metric = sink.new_metric(MetricKind::Count, "count_a", 1.0);
         b.iter(|| metric.read_and_reset());
     }
 

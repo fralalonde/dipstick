@@ -14,29 +14,31 @@ trivial_numeric_casts,
 unused_extern_crates,
 unused_import_braces,
 unused_qualifications,
-variant_size_differences,
+// variant_size_differences,
 )]
 
 #[cfg(feature = "bench")]
 extern crate test;
-
-extern crate time;
-
-extern crate cached;
-extern crate thread_local_object;
 
 #[macro_use]
 extern crate log;
 
 #[macro_use]
 extern crate lazy_static;
-extern crate num;
-extern crate scheduled_executor;
 
 #[macro_use]
 extern crate error_chain;
 
+extern crate time;
+extern crate cached;
+extern crate num;
+extern crate scheduled_executor;
+
+mod pcg32;
+mod multi;
+
 pub mod error {
+    //! Dipstick uses error_chain to handle the critical errors that might crop up when assembling the backend.
     error_chain! {
         foreign_links {
             Io(::std::io::Error);
@@ -44,11 +46,6 @@ pub mod error {
     }
 }
 
-mod pcg32;
-
-//use error::*;
-
-pub mod dual;
 pub mod sampling;
 pub mod aggregate;
 pub mod publish;
@@ -60,7 +57,7 @@ pub use num::ToPrimitive;
 pub use std::net::ToSocketAddrs;
 
 pub use aggregate::*;
-pub use dual::*;
+pub use multi::*;
 pub use publish::*;
 pub use statsd::*;
 pub use logging::*;
@@ -284,9 +281,9 @@ mod bench {
 
     #[bench]
     fn time_bench_direct_dispatch_event(b: &mut Bencher) {
-        let aggregate = aggregate().as_sink();
-        let dispatch = metrics(aggregate);
-        let event = dispatch.event("aaa");
+        let (sink, source) = aggregate();
+        let metrics = metrics(sink);
+        let event = metrics.event("aaa");
         b.iter(|| event.mark());
     }
 
@@ -377,21 +374,34 @@ pub trait AsSink<S: MetricSink> {
     fn as_sink(&self) -> S;
 }
 
+/// Metric sink trait
+pub trait IntoSink<S: MetricSink> {
+    /// Get the metric sink.
+    fn into_sink(self) -> S;
+}
+
+/// Tautology - Any sink can turn into itself, duh.
+impl<S: MetricSink> IntoSink<S> for S {
+    fn into_sink(self) -> Self {
+        self
+    }
+}
+
 /// Wrap the metrics backend to provide an application-friendly interface.
-pub fn metrics<S: MetricSink>(sink: S) -> Metrics<S> {
-    Metrics::new(sink)
+pub fn metrics<IS, S>(sink: IS) -> Metrics<S> where IS: IntoSink<S>, S: MetricSink {
+    Metrics::new(sink.into_sink())
 }
 
 /// Perform random sampling of values according to the specified rate.
-pub fn sample<S>(rate: Rate, sink: S) -> sampling::SamplingSink<S> where S: MetricSink {
-    sampling::SamplingSink::new(sink, rate)
+pub fn sample<IS, S>(rate: Rate, sink: IS) -> sampling::SamplingSink<S> where IS: IntoSink<S>, S: MetricSink {
+    sampling::SamplingSink::new(sink.into_sink(), rate)
 }
 
 /// Cache metrics to prevent them from being re-defined on every use.
 /// Use of this should be transparent, this has no effect on the values.
 /// Stateful sinks (i.e. Aggregate) may naturally cache their definitions.
-pub fn cache<S>(size: usize, sink: S) -> cache::MetricCache<S> where S: MetricSink {
-    cache::MetricCache::new(sink, size)
+pub fn cache<IS, S>(size: usize, sink: IS) -> cache::MetricCache<S> where IS: IntoSink<S>, S: MetricSink {
+    cache::MetricCache::new(sink.into_sink(), size)
 }
 
 /// Send metric to a logger.
@@ -405,10 +415,18 @@ pub fn statsd<S: AsRef<str>, A: ToSocketAddrs>(address: A, prefix: S) -> error::
     Ok(statsd::StatsdSink::new(address, prefix)?)
 }
 
-/// Sends metrics to separate backends.
-/// Nested combine() can be used if more than two destinations are required.
-pub fn combine<S1: MetricSink, S2: MetricSink>(s1: S1, s2: S2) -> dual::DualSink<S1, S2> {
-    dual::DualSink::new(s1, s2)
+/// Twin metrics sink
+impl<IS1, S1, IS2, S2> IntoSink<multi::DoubleSink<S1, S2>> for (IS1, IS2) where IS1: IntoSink<S1>, S1: MetricSink,  IS2: IntoSink<S2>, S2: MetricSink  {
+    fn into_sink(self) -> multi::DoubleSink<S1, S2> {
+        multi::DoubleSink::new(self.0.into_sink(), self.1.into_sink())
+    }
+}
+
+/// Triple metrics sink
+impl<IS1, S1, IS2, S2, IS3, S3> IntoSink<multi::DoubleSink<S1, multi::DoubleSink<S2, S3>>> for (IS1, IS2, IS3) where IS1: IntoSink<S1>, S1: MetricSink, IS2: IntoSink<S2>, S2: MetricSink,  IS3: IntoSink<S3>, S3: MetricSink  {
+    fn into_sink(self) -> multi::DoubleSink<S1, multi::DoubleSink<S2, S3>> {
+        multi::DoubleSink::new(self.0.into_sink(), multi::DoubleSink::new(self.1.into_sink(), self.2.into_sink()))
+    }
 }
 
 /// Aggregate metrics in memory.
@@ -418,14 +436,15 @@ pub fn combine<S1: MetricSink, S2: MetricSink>(s1: S1, s2: S2) -> dual::DualSink
 /// ```
 /// use dipstick::*;
 ///
-/// let aggregate = aggregate();
-/// let metrics = metrics(aggregate.as_sink());
+/// let (sink, source) = aggregate();
+/// let metrics = metrics(sink);
 ///
 /// metrics.event("my_event").mark();
 /// metrics.event("my_event").mark();
 /// ```
-pub fn aggregate() -> aggregate::MetricAggregator {
-    MetricAggregator::new()
+pub fn aggregate() -> (AggregateSink, AggregateSource) {
+    let agg = MetricAggregator::new();
+    (agg.as_sink(), agg.as_source())
 }
 
 /// Publishes all metrics from a source to a backend.
@@ -433,8 +452,8 @@ pub fn aggregate() -> aggregate::MetricAggregator {
 /// ```
 /// use dipstick::*;
 ///
-/// let aggregate = aggregate();
-/// let publisher = publish(aggregate.as_source(), log("aggregated"));
+/// let (sink, source) = aggregate();
+/// let publisher = publish(source, log("aggregated"));
 ///
 /// publisher.publish()
 /// ```

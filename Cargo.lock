@@ -16,7 +16,7 @@ dependencies = [
 name = "aggregate"
 version = "0.0.0"
 dependencies = [
- "dipstick 0.3.3-pre",
+ "dipstick 0.3.4-pre",
  "scheduled-executor 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
