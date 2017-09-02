@@ -1,4 +1,4 @@
-//! Publish metrics from a source to a sink.
+//! Publish metrics from a source to sink.
 
 use ::*;
 use aggregate::{AggregateSource, AggregateScore};

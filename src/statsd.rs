@@ -7,6 +7,7 @@ use std::cell::RefCell;
 use std::sync::Arc;
 
 #[derive(Debug)]
+/// Key of a statsd metric.
 pub struct StatsdKey {
     prefix: String,
     suffix: String,

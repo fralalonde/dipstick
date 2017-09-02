@@ -1,8 +1,9 @@
-//! Reduce the amount of data by dropping some of it.
+//! Reduce the amount of data to process or transfer by statistically dropping some of it.
 
 use ::*;
 use pcg32;
 
+/// The metric sampling key also holds the sampling rate to apply to it.
 #[derive(Debug)]
 pub struct SamplingKey<M: MetricKey> {
     target: M,
@@ -11,6 +12,7 @@ pub struct SamplingKey<M: MetricKey> {
 
 impl<M: MetricKey> MetricKey for SamplingKey<M> {}
 
+/// The writer applies sampling logic each time a metric value is reported.
 #[derive(Debug)]
 pub struct SamplingWriter<C: MetricSink> {
     target: C::Writer,
@@ -24,6 +26,7 @@ impl<C: MetricSink> MetricWriter<SamplingKey<<C as MetricSink>::Metric>> for Sam
     }
 }
 
+/// A sampling sink adapter.
 #[derive(Debug)]
 pub struct SamplingSink<C: MetricSink> {
     target: C,
@@ -31,6 +34,7 @@ pub struct SamplingSink<C: MetricSink> {
 }
 
 impl<C: MetricSink> SamplingSink<C> {
+    /// Create a new sampling sink adapter.
     pub fn new(target: C, sampling_rate: Rate) -> SamplingSink<C> {
         SamplingSink {
             target,

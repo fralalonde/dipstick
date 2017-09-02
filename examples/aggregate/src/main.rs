@@ -15,11 +15,11 @@ pub fn sample_scheduled_statsd_aggregation() {
     // SAMPLE METRICS SETUP
 
     // send application metrics to both aggregator and to sampling log
-    let aggregator = aggregate();
+    let (sink, source) = aggregate();
 
     // schedule aggregated metrics to be sent to statsd every 3 seconds
     let statsd = cache(512, statsd("localhost:8125", "hello.").expect("no statsd"));
-    let aggregate_metrics = publish(aggregator.as_source(), statsd);
+    let aggregate_metrics = publish(source, statsd);
 
     // TODO use publisher publish_every() once it doesnt require 'static publisher
     let exec = CoreExecutor::new().unwrap();
@@ -30,8 +30,8 @@ pub fn sample_scheduled_statsd_aggregation() {
     // SAMPLE METRICS USAGE
 
     // define application metrics
-    let metrics = metrics(combine(
-        aggregator.as_sink(),
+    let metrics = metrics((
+        sink,
         sample(0.1, log("metrics:"))));
 
     let counter = metrics.counter("counter_a");
@@ -66,8 +66,7 @@ pub fn logging_and_statsd() {
 
     let statsd = statsd("localhost:8125", "goodbye.").unwrap();
     let logging = log("metrics");
-    let logging_and_statsd = combine(logging, statsd);
-    metrics(logging_and_statsd);
+    metrics((logging, statsd));
 
 }
 

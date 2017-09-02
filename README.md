@@ -15,21 +15,48 @@ Dipstick's design goals are to:
 - stay out of the way in the code and at runtime (ergonomic, fast, resilient)
 
 ## Code
-Here's a short example of sending timer values to the log showing both closure and macro syntax
+Here's an example showing usage of a predefined timer with the closure syntax. 
+Each timer value is :
+- Written immediately to the "app_metrics" logger.
+- Sent to statsd immediately, one time out of ten (sampled). 
 ```rust
 use dipstick::*;
-let metrics = metrics(log("app_metrics"));
-let timer = metrics.timer("timer_b");
-let value1 = timer.time(||, compute_value1());
-let value2 = time!(timer, compute_value2());
+
+let app_metrics = metrics((
+    log("app_metrics"),
+    sample(0.1, statsd("stats:8125"))
+    ));
+    
+let timer = app_metrics.timer("timer_b");
+loop {
+    let value2 = time!(timer, compute_value2());
+}
 ```
-More complete example(s?) can be found in the /examples dir.
+
+In this other example, an ad-hoc timer with macro syntax is used.
+- Each new timer value is aggregated with the previous values.
+- Aggregation tracks count, sum, max and min values (locklessly).
+- Aggregated scores are written to log every 10 seconds.  
+- `cache(sink)` is used to prevent metrics of the same to be created multiple times.  
+```rust
+use dipstick::*;
+use std::time::Duration;
+
+let (sink, source) = aggregate();
+let app_metrics = metrics(cache(sink));
+publish(source, log("last_ten_seconds")).publish_every(Duration::from_secs(10));
+
+loop {
+    let value2 = time!(app_metrics.timer("timer_b"), compute_value2());
+}
+```
+
+Other example(s?) can be found in the /examples dir.
 
 ## TODO 
 Although already usable, Dipstick is still under heavy development and makes no guarantees 
 of any kind at this point. See the following list for any potential caveats :
 - META turn TODOs into GitHub issues
-- cool logo 
 - generic publisher / sources
 - dispatch scopes
 - feature flags
@@ -47,3 +74,4 @@ of any kind at this point. See the following list for any potential caveats :
 - tests & benchmarks
 - complete doc / inline samples
 - example applications
+- make a cool logo 
