@@ -1,6 +1,6 @@
 [root]
 name = "dipstick"
-version = "0.3.4"
+version = "0.3.5-pre"
 dependencies = [
  "cached 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "error-chain 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -16,7 +16,7 @@ dependencies = [
 name = "aggregate"
 version = "0.0.0"
 dependencies = [
- "dipstick 0.3.4-pre",
+ "dipstick 0.3.5-pre",
  "scheduled-executor 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
