@@ -36,6 +36,7 @@ extern crate scheduled_executor;
 
 mod pcg32;
 mod multi;
+mod coatcheck;
 
 pub mod error {
     //! Dipstick uses error_chain to handle the critical errors that might crop up when assembling the backend.
@@ -52,6 +53,7 @@ pub mod publish;
 pub mod statsd;
 pub mod logging;
 pub mod cache;
+//pub mod queue;
 
 pub use num::ToPrimitive;
 pub use std::net::ToSocketAddrs;
@@ -333,7 +335,7 @@ pub enum MetricKind {
 /// - Aggregate
 pub trait MetricSink: Debug {
     /// Metric identifier type of this sink.
-    type Metric: MetricKey + Debug;
+    type Metric: MetricKey + Debug + Send + Sync;
 
     /// Metric writer type of this sink.
     type Writer: MetricWriter<Self::Metric>;

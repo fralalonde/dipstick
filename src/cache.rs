@@ -1,5 +1,7 @@
 //! Cache defined metrics.
 
+// TODO one cache per metric kind
+
 use ::*;
 use cached::{SizedCache, Cached};
 use std::sync::{Arc,RwLock};

@@ -15,10 +15,10 @@ Dipstick's design goals are to:
 - stay out of the way in the code and at runtime (ergonomic, fast, resilient)
 
 ## Code
-Here's an example showing usage of a predefined timer with the closure syntax. 
+Here's an example showing usage of a predefined timer with closure syntax. 
 Each timer value is :
 - Written immediately to the "app_metrics" logger.
-- Sent to statsd immediately, one time out of ten (sampled). 
+- Sent to statsd immediately, one time out of ten (randomly sampled). 
 ```rust
 use dipstick::*;
 
@@ -28,12 +28,11 @@ let app_metrics = metrics((
     ));
     
 let timer = app_metrics.timer("timer_b");
-loop {
-    let value2 = time!(timer, compute_value2());
-}
+
+let value2 = time!(timer, compute_value2());
 ```
 
-In this other example, an ad-hoc timer with macro syntax is used.
+In this other example, an _ad-hoc_ timer with macro syntax is used.
 - Each new timer value is aggregated with the previous values.
 - Aggregation tracks count, sum, max and min values (locklessly).
 - Aggregated scores are written to log every 10 seconds.  
@@ -46,12 +45,18 @@ let (sink, source) = aggregate();
 let app_metrics = metrics(cache(sink));
 publish(source, log("last_ten_seconds")).publish_every(Duration::from_secs(10));
 
-loop {
-    let value2 = time!(app_metrics.timer("timer_b"), compute_value2());
-}
+let value2 = time!(app_metrics.timer("timer_b"), compute_value2());
 ```
 
 Other example(s?) can be found in the /examples dir.
+
+## Performance
+Predefined timers use a bit more code but are generally faster because their
+initialization cost is is only paid once.
+Ad-hoc timers are redefined "inline" on each use. They are more flexible, but have more overhead because their init cost is paid on each use. 
+Defining a metric `cache()` reduces that cost for recurring metrics.    
+
+
 
 ## TODO 
 Although already usable, Dipstick is still under heavy development and makes no guarantees 
@@ -60,8 +65,7 @@ of any kind at this point. See the following list for any potential caveats :
 - generic publisher / sources
 - dispatch scopes
 - feature flags
-- non-tokio scheduler
-- late builders
+- non-tokio publish scheduler
 - microsecond-precision intervals
 - heartbeat metric on publish
 - logger templates
