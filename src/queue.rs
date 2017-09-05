@@ -11,35 +11,41 @@ use std::fmt;
 use std::sync::mpsc;
 use std::sync::Mutex;
 
-#[derive(Debug)]
-pub struct QueuedKey<C: MetricSink> {
-    index: usize,
-}
+pub type QueuedKey<C: MetricSink> = Arc<C::Metric>;
 
-impl<C: MetricSink> MetricKey for QueuedKey<C> {}
+impl <C> MetricKey for Arc<C> where C: MetricSink {}
 
+pub type QueuedSender<C: MetricSink> = mpsc::SyncSender<QueuedWrite<C>>;
+
+unsafe impl <C> Sync for mpsc::SyncSender<QueuedWrite<C>> where C: MetricSink {}
 
 #[derive(Debug)]
 pub struct QueuedWriter<C: MetricSink> {
-    sender: Arc<mpsc::SyncSender<QueuedWrite<C>>>,
+    target_writer: Arc<C::Writer>,
+    sender: Arc<QueuedSender<C>>,
 }
 
 impl<C: MetricSink> MetricWriter<QueuedKey<C>> for QueuedWriter<C> {
     fn write(&self, metric: &QueuedKey<C>, value: Value) {
-        self.sender.send(QueuedWrite { metric, value, time: TimeHandle::now() })
+        self.sender.send(QueuedWrite {
+            metric: metric.clone(),
+            writer: self.target_writer.clone(),
+            value,
+            time: Some(TimeHandle::now()),
+        })
     }
 }
 
 struct QueuedWrite<C: MetricSink> {
-    metric: QueuedKey<C>,
+    metric: Arc<C::Metric>,
+    writer: Arc<C::Writer>,
     value : Value,
-    time: TimeHandle
+    time: Option<TimeHandle>,
 }
 
 pub struct MetricQueue<C: MetricSink> {
     target: C,
-    sender: Arc<mpsc::SyncSender<QueuedWrite<C>>>,
-    target_metrics: Vec<Option<C::Metric>>,
+    sender: Arc<QueuedSender<C>>,
 }
 
 impl<C: MetricSink> fmt::Debug for MetricQueue<C> {
@@ -53,11 +59,11 @@ impl<C: MetricSink> MetricQueue<C> {
         let (sender, receiver) = mpsc::sync_channel::<QueuedWrite<C>>(queue_size);
         let target_writer = target.new_writer();
         std::thread::spawn(move|| loop {
-            while let Ok(qw) = receiver.recv() {
-                target_writer.write(qw.metric.0, qw.value)
+            while let Ok(cmd) = receiver.recv() {
+                cmd.writer.write(cmd.metric, cmd.value);
             }
         });
-        MetricQueue { target, sender, target_metrics: Vec::new() }
+        MetricQueue { target, sender: Arc::new(sender) }
     }
 }
 
@@ -68,10 +74,13 @@ impl<C: MetricSink> MetricSink for MetricQueue<C> {
     #[allow(unused_variables)]
     fn new_metric<S>(&self, kind: MetricKind, name: S, sampling: Rate) -> Self::Metric
             where S: AsRef<str>    {
-        QueuedKey (self.target.new_metric(kind, name, sampling))
+        Arc::new(self.target.new_metric(kind, name, sampling))
     }
 
     fn new_writer(&self) -> Self::Writer {
-        QueuedWriter { sender: self.sender.clone() }
+        QueuedWriter {
+            target_writer: Arc::new(self.target.new_writer()),
+            sender: self.sender.clone()
+        }
     }
 }
