@@ -32,6 +32,7 @@ scheduled-executor = "0.3.0"
 thread-local-object = "0.1.0"
 num = "0.1.40"
 error-chain = "0.10.0"
+linked-hash-map = "0.5.0"
 
 [features]
 bench = []
