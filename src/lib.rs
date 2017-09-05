@@ -36,7 +36,7 @@ extern crate scheduled_executor;
 
 mod pcg32;
 mod multi;
-mod coatcheck;
+mod queue;
 
 pub mod error {
     //! Dipstick uses error_chain to handle the critical errors that might crop up when assembling the backend.
@@ -354,7 +354,7 @@ pub trait MetricSink: Debug {
 pub trait MetricKey: Debug {}
 
 /// A sink-specific target for writing metrics to.
-pub trait MetricWriter<M: MetricKey>: Send + Debug {
+pub trait MetricWriter<M: MetricKey>: Send + Sync + Debug {
     /// Write a single metric value
     fn write(&self, metric: &M, value: Value);
 
