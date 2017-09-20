@@ -1,6 +1,12 @@
 //! Write metrics to log
 
-use ::*;
+use core::*;
+
+/// Send metric to a logger.
+/// This uses the basic log crate as it is configured for the application.
+pub fn log<STR>(log: STR) -> LoggingSink where STR: AsRef<str> {
+    LoggingSink::new(log)
+}
 
 #[derive(Debug)]
 /// Write metrics to log
@@ -8,9 +14,6 @@ pub struct LoggingKey {
     prefix: String,
 }
 
-impl Metric for LoggingKey {}
-
-#[derive(Debug, Copy, Clone)]
 /// Write metrics to log
 pub struct LoggingWriter {}
 
@@ -21,7 +24,6 @@ impl Writer<LoggingKey> for LoggingWriter {
     }
 }
 
-#[derive(Debug)]
 /// Write metrics to the standard log with a prefix
 pub struct LoggingSink {
     prefix: String,
@@ -30,7 +32,9 @@ pub struct LoggingSink {
 
 impl LoggingSink {
     /// Create a new logging sink.
-    pub fn new<S: AsRef<str>>(prefix: S) -> LoggingSink {
+    pub fn new<STR>(prefix: STR) -> LoggingSink
+        where STR: AsRef<str>
+    {
         let prefix = prefix.as_ref().to_string();
         LoggingSink {
             prefix,
@@ -39,17 +43,16 @@ impl LoggingSink {
     }
 }
 
-impl Sink for LoggingSink {
-    type Metric = LoggingKey;
-    type Writer = LoggingWriter;
+impl Sink<LoggingKey, LoggingWriter> for LoggingSink {
 
     #[allow(unused_variables)]
-    fn new_metric<S: AsRef<str>>(&self, kind: MetricKind, name: S, sampling: Rate)
-                                 -> Self::Metric {
+    fn new_metric<STR>(&self, kind: MetricKind, name: STR, sampling: Rate) -> LoggingKey
+        where STR: AsRef<str>
+    {
         LoggingKey { prefix: format!("{:?}:{}{}", kind, self.prefix, name.as_ref()) }
     }
 
-    fn new_writer(&self) -> Self::Writer {
+    fn new_writer(&self) -> LoggingWriter {
         LoggingWriter {}
     }
 }
