@@ -1,68 +1,37 @@
 //! Dispatch metrics to multiple sinks.
 
-use ::*;
+use core::*;
 
 /// Hold each sink's metric key.
-#[derive(Debug)]
-pub struct DoubleKey<M1: Metric, M2: Metric> {
-    metric_1: M1,
-    metric_2: M2,
-}
-
-impl<M1: Metric, M2: Metric> Metric for DoubleKey<M1, M2> {}
+pub type DoubleKey<M1, M2> = (M1, M2);
 
 /// Write the metric values to each sink.
-#[derive(Debug)]
-pub struct DoubleWriter<C1: Sink, C2: Sink> {
-    sink_a: C1::Writer,
-    sink_b: C2::Writer,
-}
+pub type DoubleWriter<W1, W2> = (W1, W2);
 
-impl<C1: Sink, C2: Sink,>
-    Writer<DoubleKey<<C1 as Sink>::Metric, <C2 as Sink>::Metric>>
-    for DoubleWriter<C1, C2> {
-    fn write(&self,
-             metric: &DoubleKey<<C1 as Sink>::Metric, <C2 as Sink>::Metric>,
-             value: Value,) {
-        self.sink_a.write(&metric.metric_1, value);
-        self.sink_b.write(&metric.metric_2, value);
+impl<M1, W1, M2, W2> Writer<DoubleKey<M1, M2>> for DoubleWriter<W1, W2> 
+    where W1: Writer<M1>,
+          W2: Writer<M2>,
+{
+    fn write(&self, metric: &DoubleKey<M1, M2>, value: Value,) {
+        self.0.write(&metric.0, value);
+        self.1.write(&metric.1, value);
     }
 }
 
 /// Hold the two target sinks.
 /// Multiple `DoubleSink`s can be combined if more than two sinks are needed.
-#[derive(Debug)]
-pub struct DoubleSink<C1: Sink, C2: Sink> {
-    sink_a: C1,
-    sink_b: C2,
-}
+pub type DoubleSink<S1, S2> = (S1, S2);
 
-impl<C1: Sink, C2: Sink> DoubleSink<C1, C2> {
-    /// Create a single sink out of two disparate sinks.
-    pub fn new(sink_a: C1, sink_b: C2) -> DoubleSink<C1, C2> {
-        DoubleSink {
-            sink_a,
-            sink_b,
-        }
-    }
-}
-
-impl<C1: Sink, C2: Sink> Sink for DoubleSink<C1, C2> {
-    type Metric = DoubleKey<C1::Metric, C2::Metric>;
-    type Writer = DoubleWriter<C1, C2>;
-
+impl<M1, W1, S1, M2, W2, S2> Sink<DoubleKey<M1, M2>, DoubleWriter<W1, W2>> for DoubleSink<S1, S2>
+    where W1: Writer<M1>, S1: Sink<M1, W1>,
+          W2: Writer<M2>, S2: Sink<M2, W2>,
+{
     #[allow(unused_variables)]
-    fn new_metric<S: AsRef<str>>(&self, kind: MetricKind, name: S, sampling: Rate)
-                                 -> Self::Metric {
-        let metric_1 = self.sink_a.new_metric(kind, &name, sampling);
-        let metric_2 = self.sink_b.new_metric(kind, &name, sampling);
-        DoubleKey { metric_1, metric_2 }
+    fn new_metric<STR: AsRef<str>>(&self, kind: MetricKind, name: STR, sampling: Rate) -> DoubleKey<M1, M2> {
+        (self.0.new_metric(kind, &name, sampling), self.1.new_metric(kind, &name, sampling))
     }
 
-    fn new_writer(&self) -> Self::Writer {
-        DoubleWriter {
-            sink_a: self.sink_a.new_writer(),
-            sink_b: self.sink_b.new_writer(),
-        }
+    fn new_writer(&self) -> DoubleWriter<W1, W2> {
+        (self.0.new_writer(), self.1.new_writer())
     }
 }
