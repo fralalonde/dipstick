@@ -10,24 +10,43 @@ use std::sync::{Arc,RwLock};
 use std::fmt;
 use std::sync::mpsc;
 use std::sync::Mutex;
+use std::thread;
 
-pub type QueuedKey<C: MetricSink> = Arc<C::Metric>;
+/////////////////////
+// QUEUE
 
-impl <C> MetricKey for Arc<C> where C: MetricSink {}
-
-pub type QueuedSender<C: MetricSink> = mpsc::SyncSender<QueuedWrite<C>>;
-
-unsafe impl <C> Sync for mpsc::SyncSender<QueuedWrite<C>> where C: MetricSink {}
-
+/// Thread safe sender to the queue
 #[derive(Debug)]
-pub struct QueuedWriter<C: MetricSink> {
-    target_writer: Arc<C::Writer>,
-    sender: Arc<QueuedSender<C>>,
+pub struct QueueSender<C: Sink> (mpsc::SyncSender<QueueCommand<C>>);
+
+struct QueueCommand<C: Sink, M: C::Metric, W: C::Writer+Sync> {
+    /// The metric to write
+    metric: Arc<M>,
+    /// The writer to write the metric to
+    writer: Arc<W>,
+    /// The metric's reported value
+    value : Value,
+    /// The instant of measurement, if available
+    time: Option<TimeHandle>,
 }
 
-impl<C: MetricSink> MetricWriter<QueuedKey<C>> for QueuedWriter<C> {
-    fn write(&self, metric: &QueuedKey<C>, value: Value) {
-        self.sender.send(QueuedWrite {
+/////////////////
+// SINK
+
+#[derive(Debug, Clone)]
+pub struct QueueKey<C: Sink> (Arc<C::Metric>);
+
+impl <C> Metric for QueueKey<C> where C: Sink {}
+
+#[derive(Debug, Clone)]
+pub struct QueueWriter<C: Sink> {
+    target_writer: Arc<C::Writer>,
+    sender: QueueSender<C>,
+}
+
+impl <C: Sink + Sync> Writer<QueueKey<C>> for QueueWriter<C> {
+    fn write(&self, metric: &QueueKey<C>, value: Value) {
+        self.sender.0.send(QueueCommand {
             metric: metric.clone(),
             writer: self.target_writer.clone(),
             value,
@@ -36,49 +55,44 @@ impl<C: MetricSink> MetricWriter<QueuedKey<C>> for QueuedWriter<C> {
     }
 }
 
-struct QueuedWrite<C: MetricSink> {
-    metric: Arc<C::Metric>,
-    writer: Arc<C::Writer>,
-    value : Value,
-    time: Option<TimeHandle>,
-}
-
-pub struct MetricQueue<C: MetricSink> {
+/// A metric command-queue using a sync channel.
+/// Each client thread gets it's own writer / sender.
+/// Writes are dispatched by a single receiving thread.
+pub struct MetricQueue<C: Sink> {
     target: C,
-    sender: Arc<QueuedSender<C>>,
+    sender: QueueSender<C>,
 }
 
-impl<C: MetricSink> fmt::Debug for MetricQueue<C> {
+impl<C: Sink> fmt::Debug for MetricQueue<C> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         Ok(self.target.fmt(f)?)
     }
 }
 
-impl<C: MetricSink> MetricQueue<C> {
+impl<C: Sink> MetricQueue<C> {
     pub fn new(target: C, queue_size: usize) -> MetricQueue<C> {
-        let (sender, receiver) = mpsc::sync_channel::<QueuedWrite<C>>(queue_size);
+        let (sender, receiver) = mpsc::sync_channel::<QueueCommand<C>>(queue_size);
         let target_writer = target.new_writer();
-        std::thread::spawn(move|| loop {
+        thread::spawn(move|| loop {
             while let Ok(cmd) = receiver.recv() {
-                cmd.writer.write(cmd.metric, cmd.value);
+                cmd.writer.write(cmd.0.metric, cmd.0.value);
             }
         });
-        MetricQueue { target, sender: Arc::new(sender) }
+        MetricQueue { target, sender: Arc::new(QueueSender(sender)) }
     }
 }
 
-impl<C: MetricSink> MetricSink for MetricQueue<C> {
-    type Metric = QueuedKey<C>;
-    type Writer = QueuedWriter<C>;
+impl<C: Sink> Sink for MetricQueue<C> {
+    type Metric = QueueKey<C>;
+    type Writer = QueueWriter<C>;
 
     #[allow(unused_variables)]
-    fn new_metric<S>(&self, kind: MetricKind, name: S, sampling: Rate) -> Self::Metric
-            where S: AsRef<str>    {
-        Arc::new(self.target.new_metric(kind, name, sampling))
+    fn new_metric<S>(&self, kind: MetricKind, name: S, sampling: Rate) -> Self::Metric where S: AsRef<str> {
+        QueueKey(Arc::new(self.target.new_metric(kind, name, sampling)))
     }
 
     fn new_writer(&self) -> Self::Writer {
-        QueuedWriter {
+        QueueWriter {
             target_writer: Arc::new(self.target.new_writer()),
             sender: self.sender.clone()
         }

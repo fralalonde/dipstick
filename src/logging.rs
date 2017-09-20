@@ -8,13 +8,13 @@ pub struct LoggingKey {
     prefix: String,
 }
 
-impl MetricKey for LoggingKey {}
+impl Metric for LoggingKey {}
 
 #[derive(Debug, Copy, Clone)]
 /// Write metrics to log
 pub struct LoggingWriter {}
 
-impl MetricWriter<LoggingKey> for LoggingWriter {
+impl Writer<LoggingKey> for LoggingWriter {
     fn write(&self, metric: &LoggingKey, value: Value) {
         // TODO format faster
         info!("{}:{}", metric.prefix, value)
@@ -39,7 +39,7 @@ impl LoggingSink {
     }
 }
 
-impl MetricSink for LoggingSink {
+impl Sink for LoggingSink {
     type Metric = LoggingKey;
     type Writer = LoggingWriter;
 

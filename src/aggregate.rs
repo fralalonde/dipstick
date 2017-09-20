@@ -122,13 +122,13 @@ impl AggregateKey {
     }
 }
 
-impl MetricKey for Arc<AggregateKey> {}
+impl Metric for Arc<AggregateKey> {}
 
 /// Since aggregation negates any scope, there only needs to be a single writer ever.
 #[derive(Debug, Clone, Copy)]
 pub struct AggregateWrite();
 
-impl MetricWriter<Arc<AggregateKey>> for AggregateWrite {
+impl Writer<Arc<AggregateKey>> for AggregateWrite {
     fn write(&self, metric: &Arc<AggregateKey>, value: Value) {
         metric.write(value as usize);
     }
@@ -187,7 +187,7 @@ impl AsSink<AggregateSink> for MetricAggregator {
 #[derive(Debug, Clone)]
 pub struct AggregateSink(Arc<RwLock<Vec<Arc<AggregateKey>>>>);
 
-impl MetricSink for AggregateSink {
+impl Sink for AggregateSink {
     type Metric = Arc<AggregateKey>;
     type Writer = AggregateWrite;
 

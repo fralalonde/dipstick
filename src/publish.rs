@@ -7,7 +7,7 @@ use scheduled_executor::CoreExecutor;
 
 /// Publisher from aggregate metrics to target channel
 #[derive(Debug)]
-pub struct AggregatePublisher<C: MetricSink> {
+pub struct AggregatePublisher<C: Sink> {
     source: AggregateSource,
     target: C,
 }
@@ -16,7 +16,7 @@ lazy_static! {
     static ref EXEC: CoreExecutor = CoreExecutor::new().unwrap();
 }
 
-impl<C: MetricSink + Sync> AggregatePublisher<C> {
+impl<C: Sink + Sync> AggregatePublisher<C> {
 
     /// Create new publisher from aggregate metrics to target channel
     pub fn new(source: AggregateSource, target: C,) -> AggregatePublisher<C> {

@@ -109,12 +109,12 @@ pub const FULL_SAMPLING_RATE: Rate = 1.0;
 /// Since value is only ever increased by one, no value parameter is provided,
 /// preventing potential problems.
 #[derive(Debug)]
-pub struct Event<C: MetricSink + 'static> {
-    metric: <C as MetricSink>::Metric,
-    target_writer: Arc<<C as MetricSink>::Writer>,
+pub struct Event<C: Sink + 'static> {
+    metric: <C as Sink>::Metric,
+    target_writer: Arc<<C as Sink>::Writer>,
 }
 
-impl<C: MetricSink> Event<C> {
+impl<C: Sink> Event<C> {
     /// Record a single event occurence.
     pub fn mark(&self) {
         self.target_writer.write(&self.metric, 1);
@@ -123,12 +123,12 @@ impl<C: MetricSink> Event<C> {
 
 /// A counter that sends values to the metrics backend
 #[derive(Debug)]
-pub struct Gauge<C: MetricSink + 'static> {
-    metric: <C as MetricSink>::Metric,
-    target_writer: Arc<<C as MetricSink>::Writer>,
+pub struct Gauge<C: Sink + 'static> {
+    metric: <C as Sink>::Metric,
+    target_writer: Arc<<C as Sink>::Writer>,
 }
 
-impl<C: MetricSink> Gauge<C> {
+impl<C: Sink> Gauge<C> {
     /// Record a value point for this gauge.
     pub fn value<V>(&self, value: V) where V: ToPrimitive {
         self.target_writer.write(&self.metric, value.to_u64().unwrap());
@@ -137,12 +137,12 @@ impl<C: MetricSink> Gauge<C> {
 
 /// A gauge that sends values to the metrics backend
 #[derive(Debug)]
-pub struct Counter<C: MetricSink + 'static> {
-    metric: <C as MetricSink>::Metric,
-    target_writer: Arc<<C as MetricSink>::Writer>,
+pub struct Counter<C: Sink + 'static> {
+    metric: <C as Sink>::Metric,
+    target_writer: Arc<<C as Sink>::Writer>,
 }
 
-impl<C: MetricSink> Counter<C> {
+impl<C: Sink> Counter<C> {
     /// Record a value count.
     pub fn count<V>(&self, count: V) where V: ToPrimitive {
         self.target_writer.write(&self.metric, count.to_u64().unwrap());
@@ -156,12 +156,12 @@ impl<C: MetricSink> Counter<C> {
 /// - with start() and stop() methods, wrapping around the operation to time
 /// - with the interval_us() method, providing an externally determined microsecond interval
 #[derive(Debug)]
-pub struct Timer<C: MetricSink + 'static> {
-    metric: <C as MetricSink>::Metric,
-    target_writer: Arc<<C as MetricSink>::Writer>,
+pub struct Timer<C: Sink + 'static> {
+    metric: <C as Sink>::Metric,
+    target_writer: Arc<<C as Sink>::Writer>,
 }
 
-impl<C: MetricSink> Timer<C> {
+impl<C: Sink> Timer<C> {
     /// Record a microsecond interval for this timer
     /// Can be used in place of start()/stop() if an external time interval source is used
     pub fn interval_us<V>(&self, interval_us: V) -> V where V: ToPrimitive {
@@ -199,13 +199,13 @@ impl<C: MetricSink> Timer<C> {
 
 /// Application metrics are defined here.
 #[derive(Debug)]
-pub struct Metrics<C: MetricSink + 'static> {
+pub struct Metrics<C: Sink + 'static> {
     prefix: String,
     target: Arc<C>,
-    writer: Arc<<C as MetricSink>::Writer>,
+    writer: Arc<<C as Sink>::Writer>,
 }
 
-impl<C: MetricSink> Metrics<C> {
+impl<C: Sink> Metrics<C> {
     /// Create a new direct metric dispatch
     pub fn new(target: C) -> Metrics<C> {
         let target_writer = target.new_writer();
@@ -333,28 +333,23 @@ pub enum MetricKind {
 /// - Statsd
 /// - Log
 /// - Aggregate
-pub trait MetricSink: Debug {
-    /// Metric identifier type of this sink.
-    type Metric: MetricKey + Debug + Send + Sync;
-
-    /// Metric writer type of this sink.
-    type Writer: MetricWriter<Self::Metric>;
+pub trait Sink<M: Metric>: Debug {
 
     /// Define a new sink-specific metric that can be used for writing values.
-    fn new_metric<S: AsRef<str>>(&self, kind: MetricKind, name: S, sampling: Rate) -> Self::Metric;
+    fn new_metric<S: AsRef<str>>(&self, kind: MetricKind, name: S, sampling: Rate) -> M;
 
     /// Open a metric writer to write metrics to.
     /// Some sinks reuse the same writer while others allocate resources for every new writer.
-    fn new_writer(&self) -> Self::Writer;
+    fn new_writer(&self) -> Writer<M>;
 }
 
 /// A metric identifier defined by a specific metric sink implementation.
 /// Passed back to when writing a metric value
 /// May carry state specific to the sink's implementation
-pub trait MetricKey: Debug {}
+pub trait Metric: Debug {}
 
 /// A sink-specific target for writing metrics to.
-pub trait MetricWriter<M: MetricKey>: Send + Sync + Debug {
+pub trait Writer<M: Metric>: Send + Debug {
     /// Write a single metric value
     fn write(&self, metric: &M, value: Value);
 
@@ -371,38 +366,38 @@ pub trait AsSource {
 }
 
 /// Metric sink trait
-pub trait AsSink<S: MetricSink> {
+pub trait AsSink<S: Sink> {
     /// Get the metric sink.
     fn as_sink(&self) -> S;
 }
 
 /// Metric sink trait
-pub trait IntoSink<S: MetricSink> {
+pub trait IntoSink<S: Sink> {
     /// Get the metric sink.
     fn into_sink(self) -> S;
 }
 
 /// Tautology - Any sink can turn into itself, duh.
-impl<S: MetricSink> IntoSink<S> for S {
+impl<S: Sink> IntoSink<S> for S {
     fn into_sink(self) -> Self {
         self
     }
 }
 
 /// Wrap the metrics backend to provide an application-friendly interface.
-pub fn metrics<IS, S>(sink: IS) -> Metrics<S> where IS: IntoSink<S>, S: MetricSink {
+pub fn metrics<IS, S>(sink: IS) -> Metrics<S> where IS: IntoSink<S>, S: Sink {
     Metrics::new(sink.into_sink())
 }
 
 /// Perform random sampling of values according to the specified rate.
-pub fn sample<IS, S>(rate: Rate, sink: IS) -> sampling::SamplingSink<S> where IS: IntoSink<S>, S: MetricSink {
+pub fn sample<IS, S>(rate: Rate, sink: IS) -> sampling::SamplingSink<S> where IS: IntoSink<S>, S: Sink {
     sampling::SamplingSink::new(sink.into_sink(), rate)
 }
 
 /// Cache metrics to prevent them from being re-defined on every use.
 /// Use of this should be transparent, this has no effect on the values.
 /// Stateful sinks (i.e. Aggregate) may naturally cache their definitions.
-pub fn cache<IS, S>(size: usize, sink: IS) -> cache::MetricCache<S> where IS: IntoSink<S>, S: MetricSink {
+pub fn cache<IS, S>(size: usize, sink: IS) -> cache::MetricCache<S> where IS: IntoSink<S>, S: Sink {
     cache::MetricCache::new(sink.into_sink(), size)
 }
 
@@ -418,14 +413,14 @@ pub fn statsd<S: AsRef<str>, A: ToSocketAddrs>(address: A, prefix: S) -> error::
 }
 
 /// Twin metrics sink
-impl<IS1, S1, IS2, S2> IntoSink<multi::DoubleSink<S1, S2>> for (IS1, IS2) where IS1: IntoSink<S1>, S1: MetricSink,  IS2: IntoSink<S2>, S2: MetricSink  {
+impl<IS1, S1, IS2, S2> IntoSink<multi::DoubleSink<S1, S2>> for (IS1, IS2) where IS1: IntoSink<S1>, S1: Sink, IS2: IntoSink<S2>, S2: Sink {
     fn into_sink(self) -> multi::DoubleSink<S1, S2> {
         multi::DoubleSink::new(self.0.into_sink(), self.1.into_sink())
     }
 }
 
 /// Triple metrics sink
-impl<IS1, S1, IS2, S2, IS3, S3> IntoSink<multi::DoubleSink<S1, multi::DoubleSink<S2, S3>>> for (IS1, IS2, IS3) where IS1: IntoSink<S1>, S1: MetricSink, IS2: IntoSink<S2>, S2: MetricSink,  IS3: IntoSink<S3>, S3: MetricSink  {
+impl<IS1, S1, IS2, S2, IS3, S3> IntoSink<multi::DoubleSink<S1, multi::DoubleSink<S2, S3>>> for (IS1, IS2, IS3) where IS1: IntoSink<S1>, S1: Sink, IS2: IntoSink<S2>, S2: Sink, IS3: IntoSink<S3>, S3: Sink {
     fn into_sink(self) -> multi::DoubleSink<S1, multi::DoubleSink<S2, S3>> {
         multi::DoubleSink::new(self.0.into_sink(), multi::DoubleSink::new(self.1.into_sink(), self.2.into_sink()))
     }
@@ -459,6 +454,6 @@ pub fn aggregate() -> (AggregateSink, AggregateSource) {
 ///
 /// publisher.publish()
 /// ```
-pub fn publish<S: MetricSink + Sync>(source: AggregateSource, sink: S) -> AggregatePublisher<S> {
+pub fn publish<S: Sink + Sync>(source: AggregateSource, sink: S) -> AggregatePublisher<S> {
     publish::AggregatePublisher::new(source, sink,)
 }
