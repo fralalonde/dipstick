@@ -20,17 +20,17 @@ use std::fmt;
 // if you know how to fix it that'd be great
 #[derive(Debug)]
 /// The cache key copies the target key.
-pub struct CachedKey<C: MetricSink>(Arc<C::Metric>);
+pub struct CachedKey<C: Sink>(Arc<C::Metric>);
 
-impl<C: MetricSink> MetricKey for CachedKey<C> {}
+impl<C: Sink> Metric for CachedKey<C> {}
 
 /// The cache writer is transparent.
 #[derive(Debug)]
-pub struct CachedMetricWriter<C: MetricSink> {
+pub struct CachedMetricWriter<C: Sink> {
     target: C::Writer,
 }
 
-impl<C: MetricSink> MetricWriter<CachedKey<C>> for CachedMetricWriter<C> {
+impl<C: Sink> Writer<CachedKey<C>> for CachedMetricWriter<C> {
     fn write(&self, metric: &CachedKey<C>, value: Value) {
         self.target.write(metric.0.as_ref(), value)
     }
@@ -38,18 +38,18 @@ impl<C: MetricSink> MetricWriter<CachedKey<C>> for CachedMetricWriter<C> {
 
 /// A cache to help with ad-hoc defined metrics
 /// Does not alter the values of the metrics
-pub struct MetricCache<C: MetricSink> {
+pub struct MetricCache<C: Sink> {
     target: C,
     cache: RwLock<SizedCache<String, Arc<C::Metric>>>,
 }
 
-impl<C: MetricSink> fmt::Debug for MetricCache<C> {
+impl<C: Sink> fmt::Debug for MetricCache<C> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         Ok(self.target.fmt(f)?)
     }
 }
 
-impl<C: MetricSink> MetricCache<C> {
+impl<C: Sink> MetricCache<C> {
     /// Build a new metric cache
     pub fn new(target: C, cache_size: usize) -> MetricCache<C> {
         let cache = RwLock::new(SizedCache::with_capacity(cache_size));
@@ -57,7 +57,7 @@ impl<C: MetricSink> MetricCache<C> {
     }
 }
 
-impl<C: MetricSink> MetricSink for MetricCache<C> {
+impl<C: Sink> Sink for MetricCache<C> {
     type Metric = CachedKey<C>;
     type Writer = CachedMetricWriter<C>;
 

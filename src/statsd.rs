@@ -14,7 +14,7 @@ pub struct StatsdKey {
     scale: u64,
 }
 
-impl MetricKey for StatsdKey {}
+impl Metric for StatsdKey {}
 
 /// Use a safe maximum size for UDP to prevent fragmentation.
 const MAX_UDP_PAYLOAD: usize = 576;
@@ -39,7 +39,7 @@ fn flush(payload: &mut String, socket: &UdpSocket) {
     payload.clear();
 }
 
-impl MetricWriter<StatsdKey> for StatsdWriter {
+impl Writer<StatsdKey> for StatsdWriter {
     fn write(&self, metric: &StatsdKey, value: Value) {
         let scaled_value = if metric.scale != 1 {
             value / metric.scale
@@ -111,7 +111,7 @@ impl StatsdSink {
     }
 }
 
-impl MetricSink for StatsdSink {
+impl Sink for StatsdSink {
     type Metric = StatsdKey;
     type Writer = StatsdWriter;
 

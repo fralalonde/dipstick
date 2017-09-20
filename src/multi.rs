@@ -4,25 +4,25 @@ use ::*;
 
 /// Hold each sink's metric key.
 #[derive(Debug)]
-pub struct DoubleKey<M1: MetricKey, M2: MetricKey> {
+pub struct DoubleKey<M1: Metric, M2: Metric> {
     metric_1: M1,
     metric_2: M2,
 }
 
-impl<M1: MetricKey, M2: MetricKey> MetricKey for DoubleKey<M1, M2> {}
+impl<M1: Metric, M2: Metric> Metric for DoubleKey<M1, M2> {}
 
 /// Write the metric values to each sink.
 #[derive(Debug)]
-pub struct DoubleWriter<C1: MetricSink, C2: MetricSink> {
+pub struct DoubleWriter<C1: Sink, C2: Sink> {
     sink_a: C1::Writer,
     sink_b: C2::Writer,
 }
 
-impl<C1: MetricSink, C2: MetricSink,>
-    MetricWriter<DoubleKey<<C1 as MetricSink>::Metric, <C2 as MetricSink>::Metric>>
+impl<C1: Sink, C2: Sink,>
+    Writer<DoubleKey<<C1 as Sink>::Metric, <C2 as Sink>::Metric>>
     for DoubleWriter<C1, C2> {
     fn write(&self,
-             metric: &DoubleKey<<C1 as MetricSink>::Metric, <C2 as MetricSink>::Metric>,
+             metric: &DoubleKey<<C1 as Sink>::Metric, <C2 as Sink>::Metric>,
              value: Value,) {
         self.sink_a.write(&metric.metric_1, value);
         self.sink_b.write(&metric.metric_2, value);
@@ -32,12 +32,12 @@ impl<C1: MetricSink, C2: MetricSink,>
 /// Hold the two target sinks.
 /// Multiple `DoubleSink`s can be combined if more than two sinks are needed.
 #[derive(Debug)]
-pub struct DoubleSink<C1: MetricSink, C2: MetricSink> {
+pub struct DoubleSink<C1: Sink, C2: Sink> {
     sink_a: C1,
     sink_b: C2,
 }
 
-impl<C1: MetricSink, C2: MetricSink> DoubleSink<C1, C2> {
+impl<C1: Sink, C2: Sink> DoubleSink<C1, C2> {
     /// Create a single sink out of two disparate sinks.
     pub fn new(sink_a: C1, sink_b: C2) -> DoubleSink<C1, C2> {
         DoubleSink {
@@ -47,7 +47,7 @@ impl<C1: MetricSink, C2: MetricSink> DoubleSink<C1, C2> {
     }
 }
 
-impl<C1: MetricSink, C2: MetricSink> MetricSink for DoubleSink<C1, C2> {
+impl<C1: Sink, C2: Sink> Sink for DoubleSink<C1, C2> {
     type Metric = DoubleKey<C1::Metric, C2::Metric>;
     type Writer = DoubleWriter<C1, C2>;
 
