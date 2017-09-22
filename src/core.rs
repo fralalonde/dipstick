@@ -1,4 +1,3 @@
-use  std::sync::Arc;
 use time;
 
 /// Base type for recorded metric values.

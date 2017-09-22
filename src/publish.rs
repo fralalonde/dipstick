@@ -13,7 +13,6 @@ use core::*;
 use aggregate::{AggregateSource, ScoresSnapshot};
 use std::time::Duration;
 use scheduled_executor::CoreExecutor;
-use std::marker::PhantomData;
 
 lazy_static! {
     static ref EXEC: CoreExecutor = CoreExecutor::new().unwrap();

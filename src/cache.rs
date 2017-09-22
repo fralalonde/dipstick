@@ -2,7 +2,7 @@
 
 // TODO one cache per metric kind (why?)
 
-use ::*;
+use core::{Writer, Sink, Value, MetricKind, Rate};
 use cached::{SizedCache, Cached};
 use std::sync::{Arc,RwLock};
 use std::marker::PhantomData;
@@ -10,10 +10,10 @@ use std::marker::PhantomData;
 /// Cache metrics to prevent them from being re-defined on every use.
 /// Use of this should be transparent, this has no effect on the values.
 /// Stateful sinks (i.e. Aggregate) may naturally cache their definitions.
-pub fn cache<'ph, M, W, S>(size: usize, sink: S) -> cache::MetricCache<'ph, M, W, S>
+pub fn cache<'ph, M, W, S>(size: usize, sink: S) -> MetricCache<'ph, M, W, S>
     where W: Writer<M>, S: Sink<M, W>
 {
-    cache::MetricCache::new(sink, size)
+    MetricCache::new(sink, size)
 }
 
 /// The cache key copies the target key.

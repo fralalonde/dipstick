@@ -9,6 +9,15 @@ use std::sync::Arc;
 use std::sync::mpsc;
 use std::thread;
 
+/// Cache metrics to prevent them from being re-defined on every use.
+/// Use of this should be transparent, this has no effect on the values.
+/// Stateful sinks (i.e. Aggregate) may naturally cache their definitions.
+pub fn queue<M, W, S>(size: usize, sink: S) -> MetricQueue<M, W, S>
+    where M: 'static + Send + Sync, W: 'static + Writer<M> + Send + Sync, S: Sink<M, W>
+{
+    MetricQueue::new(sink, size)
+}
+
 /////////////////////
 // QUEUE
 
