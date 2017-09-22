@@ -56,11 +56,8 @@ pub mod queue;
 pub mod app;
 pub mod macros;
 pub mod core;
+pub mod console;
 pub mod source;
-
-use core::*;
-
-use aggregate as agg;
 
 // input
 pub use app::metrics;
@@ -75,4 +72,6 @@ pub use publish::{publish, publish_every};
 
 // output
 pub use log::log;
+pub use console::stdout;
 pub use statsd::statsd;
+pub use queue::queue;

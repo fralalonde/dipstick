@@ -21,7 +21,7 @@ pub fn sample_scheduled_statsd_aggregation() {
     let (sink, source) = aggregate();
 
     // schedule aggregated metrics to be sent to statsd every 3 seconds
-    let statsd: cache::MetricCache<statsd::StatsdMetric, statsd::StatsdWriter, statsd::StatsdSink> = cache(512, statsd("localhost:8125", "hello.").expect("no statsd"));
+    let statsd = cache(512, statsd("localhost:8125", "hello.").expect("no statsd"));
 
     // TODO use publisher publish_every() once it doesnt require 'static publisher
     let exec = CoreExecutor::new().unwrap();

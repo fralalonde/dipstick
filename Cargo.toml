@@ -2,6 +2,7 @@
 members = [
   "./",
   "examples/aggregate/",
+  "examples/queued/",
 ]
 
 [package]
