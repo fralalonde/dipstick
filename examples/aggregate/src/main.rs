@@ -6,6 +6,9 @@ use scheduled_executor::CoreExecutor;
 use std::time::Duration;
 use dipstick::*;
 
+// TODO have separate _raw_ example
+use dipstick::core::{Sink, Writer, self};
+
 fn main() {
     sample_scheduled_statsd_aggregation()
 }
@@ -19,12 +22,11 @@ pub fn sample_scheduled_statsd_aggregation() {
 
     // schedule aggregated metrics to be sent to statsd every 3 seconds
     let statsd = cache(512, statsd("localhost:8125", "hello.").expect("no statsd"));
-    let aggregate_metrics = publish(source, statsd);
 
     // TODO use publisher publish_every() once it doesnt require 'static publisher
     let exec = CoreExecutor::new().unwrap();
     exec.schedule_fixed_rate(Duration::from_secs(3), Duration::from_secs(3), move |_| {
-        aggregate_metrics.publish()
+        publish(&source, &statsd)
     });
 
     // SAMPLE METRICS USAGE
@@ -80,7 +82,7 @@ pub fn raw_write() {
     let metrics_log = log("metrics");
 
     // define and send metrics using raw channel API
-    let counter = metrics_log.new_metric(MetricKind::Count, "count_a", dipstick::FULL_SAMPLING_RATE);
+    let counter = metrics_log.new_metric(core::MetricKind::Count, "count_a", core::FULL_SAMPLING_RATE);
     metrics_log.new_writer().write(&counter, 1);
 }
 

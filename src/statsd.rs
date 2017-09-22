@@ -1,20 +1,30 @@
 //! Send metrics to a statsd server.
 
-use ::*;
+use ::core::*;
+use ::error;
+
 use std::io::Result;
-use std::net::{UdpSocket,ToSocketAddrs};
+use std::net::UdpSocket;
 use std::cell::RefCell;
 use std::sync::Arc;
 
-#[derive(Debug)]
+pub use std::net::ToSocketAddrs;
+
+/// Send metrics to a statsd server at the address and port provided.
+pub fn statsd<STR, ADDR>(address: ADDR, prefix: STR) -> error::Result<StatsdSink>
+    where STR: AsRef<str>, ADDR: ToSocketAddrs
+{
+    Ok(StatsdSink::new(address, prefix)?)
+}
+
+
 /// Key of a statsd metric.
-pub struct StatsdKey {
+#[derive(Debug)]
+pub struct StatsdMetric {
     prefix: String,
     suffix: String,
     scale: u64,
 }
-
-impl MetricKey for StatsdKey {}
 
 /// Use a safe maximum size for UDP to prevent fragmentation.
 const MAX_UDP_PAYLOAD: usize = 576;
@@ -24,7 +34,6 @@ thread_local! {
 }
 
 /// The statsd writer formats metrics to statsd protocol and writes them to a UDP socket.
-#[derive(Debug)]
 pub struct StatsdWriter {
     socket: Arc<UdpSocket>,
 }
@@ -39,8 +48,8 @@ fn flush(payload: &mut String, socket: &UdpSocket) {
     payload.clear();
 }
 
-impl MetricWriter<StatsdKey> for StatsdWriter {
-    fn write(&self, metric: &StatsdKey, value: Value) {
+impl Writer<StatsdMetric> for StatsdWriter {
+    fn write(&self, metric: &StatsdMetric, value: Value) {
         let scaled_value = if metric.scale != 1 {
             value / metric.scale
         } else {
@@ -90,7 +99,6 @@ impl Drop for StatsdWriter {
 }
 
 /// Allows sending metrics to a statsd server
-#[derive(Debug)]
 pub struct StatsdSink {
     socket: Arc<UdpSocket>,
     prefix: String,
@@ -111,12 +119,9 @@ impl StatsdSink {
     }
 }
 
-impl MetricSink for StatsdSink {
-    type Metric = StatsdKey;
-    type Writer = StatsdWriter;
+impl Sink<StatsdMetric, StatsdWriter> for StatsdSink {
 
-    fn new_metric<S: AsRef<str>>(&self, kind: MetricKind, name: S, sampling: Rate)
-                                 -> Self::Metric {
+    fn new_metric<S: AsRef<str>>(&self, kind: MetricKind, name: S, sampling: Rate) -> StatsdMetric {
         let mut prefix = String::with_capacity(32);
         prefix.push_str(&self.prefix);
         prefix.push_str(name.as_ref());
@@ -140,10 +145,10 @@ impl MetricSink for StatsdSink {
             _ => 1
         };
 
-        StatsdKey { prefix, suffix, scale }
+        StatsdMetric { prefix, suffix, scale }
     }
 
-    fn new_writer(&self) -> Self::Writer {
+    fn new_writer(&self) -> StatsdWriter {
         StatsdWriter { socket: self.socket.clone() }
     }
 }
