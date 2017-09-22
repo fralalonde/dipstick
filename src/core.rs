@@ -37,7 +37,7 @@ pub const FULL_SAMPLING_RATE: Rate = 1.0;
 
 /// Used to differentiate between metric kinds in the backend.
 #[derive(Debug, Copy, Clone)]
-pub enum MetricKind {
+pub enum Kind {
     /// Was one item handled?
     Event,
     /// How many items were handled?
@@ -58,27 +58,19 @@ pub enum MetricKind {
 /// - Statsd
 /// - Log
 /// - Aggregate
-pub trait Sink<M, W> where W: Writer<M> {
-    /// Define a new sink-specific metric that can be used for writing values.
-    fn new_metric<STR: AsRef<str>>(&self, kind: MetricKind, name: STR, sampling: Rate) -> M;
+/// Print metrics to Generic.
+///
+pub trait Sink<M> {
+    fn new_metric<STR: AsRef<str>>(&self, kind: Kind, name: STR, sampling: Rate) -> M;
 
-    /// Open a metric writer to write metrics to.
-    /// Some sinks reuse the same writer while others allocate resources for every new writer.
-    fn new_writer(&self) -> W;
+    /// Returns a callback function to send scope commands.
+    /// Writes can be performed by passing Some((&Metric, Value))
+    /// Flushes can be performed by passing None
+    fn new_scope(&self) -> &Fn(Option<(&M, Value)>);
 }
 
-/// A sink-specific target for writing metrics to.
-pub trait Writer<M> {
-    /// Write a single metric value
-    fn write(&self, metric: &M, value: Value);
 
-    /// Some sinks may have buffering capability.
-    /// Flushing makes sure all previously written metrics are propagated
-    /// down the sink chain and to any applicable external outputs.
-    fn flush(&self) {}
-}
-
-pub trait AsSink<M, W, S> where W: Writer<M>, S: Sink<M, W> {
+pub trait AsSink<M, S: Sink<M>> {
     /// Get the metric sink.
     fn as_sink(&self) -> S;
 }

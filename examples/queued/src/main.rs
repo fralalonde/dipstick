@@ -6,7 +6,7 @@ use scheduled_executor::CoreExecutor;
 use std::time::Duration;
 use dipstick::*;
 
-use dipstick::core::{Sink, Writer, self};
+use dipstick::core::{Sink, self};
 
 fn main() {
     sample_scheduled_statsd_aggregation()

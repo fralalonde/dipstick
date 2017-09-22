@@ -7,7 +7,7 @@ use std::time::Duration;
 use dipstick::*;
 
 // TODO have separate _raw_ example
-use dipstick::core::{Sink, Writer, self};
+use dipstick::core::{Sink, self};
 
 fn main() {
     sample_scheduled_statsd_aggregation()
@@ -82,8 +82,8 @@ pub fn raw_write() {
     let metrics_log = log("metrics");
 
     // define and send metrics using raw channel API
-    let counter = metrics_log.new_metric(core::MetricKind::Count, "count_a", core::FULL_SAMPLING_RATE);
-    metrics_log.new_writer().write(&counter, 1);
+    let counter = metrics_log.new_metric(core::Kind::Count, "count_a", core::FULL_SAMPLING_RATE);
+    metrics_log.new_scope().write(&counter, 1);
 }
 
 pub fn counter_to_log() {
