@@ -1,13 +1,40 @@
 //! Maintain aggregated metrics for deferred reporting,
 
-use ::*;
+use core::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::usize;
 
+/// Aggregate metrics in memory.
+/// Depending on the type of metric, count, sum, minimum and maximum of values will be tracked.
+/// Needs to be connected to a publish to be useful.
+///
+/// ```
+/// use dipstick::*;
+///
+/// let (sink, source) = aggregate();
+/// let metrics = metrics(sink);
+///
+/// metrics.event("my_event").mark();
+/// metrics.event("my_event").mark();
+/// ```
+pub fn aggregate() -> (AggregateSink, AggregateSource) {
+    let agg = Aggregator::new();
+    (agg.as_sink(), agg.as_source())
+}
+
+
+/// Core aggregation structure for a single metric.
+/// Hit count is maintained for all types.
+/// If hit count is zero, then no values were recorded.
 #[derive(Debug)]
-enum AtomicScore {
-    Event { hit: AtomicUsize },
+enum InnerScores {
+    /// Event metrics need not record more than a hit count.
+    Event {
+        hit: AtomicUsize
+    },
+
+    /// Value metrics keep track of key highlights.
     Value {
         hit: AtomicUsize,
         sum: AtomicUsize,
@@ -16,9 +43,9 @@ enum AtomicScore {
     },
 }
 
-/// to-be-consumed aggregated values
+/// To-be-published snapshot of aggregated score values.
 #[derive(Debug, Clone, Copy)]
-pub enum AggregateScore {
+pub enum ScoresSnapshot {
     /// No data was reported (yet) for this metric.
     NoData,
 
@@ -41,47 +68,43 @@ pub enum AggregateScore {
     },
 }
 
-/// A metric that holds aggregated values
+/// A metric that holds aggregated values.
+/// Some fields are kept public to ease publishing.
 #[derive(Debug)]
-pub struct AggregateKey {
+pub struct MetricScores {
     /// The kind of metric.
     pub kind: MetricKind,
+
     /// The metric's name.
     pub name: String,
-    score: AtomicScore,
+
+    score: InnerScores,
 }
 
-impl AggregateKey {
-    /// Update scores with value
+/// Spinlock update of max and min values.
+/// Retries until success or clear loss to concurrent update.
+#[inline]
+fn compare_and_swap<F>(counter: &AtomicUsize, new_value: usize, retry: F) where F: Fn(usize) -> bool {
+    let mut loaded = counter.load(Ordering::Acquire);
+    while retry(loaded) {
+        if counter.compare_and_swap(loaded, new_value, Ordering::Release) == new_value {
+            // success
+            break;
+        }
+        loaded = counter.load(Ordering::Acquire);
+    }
+}
+
+impl MetricScores {
+    /// Update scores with new value
     pub fn write(&self, value: usize) -> () {
         match &self.score {
-            &AtomicScore::Event { ref hit, .. } => {
+            &InnerScores::Event { ref hit, .. } => {
                 hit.fetch_add(1, Ordering::SeqCst);
             }
-            &AtomicScore::Value {
-                ref hit,
-                ref sum,
-                ref max,
-                ref min,
-                ..
-            } => {
-                let mut try_max = max.load(Ordering::Acquire);
-                while value > try_max {
-                    if max.compare_and_swap(try_max, value, Ordering::Release) == try_max {
-                        break;
-                    } else {
-                        try_max = max.load(Ordering::Acquire);
-                    }
-                }
-
-                let mut try_min = min.load(Ordering::Acquire);
-                while value < try_min {
-                    if min.compare_and_swap(try_min, value, Ordering::Release) == try_min {
-                        break;
-                    } else {
-                        try_min = min.load(Ordering::Acquire);
-                    }
-                }
+            &InnerScores::Value { ref hit, ref sum, ref max, ref min, .. } => {
+                compare_and_swap(max, value, |loaded| value > loaded);
+                compare_and_swap(min, value, |loaded| value < loaded);
                 sum.fetch_add(value, Ordering::Acquire);
                 // TODO report any concurrent updates / resets for measurement of contention
                 hit.fetch_add(1, Ordering::Acquire);
@@ -90,27 +113,18 @@ impl AggregateKey {
     }
 
     /// reset aggregate values, return previous values
-    pub fn read_and_reset(&self) -> AggregateScore {
+    pub fn read_and_reset(&self) -> ScoresSnapshot {
         match self.score {
-            AtomicScore::Event { ref hit } => {
-                let hit = hit.swap(0, Ordering::Release) as u64;
-                if hit == 0 {
-                    AggregateScore::NoData
-                } else {
-                    AggregateScore::Event { hit }
+            InnerScores::Event { ref hit } => {
+                match hit.swap(0, Ordering::Release) as u64 {
+                    0 => ScoresSnapshot::NoData,
+                    hit => ScoresSnapshot::Event { hit }
                 }
             }
-            AtomicScore::Value {
-                ref hit,
-                ref sum,
-                ref max,
-                ref min,
-            } => {
-                let hit = hit.swap(0, Ordering::Release) as u64;
-                if hit == 0 {
-                    AggregateScore::NoData
-                } else {
-                    AggregateScore::Value {
+            InnerScores::Value { ref hit, ref sum, ref max, ref min, .. } => {
+                match hit.swap(0, Ordering::Release) as u64 {
+                    0 => ScoresSnapshot::NoData,
+                    hit => ScoresSnapshot::Value {
                         hit,
                         sum: sum.swap(0, Ordering::Release) as u64,
                         max: max.swap(usize::MIN, Ordering::Release) as u64,
@@ -122,32 +136,14 @@ impl AggregateKey {
     }
 }
 
-impl MetricKey for Arc<AggregateKey> {}
-
-/// Since aggregation negates any scope, there only needs to be a single writer ever.
-#[derive(Debug, Clone, Copy)]
-pub struct AggregateWrite();
-
-impl MetricWriter<Arc<AggregateKey>> for AggregateWrite {
-    fn write(&self, metric: &Arc<AggregateKey>, value: Value) {
-        metric.write(value as usize);
-    }
-}
-
-// there can only be one
-lazy_static! {
-    static ref AGGREGATE_WRITE: AggregateWrite = AggregateWrite();
-}
-
 /// Enumerate the metrics being aggregated and their scores.
-#[derive(Debug, Clone)]
-pub struct AggregateSource(Arc<RwLock<Vec<Arc<AggregateKey>>>>);
+#[derive(Clone)]
+pub struct AggregateSource(Arc<RwLock<Vec<Arc<MetricScores>>>>);
 
 impl AggregateSource {
 
     /// Iterate over every aggregated metric.
-    pub fn for_each<F>(&self, ops: F) where F: Fn(&AggregateKey),
-    {
+    pub fn for_each<F>(&self, ops: F) where F: Fn(&MetricScores) {
         for metric in self.0.read().unwrap().iter() {
             ops(&metric)
         }
@@ -157,25 +153,34 @@ impl AggregateSource {
 /// Central aggregation structure.
 /// Since `AggregateKey`s themselves contain scores, the aggregator simply maintains
 /// a shared list of metrics for enumeration when used as source.
-#[derive(Debug)]
-pub struct MetricAggregator {
-    metrics: Arc<RwLock<Vec<Arc<AggregateKey>>>>,
+pub struct Aggregator {
+    metrics: Arc<RwLock<Vec<Arc<MetricScores>>>>,
 }
 
-impl MetricAggregator {
+impl Aggregator {
     /// Build a new metric aggregation point.
-    pub fn new() -> MetricAggregator {
-        MetricAggregator { metrics: Arc::new(RwLock::new(Vec::new())) }
+    pub fn new() -> Aggregator {
+        Aggregator::with_capacity(0)
+    }
+
+    pub fn with_capacity(size: usize) -> Aggregator {
+        Aggregator { metrics: Arc::new(RwLock::new(Vec::with_capacity(size))) }
     }
 }
 
-impl AsSource for MetricAggregator {
+/// Something that can be seen as a metric source.
+pub trait AsSource {
+    /// Get the metric source.
+    fn as_source(&self) -> AggregateSource;
+}
+
+impl AsSource for Aggregator {
     fn as_source(&self) -> AggregateSource {
         AggregateSource(self.metrics.clone())
     }
 }
 
-impl AsSink<AggregateSink> for MetricAggregator {
+impl AsSink<Arc<MetricScores>, AggregateWriter, AggregateSink> for Aggregator {
     fn as_sink(&self) -> AggregateSink {
         AggregateSink(self.metrics.clone())
     }
@@ -184,23 +189,28 @@ impl AsSink<AggregateSink> for MetricAggregator {
 /// A sink where to send metrics for aggregation.
 /// The parameters of aggregation may be set upon creation.
 /// Just `clone()` to use as a shared aggregator.
-#[derive(Debug, Clone)]
-pub struct AggregateSink(Arc<RwLock<Vec<Arc<AggregateKey>>>>);
+#[derive(Clone)]
+pub struct AggregateSink(Arc<RwLock<Vec<Arc<MetricScores>>>>);
 
-impl MetricSink for AggregateSink {
-    type Metric = Arc<AggregateKey>;
-    type Writer = AggregateWrite;
+pub struct AggregateWriter;
 
+/// Since aggregation negates any scope, there only needs to be a single writer ever
+impl Writer<Arc<MetricScores>> for AggregateWriter {
+    fn write(&self, metric: &Arc<MetricScores>, value: Value) {
+        metric.write(value as usize);
+    }
+}
+
+impl Sink<Arc<MetricScores>, AggregateWriter> for AggregateSink {
     #[allow(unused_variables)]
-    fn new_metric<S: AsRef<str>>(&self, kind: MetricKind, name: S, sampling: Rate)
-                                 -> Self::Metric {
+    fn new_metric<S: AsRef<str>>(&self, kind: MetricKind, name: S, sampling: Rate) -> Arc<MetricScores> {
         let name = name.as_ref().to_string();
-        let metric = Arc::new(AggregateKey {
+        let metric = Arc::new(MetricScores {
             kind,
             name,
             score: match kind {
-                MetricKind::Event => AtomicScore::Event { hit: AtomicUsize::new(0) },
-                _ => AtomicScore::Value {
+                MetricKind::Event => InnerScores::Event { hit: AtomicUsize::new(0) },
+                _ => InnerScores::Value {
                     hit: AtomicUsize::new(0),
                     sum: AtomicUsize::new(0),
                     max: AtomicUsize::new(usize::MIN),
@@ -213,17 +223,15 @@ impl MetricSink for AggregateSink {
         metric
     }
 
-    fn new_writer(&self) -> Self::Writer {
-        // TODO return AGGREGATE_WRITE or a immutable field at least
-        AggregateWrite()
+    fn new_writer(&self) -> AggregateWriter {
+        AggregateWriter
     }
 }
 
-/// Run benchmarks with `cargo +nightly bench --features bench`
 #[cfg(feature = "bench")]
-mod bench {
+mod microbench {
 
-    use super::MetricAggregator;
+    use super::Aggregator;
     use ::*;
     use test::Bencher;
 

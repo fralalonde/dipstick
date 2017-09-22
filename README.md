@@ -56,7 +56,7 @@ initialization cost is is only paid once.
 Ad-hoc timers are redefined "inline" on each use. They are more flexible, but have more overhead because their init cost is paid on each use. 
 Defining a metric `cache()` reduces that cost for recurring metrics.    
 
-
+Run benchmarks with `cargo +nightly bench --features bench`.
 
 ## TODO 
 Although already usable, Dipstick is still under heavy development and makes no guarantees 
@@ -65,6 +65,7 @@ of any kind at this point. See the following list for any potential caveats :
 - generic publisher / sources
 - dispatch scopes
 - feature flags
+- derive stats
 - non-tokio publish scheduler
 - microsecond-precision intervals
 - heartbeat metric on publish

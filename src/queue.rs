@@ -4,74 +4,90 @@
 
 // TODO option to drop metrics when queue full
 
-use ::*;
-use cached::{SizedCache, Cached};
-use std::sync::{Arc,RwLock};
-use std::fmt;
+use core::*;
+use std::sync::Arc;
 use std::sync::mpsc;
-use std::sync::Mutex;
+use std::thread;
 
-#[derive(Debug)]
-pub struct QueuedKey<C: MetricSink> {
-    index: usize,
+/// Cache metrics to prevent them from being re-defined on every use.
+/// Use of this should be transparent, this has no effect on the values.
+/// Stateful sinks (i.e. Aggregate) may naturally cache their definitions.
+pub fn queue<M, W, S>(size: usize, sink: S) -> MetricQueue<M, W, S>
+    where M: 'static + Send + Sync, W: 'static + Writer<M> + Send + Sync, S: Sink<M, W>
+{
+    MetricQueue::new(sink, size)
 }
 
-impl<C: MetricSink> MetricKey for QueuedKey<C> {}
+/////////////////////
+// QUEUE
 
+/// Thread safe sender to the queue
+pub type QueueSender<M, W> = mpsc::SyncSender<QueueCommand<M, W>>;
 
-#[derive(Debug)]
-pub struct QueuedWriter<C: MetricSink> {
-    sender: Arc<mpsc::SyncSender<QueuedWrite<C>>>,
-}
-
-impl<C: MetricSink> MetricWriter<QueuedKey<C>> for QueuedWriter<C> {
-    fn write(&self, metric: &QueuedKey<C>, value: Value) {
-        self.sender.send(QueuedWrite { metric, value, time: TimeHandle::now() })
-    }
-}
-
-struct QueuedWrite<C: MetricSink> {
-    metric: QueuedKey<C>,
+struct QueueCommand<M, W> {
+    /// The metric to write
+    metric: Arc<M>,
+    /// The writer to write the metric to
+    writer: Arc<W>,
+    /// The metric's reported value
     value : Value,
-    time: TimeHandle
+    /// The instant of measurement, if available
+    time: Option<TimeHandle>,
 }
 
-pub struct MetricQueue<C: MetricSink> {
-    target: C,
-    sender: Arc<mpsc::SyncSender<QueuedWrite<C>>>,
-    target_metrics: Vec<Option<C::Metric>>,
+/////////////////
+// SINK
+
+/// The queue writer simply sends the metric, writer and value over the channel for the actual write
+/// to be performed synchronously by the queue command execution thread.
+pub struct QueueWriter<M, W> {
+    target_writer: Arc<W>,
+    sender: QueueSender<M, W>,
 }
 
-impl<C: MetricSink> fmt::Debug for MetricQueue<C> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        Ok(self.target.fmt(f)?)
+impl <M, W> Writer<Arc<M>> for QueueWriter<M, W> where W: Writer<M> {
+    fn write(&self, metric: &Arc<M>, value: Value) {
+        self.sender.send(QueueCommand {
+            metric: metric.clone(),
+            writer: self.target_writer.clone(),
+            value,
+            time: Some(TimeHandle::now()),
+        }).unwrap_or_else(|e| {/* TODO record error in selfstats */} )
     }
 }
 
-impl<C: MetricSink> MetricQueue<C> {
-    pub fn new(target: C, queue_size: usize) -> MetricQueue<C> {
-        let (sender, receiver) = mpsc::sync_channel::<QueuedWrite<C>>(queue_size);
-        let target_writer = target.new_writer();
-        std::thread::spawn(move|| loop {
-            while let Ok(qw) = receiver.recv() {
-                target_writer.write(qw.metric.0, qw.value)
+/// A metric command-queue using a sync channel.
+/// Each client thread gets it's own writer / sender.
+/// Writes are dispatched by a single receiving thread.
+pub struct MetricQueue<M, W, S> {
+    target: S,
+    sender: QueueSender<M, W>,
+}
+
+impl<M, W, S> MetricQueue<M, W, S> where M: 'static + Send + Sync, W: 'static + Writer<M> + Send + Sync, S: Sink<M, W> {
+
+    /// Build a new metric queue for asynchronous metric dispatch.
+    pub fn new(target: S, queue_size: usize) -> MetricQueue<M, W, S> {
+        let (sender, receiver) = mpsc::sync_channel::<QueueCommand<M, W>>(queue_size);
+        thread::spawn(move || loop {
+            while let Ok(cmd) = receiver.recv() {
+                cmd.writer.write(&cmd.metric, cmd.value);
             }
         });
-        MetricQueue { target, sender, target_metrics: Vec::new() }
+        MetricQueue { target, sender }
     }
 }
 
-impl<C: MetricSink> MetricSink for MetricQueue<C> {
-    type Metric = QueuedKey<C>;
-    type Writer = QueuedWriter<C>;
-
+impl<M, W, S> Sink<Arc<M>, QueueWriter<M, W>> for MetricQueue<M, W, S> where W: Writer<M>, S: Sink<M, W> {
     #[allow(unused_variables)]
-    fn new_metric<S>(&self, kind: MetricKind, name: S, sampling: Rate) -> Self::Metric
-            where S: AsRef<str>    {
-        QueuedKey (self.target.new_metric(kind, name, sampling))
+    fn new_metric<STR: AsRef<str>>(&self, kind: MetricKind, name: STR, sampling: Rate) -> Arc<M> {
+        Arc::new(self.target.new_metric(kind, name, sampling))
     }
 
-    fn new_writer(&self) -> Self::Writer {
-        QueuedWriter { sender: self.sender.clone() }
+    fn new_writer(&self) -> QueueWriter<M, W> {
+        QueueWriter {
+            target_writer: Arc::new(self.target.new_writer()),
+            sender: self.sender.clone()
+        }
     }
 }

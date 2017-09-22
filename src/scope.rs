@@ -1,30 +1,28 @@
 //! Associate thread-local metadata to application metrics being reported.
 //! **not yet implemented**
 
-use ::*;
+use sink::*;
 
-#[derive(Debug)]
-pub struct ScopeKey<M: MetricKey> {
-    target: M,
-}
-
-impl<M: MetricKey> MetricKey for ScopeKey<M> {}
-
-#[derive(Debug)]
-pub struct ScopeWriter<C: MetricSink> {
-    default_writer: C::Writer,
-    thread_writer: ThreadLocal<C::Writer>,
-}
-
-impl<C: MetricSink> MetricWriter<ScopeKey<<C as MetricSink>::Metric>> for ScopeWriter<C> {
-    fn write(&self, metric: &ScopeKey<<C as MetricSink>::Metric>, value: Value) {
-        let scope = self.thread_writer.get(|scope| match scope {
-            Some(scoped) => scoped.writer.write(metric, value),
-            None => self.default_writer.write(metric, value),
-        });
-    }
-
-}
+//#[derive(Debug)]
+//pub struct ScopeKey<M: MetricKey> {
+//    target: M,
+//}
+//
+//#[derive(Debug)]
+//pub struct ScopeWriter<C: MetricSink> {
+//    default_writer: C::Writer,
+//    thread_writer: ThreadLocal<C::Writer>,
+//}
+//
+//impl<C: MetricSink> MetricWriter<ScopeKey<<C as MetricSink>::Metric>> for ScopeWriter<C> {
+//    fn write(&self, metric: &ScopeKey<<C as MetricSink>::Metric>, value: Value) {
+//        let scope = self.thread_writer.get(|scope| match scope {
+//            Some(scoped) => scoped.writer.write(metric, value),
+//            None => self.default_writer.write(metric, value),
+//        });
+//    }
+//
+//}
 
 //impl<C: MetricSink> DispatchScope for ScopeWriter<C> {
 //    fn set_property<S: AsRef<str>>(&self, key: S, value: S) -> &Self {
@@ -53,39 +51,39 @@ impl<C: MetricSink> MetricWriter<ScopeKey<<C as MetricSink>::Metric>> for ScopeW
 //    }
 
 
-#[derive(Debug)]
-pub struct ScopeSink<C: MetricSink> {
-    target: C,
-    writer: Arc<ScopeWriter<C>>,
-}
-
-impl<C: MetricSink> ScopeSink<C> {
-    pub fn new(target: C, sampling_rate: Rate) -> ScopeSink<C> {
-        ScopeSink {
-            target,
-            writer: Arc::new(ScopeWriter {
-                default_writer: target.new_writer(),
-                thread_writer: ThreadLocal::new(),
-            }),
-        }
-    }
-}
-
-impl<C: MetricSink> MetricSink for ScopeSink<C> {
-    type Metric = ScopeKey<C::Metric>;
-    type Writer = ScopeWriter<C>;
-
-    #[allow(unused_variables)]
-    fn new_metric<S: AsRef<str>>(&self, kind: MetricType, name: S, sampling: Rate)
-            -> Self::Metric {
-        let pm = self.target.new_metric(kind, name, self.sampling_rate);
-        ScopeKey {
-            target: pm,
-        }
-    }
-
-    fn new_writer(&self) -> Self::Writer {
-        self.writer.thread_writer.set(self.target.new_writer())
-        // TODO drop target_writer on scope_writer drop (or something)
-    }
-}
+//#[derive(Debug)]
+//pub struct ScopeSink<C: MetricSink> {
+//    target: C,
+//    writer: Arc<ScopeWriter<C>>,
+//}
+//
+//impl<C: MetricSink> ScopeSink<C> {
+//    pub fn new(target: C, sampling_rate: Rate) -> ScopeSink<C> {
+//        ScopeSink {
+//            target,
+//            writer: Arc::new(ScopeWriter {
+//                default_writer: target.new_writer(),
+//                thread_writer: ThreadLocal::new(),
+//            }),
+//        }
+//    }
+//}
+//
+//impl<C: MetricSink> MetricSink for ScopeSink<C> {
+//    type Metric = ScopeKey<C::Metric>;
+//    type Writer = ScopeWriter<C>;
+//
+//    #[allow(unused_variables)]
+//    fn new_metric<S: AsRef<str>>(&self, kind: MetricType, name: S, sampling: Rate)
+//            -> Self::Metric {
+//        let pm = self.target.new_metric(kind, name, self.sampling_rate);
+//        ScopeKey {
+//            target: pm,
+//        }
+//    }
+//
+//    fn new_writer(&self) -> Self::Writer {
+//        self.writer.thread_writer.set(self.target.new_writer())
+//        // TODO drop target_writer on scope_writer drop (or something)
+//    }
+//}
