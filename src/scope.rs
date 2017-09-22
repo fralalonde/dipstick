@@ -40,8 +40,8 @@ use sink::*;
 //    where
 //        F: Fn(&Self::Scope),
 //    {
-//        let new_writer = self.target.new_writer();
-//        let scope = ScopeWriter { writer: new_writer };
+//        let new_scope = self.target.new_scope();
+//        let scope = ScopeWriter { writer: new_scope };
 //        // TODO add ThreadLocal with(T, FnOnce) method to replace these three
 //        self.dispatch_scope.thread_scope.set(scope);
 //        self.dispatch_scope.thread_scope.get(|option_scope| {
@@ -62,7 +62,7 @@ use sink::*;
 //        ScopeSink {
 //            target,
 //            writer: Arc::new(ScopeWriter {
-//                default_writer: target.new_writer(),
+//                default_writer: target.new_scope(),
 //                thread_writer: ThreadLocal::new(),
 //            }),
 //        }
@@ -82,8 +82,8 @@ use sink::*;
 //        }
 //    }
 //
-//    fn new_writer(&self) -> Self::Writer {
-//        self.writer.thread_writer.set(self.target.new_writer())
+//    fn new_scope(&self) -> Self::Writer {
+//        self.writer.thread_writer.set(self.target.new_scope())
 //        // TODO drop target_writer on scope_writer drop (or something)
 //    }
 //}

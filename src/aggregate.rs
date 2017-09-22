@@ -73,7 +73,7 @@ pub enum ScoresSnapshot {
 #[derive(Debug)]
 pub struct MetricScores {
     /// The kind of metric.
-    pub kind: MetricKind,
+    pub kind: Kind,
 
     /// The metric's name.
     pub name: String,
@@ -180,7 +180,7 @@ impl AsSource for Aggregator {
     }
 }
 
-impl AsSink<Arc<MetricScores>, AggregateWriter, AggregateSink> for Aggregator {
+impl AsSink<Arc<MetricScores>, AggregateSink> for Aggregator {
     fn as_sink(&self) -> AggregateSink {
         AggregateSink(self.metrics.clone())
     }
@@ -192,24 +192,15 @@ impl AsSink<Arc<MetricScores>, AggregateWriter, AggregateSink> for Aggregator {
 #[derive(Clone)]
 pub struct AggregateSink(Arc<RwLock<Vec<Arc<MetricScores>>>>);
 
-pub struct AggregateWriter;
-
-/// Since aggregation negates any scope, there only needs to be a single writer ever
-impl Writer<Arc<MetricScores>> for AggregateWriter {
-    fn write(&self, metric: &Arc<MetricScores>, value: Value) {
-        metric.write(value as usize);
-    }
-}
-
-impl Sink<Arc<MetricScores>, AggregateWriter> for AggregateSink {
+impl Sink<Arc<MetricScores>> for AggregateSink {
     #[allow(unused_variables)]
-    fn new_metric<S: AsRef<str>>(&self, kind: MetricKind, name: S, sampling: Rate) -> Arc<MetricScores> {
+    fn new_metric<S: AsRef<str>>(&self, kind: Kind, name: S, sampling: Rate) -> Arc<MetricScores> {
         let name = name.as_ref().to_string();
         let metric = Arc::new(MetricScores {
             kind,
             name,
             score: match kind {
-                MetricKind::Event => InnerScores::Event { hit: AtomicUsize::new(0) },
+                Kind::Event => InnerScores::Event { hit: AtomicUsize::new(0) },
                 _ => InnerScores::Value {
                     hit: AtomicUsize::new(0),
                     sum: AtomicUsize::new(0),
@@ -223,9 +214,13 @@ impl Sink<Arc<MetricScores>, AggregateWriter> for AggregateSink {
         metric
     }
 
-    fn new_writer(&self) -> AggregateWriter {
-        AggregateWriter
+    fn new_scope(&self) -> &Fn(Option<(&Arc<MetricScores>, Value)>) {
+        &|cmd| match cmd {
+            Some((metric, value)) => metric.write(value as usize),
+            None => {}
+        }
     }
+
 }
 
 #[cfg(feature = "bench")]
@@ -239,17 +234,17 @@ mod microbench {
     fn time_bench_write_event(b: &mut Bencher) {
         let (sink, source) = aggregate();
         let metric = sink.new_metric(MetricKind::Event, "event_a", 1.0);
-        let writer = sink.new_writer();
-        b.iter(|| writer.write(&metric, 1));
+        let scope = sink.new_scope();
+        b.iter(|| scope(Some((&metric, 1))));
     }
 
 
     #[bench]
     fn time_bench_write_count(b: &mut Bencher) {
         let (sink, source) = aggregate();
-        let metric = sink.new_metric(MetricKind::Count, "count_a", 1.0);
-        let writer = sink.new_writer();
-        b.iter(|| writer.write(&metric, 1));
+        let metric = sink.new_metric(Kind::Count, "count_a", 1.0);
+        let scope = sink.new_scope();
+        b.iter(|| scope(Some((&metric, 1))));
     }
 
     #[bench]

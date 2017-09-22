@@ -49,29 +49,29 @@ pub mod sampling;
 pub mod aggregate;
 pub mod publish;
 pub mod statsd;
-pub mod log;
+pub mod output;
 pub mod cache;
 pub mod multi;
 pub mod queue;
 pub mod app;
 pub mod macros;
 pub mod core;
-pub mod console;
 pub mod source;
 
 // input
 pub use app::metrics;
 
+// buffering
+pub use queue::queue;
+
 // transform
 pub use cache::cache;
 pub use sampling::sample;
 
-// store + forward
+// pack + forward
 pub use aggregate::aggregate;
 pub use publish::{publish, publish_every};
 
 // output
-pub use log::log;
-pub use console::stdout;
+pub use output::{log, print};
 pub use statsd::statsd;
-pub use queue::queue;

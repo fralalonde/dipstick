@@ -15,69 +15,73 @@ pub use num::ToPrimitive;
 
 
 /// Wrap the metrics backend to provide an application-friendly interface.
-pub fn metrics<'ph, M, W, S>(sink: S) -> AppMetrics<'ph, M, W, S>
-    where W: Writer<M>, S: Sink<M, W>
-{
-    AppMetrics::new(sink)
+pub fn metrics<'ph, M, S>(sink: S) -> AppMetrics<'ph, M, S> where S: Sink<M> + 'static, M: 'static {
+    let next_scope = sink.new_scope();
+    AppMetrics {
+        prefix: "".to_string(),
+        next_scope: Arc::new(next_scope),
+        next_sink: Arc::new(sink),
+        phantom: PhantomData {},
+    }
 }
 
 /// A monotonic counter metric.
 /// Since value is only ever increased by one, no value parameter is provided,
 /// preventing potential problems.
-pub struct Event<M, W> {
+pub struct Event<M> {
     metric: M,
-    target_writer: Arc<W>,
+    next_scope: Arc<Fn(Option<(&M, Value)>)>,
 }
 
-impl<M, W> Event<M, W> where W: Writer<M> {
+impl<M> Event<M> {
     /// Record a single event occurence.
     pub fn mark(&self) {
-        self.target_writer.write(&self.metric, 1);
+        self.next_scope.as_ref()(Some((&self.metric, 1)));
     }
 }
 
 /// A counter that sends values to the metrics backend
-pub struct Gauge<M, W> {
+pub struct Counter<M> {
     metric: M,
-    target_writer: Arc<W>,
+    next_scope: Arc<Fn(Option<(&M, Value)>)>,
 }
 
-impl<M, W> Gauge<M, W> where W: Writer<M> {
-    /// Record a value point for this gauge.
-    pub fn value<V>(&self, value: V) where V: ToPrimitive {
-        self.target_writer.write(&self.metric, value.to_u64().unwrap());
+impl<M> Counter<M> {
+    /// Record a value count.
+    pub fn count<V>(&self, count: V) where V: ToPrimitive {
+        self.next_scope.as_ref()(Some((&self.metric, count.to_u64().unwrap())));
     }
 }
 
 /// A gauge that sends values to the metrics backend
-pub struct Counter<M, W> where W: Writer<M> {
+pub struct Gauge<M> {
     metric: M,
-    target_writer: Arc<W>,
+    next_scope: Arc<Fn(Option<(&M, Value)>)>,
 }
 
-impl<M, W> Counter<M, W> where W: Writer<M> {
-    /// Record a value count.
-    pub fn count<V>(&self, count: V) where V: ToPrimitive {
-        self.target_writer.write(&self.metric, count.to_u64().unwrap());
+impl<M> Gauge<M> {
+    /// Record a value point for this gauge.
+    pub fn value<V>(&self, value: V) where V: ToPrimitive {
+        self.next_scope.as_ref()(Some((&self.metric, value.to_u64().unwrap())));
     }
 }
 
 /// A timer that sends values to the metrics backend
 /// Timers can record time intervals in multiple ways :
-/// - with the time! macro, which wraps an expression or block with start() and stop() calls.
-/// - with the time(Fn) method, which wraps a closure with start() and stop() calls.
-/// - with start() and stop() methods, wrapping around the operation to time
+/// - with the time! macrohich wraps an expression or block with start() and stop() calls.
+/// - with the time(Fn) methodhich wraps a closure with start() and stop() calls.
+/// - with start() and stop() methodsrapping around the operation to time
 /// - with the interval_us() method, providing an externally determined microsecond interval
-pub struct Timer<M, W> {
+pub struct Timer<M> {
     metric: M,
-    target_writer: Arc<W>,
+    next_scope: Arc<Fn(Option<(&M, Value)>)>,
 }
 
-impl<M, W> Timer<M, W> where W: Writer<M> {
+impl<M> Timer<M> {
     /// Record a microsecond interval for this timer
     /// Can be used in place of start()/stop() if an external time interval source is used
     pub fn interval_us<V>(&self, interval_us: V) -> V where V: ToPrimitive {
-        self.target_writer.write(&self.metric, interval_us.to_u64().unwrap());
+        self.next_scope.as_ref()(Some((&self.metric, interval_us.to_u64().unwrap())));
         interval_us
     }
 
@@ -110,24 +114,14 @@ impl<M, W> Timer<M, W> where W: Writer<M> {
 }
 
 /// Variations of this should also provide control of the metric recording scope.
-pub struct AppMetrics<'ph, M, W, S> where M: 'ph, W: Writer<M>, S: Sink<M, W>  {
+pub struct AppMetrics<'ph, M, S> where M: 'ph, S: Sink<M>  {
     prefix: String,
-    writer: Arc<W>,
-    target: Arc<S>,
+    next_scope: Arc<Fn(Option<(&M, Value)>)>,
+    next_sink: Arc<S>,
     phantom: PhantomData<&'ph M>,
 }
 
-impl <'ph, M, W, S> AppMetrics<'ph, M, W, S> where W: Writer<M>, S: Sink<M, W> {
-    /// Create a new direct metric dispatch
-    pub fn new(target: S) -> AppMetrics<'ph, M, W, S> {
-        let target_writer: W = target.new_writer();
-        AppMetrics {
-            prefix: "".to_string(),
-            writer: Arc::new(target_writer),
-            target: Arc::new(target),
-            phantom: PhantomData {},
-        }
-    }
+impl <'ph, M, S> AppMetrics<'ph, M, S> where S: Sink<M> {
 
     fn qualified_name<AS>(&self, name: AS) -> String
         where AS: Into<String> + AsRef<str>
@@ -142,35 +136,35 @@ impl <'ph, M, W, S> AppMetrics<'ph, M, W, S> where W: Writer<M>, S: Sink<M, W> {
     }
 
     /// Get an event counter of the provided name.
-    pub fn event<AS>(&self, name: AS) -> Event<M, W>
+    pub fn event<AS>(&self, name: AS) -> Event<M>
         where AS: Into<String> + AsRef<str>
     {
-        let metric = self.target.new_metric(MetricKind::Event, self.qualified_name(name), 1.0);
-        Event { metric, target_writer: self.writer.clone(), }
+        let metric = self.next_sink.new_metric(Kind::Event, self.qualified_name(name), 1.0);
+        Event { metric, next_scope: self.next_scope.clone(), }
     }
 
     /// Get a counter of the provided name.
-    pub fn counter<AS>(&self, name: AS) -> Counter<M, W>
+    pub fn counter<AS>(&self, name: AS) -> Counter<M>
         where AS: Into<String> + AsRef<str>
     {
-        let metric = self.target.new_metric(MetricKind::Count, self.qualified_name(name), 1.0);
-        Counter { metric, target_writer: self.writer.clone(), }
+        let metric = self.next_sink.new_metric(Kind::Count, self.qualified_name(name), 1.0);
+        Counter { metric, next_scope: self.next_scope.clone(), }
     }
 
     /// Get a timer of the provided name.
-    pub fn timer<AS>(&self, name: AS) -> Timer<M, W>
+    pub fn timer<AS>(&self, name: AS) -> Timer<M>
         where AS: Into<String> + AsRef<str>
     {
-        let metric = self.target.new_metric(MetricKind::Time, self.qualified_name(name), 1.0);
-        Timer { metric, target_writer: self.writer.clone(), }
+        let metric = self.next_sink.new_metric(Kind::Time, self.qualified_name(name), 1.0);
+        Timer { metric, next_scope: self.next_scope.clone(), }
     }
 
     /// Get a gauge of the provided name.
-    pub fn gauge<AS>(&self, name: AS) -> Gauge<M, W>
+    pub fn gauge<AS>(&self, name: AS) -> Gauge<M>
         where AS: Into<String> + AsRef<str>
     {
-        let metric = self.target.new_metric(MetricKind::Gauge, self.qualified_name(name), 1.0);
-        Gauge { metric, target_writer: self.writer.clone(), }
+        let metric = self.next_sink.new_metric(Kind::Gauge, self.qualified_name(name), 1.0);
+        Gauge { metric, next_scope: self.next_scope.clone(), }
     }
 
     /// Prepend the metrics name with a prefix.
@@ -178,8 +172,8 @@ impl <'ph, M, W, S> AppMetrics<'ph, M, W, S> where W: Writer<M>, S: Sink<M, W> {
     pub fn with_prefix<IS>(&self, prefix: IS) -> Self where IS: Into<String> {
         AppMetrics {
             prefix: prefix.into(),
-            target: self.target.clone(),
-            writer: self.writer.clone(),
+            next_sink: self.next_sink.clone(),
+            next_scope: self.next_scope.clone(),
             phantom: PhantomData {},
         }
     }
