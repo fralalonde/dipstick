@@ -26,7 +26,7 @@ pub struct MetricCache<M, S> {
 }
 
 impl<M, S> Sink<Arc<M>> for MetricCache<M, S>
-    where S: Sink<M>
+    where S: Sink<M>, M: 'static
 {
     #[allow(unused_variables)]
     fn new_metric<STR>(&self, kind: Kind, name: STR, sampling: Rate) -> Arc<M>
@@ -49,11 +49,11 @@ impl<M, S> Sink<Arc<M>> for MetricCache<M, S>
         new_metric
     }
 
-    fn new_scope(&self) -> &Fn(Option<(&Arc<M>, Value)>) {
-        let target_scope = self.next_sink.new_scope();
-        &|cmd| match cmd {
-            Some((metric, value)) => target_scope(Some((metric.as_ref(), value))),
-            None => target_scope(None)
-        }
+    fn new_scope(&self) -> Box<Fn(Option<(&Arc<M>, Value)>)> {
+        let next_scope = self.next_sink.new_scope();
+       Box::new(|cmd| match cmd {
+            Some((metric, value)) => next_scope(Some((metric.as_ref(), value))),
+            None => next_scope(None)
+        })
     }
 }

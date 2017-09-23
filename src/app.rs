@@ -19,7 +19,7 @@ pub fn metrics<'ph, M, S>(sink: S) -> AppMetrics<'ph, M, S> where S: Sink<M> + '
     let next_scope = sink.new_scope();
     AppMetrics {
         prefix: "".to_string(),
-        next_scope: Arc::new(next_scope),
+        next_scope: Arc::from(next_scope),
         next_sink: Arc::new(sink),
         phantom: PhantomData {},
     }
