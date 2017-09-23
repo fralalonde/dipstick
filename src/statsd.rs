@@ -37,18 +37,18 @@ const MAX_UDP_PAYLOAD: usize = 576;
 
 
 /// Wrapped buffer & socket as one so that any remainding data can be flushed on Drop.
-struct ScopeBuffer<'a> {
+struct ScopeBuffer {
     str: String,
-    socket: &'a UdpSocket,
+    socket: Arc<UdpSocket>,
 }
 
-impl<'a> Drop for ScopeBuffer<'a> {
+impl Drop for ScopeBuffer {
     fn drop(&mut self) {
         self.flush()
     }
 }
 
-impl <'a> ScopeBuffer<'a> {
+impl  ScopeBuffer {
 
     fn flush(&mut self) {
         debug!("statsd sending {} bytes", self.str.len());
@@ -96,9 +96,9 @@ impl Sink<StatsdMetric> for StatsdSink {
         StatsdMetric { prefix, suffix, scale }
     }
 
-    fn new_scope(&self) -> &Fn(Option<(&StatsdMetric, Value)>) {
-        let mut buf = ScopeBuffer { str: String::with_capacity(MAX_UDP_PAYLOAD), socket: &self.socket };
-       &|cmd| match cmd {
+    fn new_scope(&self) -> Box<Fn(Option<(&StatsdMetric, Value)>)> {
+        let mut buf = ScopeBuffer { str: String::with_capacity(MAX_UDP_PAYLOAD), socket: self.socket.clone() };
+        Box::new(|cmd| match cmd {
             Some((metric, value)) => {
                 let scaled_value = if metric.scale != 1 {
                     value / metric.scale
@@ -133,6 +133,6 @@ impl Sink<StatsdMetric> for StatsdSink {
                     buf.flush();
                 }
             }
-        }
+        })
     }
 }

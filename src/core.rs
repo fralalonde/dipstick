@@ -66,7 +66,7 @@ pub trait Sink<M> {
     /// Returns a callback function to send scope commands.
     /// Writes can be performed by passing Some((&Metric, Value))
     /// Flushes can be performed by passing None
-    fn new_scope(&self) -> &Fn(Option<(&M, Value)>);
+    fn new_scope(&self) -> Box<Fn(Option<(&M, Value)>)>;
 }
 
 

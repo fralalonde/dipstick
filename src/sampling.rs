@@ -26,7 +26,7 @@ pub struct SamplingSink<'ph, M: 'ph, S> {
 }
 
 impl<'ph, M, S> Sink<SamplingMetric<M>> for SamplingSink<'ph, M, S>
-    where S: Sink<M>
+    where S: Sink<M>, M: 'static
 {
     #[allow(unused_variables)]
     fn new_metric<STR: AsRef<str>>(&self, kind: Kind, name: STR, sampling: Rate)
@@ -41,15 +41,15 @@ impl<'ph, M, S> Sink<SamplingMetric<M>> for SamplingSink<'ph, M, S>
         }
     }
 
-    fn new_scope(&self) -> &Fn(Option<(&SamplingMetric<M>, Value)>) {
+    fn new_scope(&self) -> Box<Fn(Option<(&SamplingMetric<M>, Value)>)> {
         let next_scope = self.next_sink.new_scope();
-        &|cmd| {
+        Box::new(|cmd| {
             if let Some((metric, value)) = cmd {
                 if !pcg32::accept_sample(metric.int_sampling_rate) {
                     return;
                 }
             }
             next_scope(None)
-        }
+        })
     }
 }

@@ -35,8 +35,8 @@ impl <M> Sink<M> for FnSink<M> {
         self.metric_fn.as_ref()(kind, name.as_ref(), sampling)
     }
 
-    fn new_scope(&self) -> &Fn(Option<(&M, Value)>) {
-        &*self.scope_fn
+    fn new_scope(&self) -> Box<Fn(Option<(&M, Value)>)> {
+        self.scope_fn
     }
 }
 

@@ -214,11 +214,11 @@ impl Sink<Arc<MetricScores>> for AggregateSink {
         metric
     }
 
-    fn new_scope(&self) -> &Fn(Option<(&Arc<MetricScores>, Value)>) {
-        &|cmd| match cmd {
+    fn new_scope(&self) -> Box<Fn(Option<(&Arc<MetricScores>, Value)>)> {
+        Box::new(|cmd| match cmd {
             Some((metric, value)) => metric.write(value as usize),
             None => {}
-        }
+        })
     }
 
 }
