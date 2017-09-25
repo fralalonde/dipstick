@@ -19,8 +19,8 @@ pub fn queue<M, S>(queue_size: usize, sink: S) -> MetricQueue<M, S>
         while let Ok(cmd) = receiver.recv() {
             // apply scope commands received from channel
             match cmd {
-                QueueCommand {cmd: Some((metric, value)), next_scope, .. } => next_scope(Some((metric.as_ref(), value))),
-                QueueCommand {cmd: None, next_scope, .. } => next_scope(None),
+                QueueCommand {cmd: Some((metric, value)), next_scope, .. } => next_scope(Scope::Write(metric.as_ref(), value)),
+                QueueCommand {cmd: None, next_scope, .. } => next_scope(Scope::Flush),
             }
         }
     });
@@ -30,8 +30,9 @@ pub fn queue<M, S>(queue_size: usize, sink: S) -> MetricQueue<M, S>
 /// Thread safe sender to the queue
 pub type QueueSender<M> = mpsc::SyncSender<QueueCommand<M>>;
 
-struct QueueCommand<M> {
-    /// The metric and value to write
+pub struct QueueCommand<M> {
+    /// If Some(), the metric and value to write.
+    /// If None, flush the scope
     cmd: Option<(Arc<M>, Value)>,
     /// The scope to write the metric to
     next_scope: Arc<ScopeFn<M>>,
@@ -60,8 +61,8 @@ impl<M, S> Sink<Arc<M>> for MetricQueue<M, S> where S: Sink<M>, M: 'static + Sen
         // forward any scope command through the channel
         Arc::new(move |cmd| {
             let send_cmd = match cmd {
-                Some((metric, value)) => Some(((*metric).clone(), value)),
-                None => None,
+                Scope::Write(metric, value) => Some(((*metric).clone(), value)),
+                Scope::Flush => None,
             };
             sender.send(QueueCommand {
                 cmd: send_cmd,

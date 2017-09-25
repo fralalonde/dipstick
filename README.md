@@ -70,13 +70,12 @@ of any kind at this point. See the following list for any potential caveats :
 - microsecond-precision intervals
 - heartbeat metric on publish
 - logger templates
-- more outputs adapters
 - configurable aggregation
-- queued dispatch
 - non-aggregating buffers
 - tagged / ad-hoc metrics
-- framework glue (rocket, iron, etc.)
-- tests & benchmarks
+- framework glue (rocket, iron, gotham, indicatif, etc.)
+- more tests & benchmarks
 - complete doc / inline samples
-- example applications
-- make a cool logo 
+- more example apps
+- A cool logo 
+- method annotation processors `#[timer("name")]`

@@ -1,8 +1,10 @@
 [workspace]
 members = [
   "./",
-  "examples/aggregate/",
-  "examples/queued/",
+  "examples/multi_outs/",
+  "examples/aggregate_statsd/",
+  "examples/async_print/",
+  "examples/raw_log/",
 ]
 
 [package]

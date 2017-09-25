@@ -39,7 +39,7 @@ pub fn publish<M, S>(source: &AggregateSource, target: &S)
             ScoresSnapshot::Event { hit } => {
                 let name = format!("{}.hit", &metric.name);
                 let temp_metric = target.new_metric(Kind::Count, &name, 1.0);
-                scope(Some((&temp_metric, hit)));
+                scope(Scope::Write(&temp_metric, hit));
             }
             ScoresSnapshot::Value { hit, sum, max, min } => {
                 if hit > 0 {
@@ -53,7 +53,7 @@ pub fn publish<M, S>(source: &AggregateSource, target: &S)
                             // assuming values will still be good enough to be useful
                             let name = format!("{}.avg", &metric.name);
                             let temp_metric = target.new_metric(metric.kind, &name, 1.0);
-                            scope(Some((&temp_metric, sum / hit)));
+                            scope(Scope::Write(&temp_metric, sum / hit));
                         }
                         _ => (),
                     }
@@ -64,22 +64,22 @@ pub fn publish<M, S>(source: &AggregateSource, target: &S)
                         &Kind::Time => {
                             let name = format!("{}.sum", &metric.name);
                             let temp_metric = target.new_metric(metric.kind, &name, 1.0);
-                            scope(Some((&temp_metric, sum)));
+                            scope(Scope::Write(&temp_metric, sum));
 
                             let name = format!("{}.hit", &metric.name);
                             let temp_metric = target.new_metric(metric.kind, &name, 1.0);
-                            scope(Some((&temp_metric, hit)));
+                            scope(Scope::Write(&temp_metric, hit));
                         }
                         _ => (),
                     }
 
                     let name = format!("{}.max", &metric.name);
                     let temp_metric = target.new_metric(Kind::Gauge, &name, 1.0);
-                    scope(Some((&temp_metric, max)));
+                    scope(Scope::Write(&temp_metric, max));
 
                     let name = format!("{}.min", &metric.name);
                     let temp_metric = target.new_metric(Kind::Gauge, &name, 1.0);
-                    scope(Some((&temp_metric, min)));
+                    scope(Scope::Write(&temp_metric, min));
                 }
             }
         }

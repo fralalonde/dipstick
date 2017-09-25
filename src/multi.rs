@@ -2,7 +2,6 @@
 
 use core::*;
 use std::sync::Arc;
-use std::rc::Rc;
 
 /// Hold each sink's metric key.
 pub type DoubleKey<M1, M2> = (M1, M2);
@@ -24,13 +23,13 @@ impl<M1, S1, M2, S2> Sink<DoubleKey<M1, M2>> for DoubleSink<S1, S2>
         let scope1 = self.1.new_scope();
         Arc::new(move |cmd| {
             match cmd {
-                Some((metric, value)) => {
-                    scope0(Some((&metric.0, value)));
-                    scope1(Some((&metric.1, value)));
+                Scope::Write(metric, value) => {
+                    scope0(Scope::Write(&metric.0, value));
+                    scope1(Scope::Write(&metric.1, value));
                 },
-                None => {
-                    scope0(None);
-                    scope1(None);
+                Scope::Flush => {
+                    scope0(Scope::Flush);
+                    scope1(Scope::Flush);
                 }
             }
         })

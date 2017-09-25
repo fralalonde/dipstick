@@ -45,12 +45,12 @@ impl<'ph, M, S> Sink<SamplingMetric<M>> for SamplingSink<'ph, M, S>
     fn new_scope(&self) -> ScopeFn<SamplingMetric<M>> {
         let next_scope = self.next_sink.new_scope();
         Arc::new(move |cmd| {
-            if let Some((metric, value)) = cmd {
-                if !pcg32::accept_sample(metric.int_sampling_rate) {
-                    return;
+            if let Scope::Write(metric, value) = cmd {
+                if pcg32::accept_sample(metric.int_sampling_rate) {
+                    next_scope(Scope::Write(&metric.target, value))
                 }
             }
-            next_scope(None)
+            next_scope(Scope::Flush)
         })
     }
 }
