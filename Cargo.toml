@@ -10,7 +10,7 @@ members = [
 
 [package]
 name = "dipstick"
-version = "0.4.1"
+version = "0.4.2-alpha.0"
 authors = ["Francis Lalonde <fralalonde@gmail.com>"]
 
 description = """A fast and modular metrics library decoupling app instrumentation from reporting backend.
@@ -28,13 +28,11 @@ license = "MIT/Apache-2.0"
 travis-ci = { repository = "fralalonde/dipstick", branch = "master" }
 
 [dependencies]
-lazy_static = "0.2.8"
 cached = "0.4.1"
 log = "0.3.8"
 time = "0.1"
 num = "0.1.40"
 error-chain = "0.10.0"
-linked-hash-map = "0.5.0"
 
 [features]
 bench = []

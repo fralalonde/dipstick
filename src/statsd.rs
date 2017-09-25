@@ -34,44 +34,6 @@ pub struct StatsdMetric {
 /// Use a safe maximum size for UDP to prevent fragmentation.
 const MAX_UDP_PAYLOAD: usize = 576;
 
-//thread_local! {
-//    static SEND_BUFFER: RefCell<String> = RefCell::new(String::with_capacity(MAX_UDP_PAYLOAD));
-//}
-//
-//fn write(&self) {
-//    SEND_BUFFER.with(|cell| {
-//        let ref mut buf = cell.borrow_mut();
-//        if entry_len > buf.capacity() {
-//            // TODO report entry too big to fit in buffer (!?)
-//            return;
-//        }
-//
-//        let remaining = buf.capacity() - buf.len();
-//        if entry_len + 1 > remaining {
-//            // buffer is full, flush before appending
-//            flush(buf, &self.socket);
-//        } else {
-//            if !buf.is_empty() {
-//                // separate from previous entry
-//                buf.push('\n')
-//            }
-//            buf.push_str(&metric.prefix);
-//            buf.push_str(&value_str);
-//            buf.push_str(&metric.suffix);
-//        }
-//    });
-//}
-//
-//fn flush(&self) {
-//    SEND_BUFFER.with(|cell| {
-//        let ref mut buf = cell.borrow_mut();
-//        if !buf.is_empty() {
-//            // operation complete, flush any metrics in buffer
-//            flush(buf, &self.socket)
-//        }
-//    })
-//}
-
 /// Wrapped buffer & socket as one so that any remainding data can be flushed on Drop.
 struct ScopeBuffer {
     str: String,
