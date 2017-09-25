@@ -1,3 +1,7 @@
+//! Dipstick metrics core types and traits.
+//! This is mostly centered around the backend.
+//! Application-facing types are in the `app` module.
+
 use time;
 use std::sync::Arc;
 
@@ -63,7 +67,15 @@ pub type MetricFn<M> = Arc<Fn(Kind, &str, Rate) -> M + Send + Sync>;
 /// Complex applications may define a new scope fo each operation or request.
 /// Scopes can be moved acrossed threads (Send) but are not required to be thread-safe (Sync).
 /// Some implementations _may_ be 'Sync', otherwise queue()ing or threadlocal() can be used.
-pub type ScopeFn<M> = Arc<Fn(Option<(&M, Value)>) + Send + Sync>;
+pub type ScopeFn<M> = Arc<Fn(Scope<M>) + Send + Sync>;
+
+/// Whether to write or flush the scope.
+pub enum Scope<'a, M: 'a> {
+    /// Write the value for the metric.
+    Write(&'a M, Value),
+    /// Flush the scope buffer, if applicable.
+    Flush,
+}
 
 /// Main trait of the metrics backend API.
 /// Defines a component that can be used when setting up a metrics backend stack.
@@ -77,6 +89,7 @@ pub type ScopeFn<M> = Arc<Fn(Option<(&M, Value)>) + Send + Sync>;
 /// - Aggregate
 /// Print metrics to Generic.
 pub trait Sink<M> where M: Send + Sync {
+    /// Define a new metric instrument of the requested kind, with the specified name and sample rate.
     fn new_metric(&self, kind: Kind, name: &str, sampling: Rate) -> M;
 
     /// Returns a callback function to send scope commands.
@@ -85,7 +98,7 @@ pub trait Sink<M> where M: Send + Sync {
     fn new_scope(&self) -> ScopeFn<M>;
 }
 
-
+/// Expose the `Sink` nature of a multi-faceted struct.
 pub trait AsSink<M, S: Sink<M>> where M: Send + Sync {
     /// Get the metric sink.
     fn as_sink(&self) -> S;

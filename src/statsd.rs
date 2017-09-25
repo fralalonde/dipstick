@@ -3,7 +3,6 @@
 use ::core::*;
 use ::error;
 
-use std::io::Result;
 use std::net::UdpSocket;
 use std::sync::{Arc,RwLock};
 
@@ -136,7 +135,7 @@ impl Sink<StatsdMetric> for StatsdSink {
     fn new_scope(&self) -> ScopeFn<StatsdMetric> {
         let buf = RwLock::new(ScopeBuffer { str: String::with_capacity(MAX_UDP_PAYLOAD), socket: self.socket.clone() });
         Arc::new(move |cmd| match cmd {
-            Some((metric, value)) => {
+            Scope::Write(metric, value) => {
                 if let Ok(mut buf) = buf.try_write() {
                     let scaled_value = if metric.scale != 1 {
                         value / metric.scale
@@ -166,7 +165,7 @@ impl Sink<StatsdMetric> for StatsdSink {
                     }
                 }
             },
-            None => {
+            Scope::Flush => {
                 if let Ok(mut buf) = buf.try_write() {
                     if !buf.str.is_empty() {
                         // operation complete, flush any metrics in buffer

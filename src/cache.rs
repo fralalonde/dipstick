@@ -51,8 +51,8 @@ impl<M, S> Sink<Arc<M>> for MetricCache<M, S>
     fn new_scope(&self) -> ScopeFn<Arc<M>> {
         let next_scope = self.next_sink.new_scope();
         Arc::new(move |cmd| match cmd {
-            Some((metric, value)) => next_scope(Some((metric, value))),
-            None => next_scope(None)
+            Scope::Write(metric, value) => next_scope(Scope::Write(metric, value)),
+            Scope::Flush => next_scope(Scope::Flush)
         })
     }
 }

@@ -163,6 +163,7 @@ impl Aggregator {
         Aggregator::with_capacity(0)
     }
 
+    /// Build a new metric aggregation point with specified initial capacity of metrics to aggregate.
     pub fn with_capacity(size: usize) -> Aggregator {
         Aggregator { metrics: Arc::new(RwLock::new(Vec::with_capacity(size))) }
     }
@@ -216,8 +217,8 @@ impl Sink<Arc<MetricScores>> for AggregateSink {
 
     fn new_scope(&self) -> ScopeFn<Arc<MetricScores>> {
         Arc::new(|cmd| match cmd {
-            Some((metric, value)) => metric.write(value as usize),
-            None => {}
+            Scope::Write(metric, value) => metric.write(value as usize),
+            Scope::Flush => {}
         })
     }
 
@@ -226,38 +227,38 @@ impl Sink<Arc<MetricScores>> for AggregateSink {
 #[cfg(feature = "bench")]
 mod microbench {
 
-    use super::Aggregator;
+    use super::*;
     use ::*;
     use test::Bencher;
 
     #[bench]
     fn time_bench_write_event(b: &mut Bencher) {
         let (sink, source) = aggregate();
-        let metric = sink.new_metric(MetricKind::Event, "event_a", 1.0);
+        let metric = sink.new_metric(Kind::Event, &"event_a", 1.0);
         let scope = sink.new_scope();
-        b.iter(|| scope(Some((&metric, 1))));
+        b.iter(|| scope(Scope::Write(&metric, 1)));
     }
 
 
     #[bench]
     fn time_bench_write_count(b: &mut Bencher) {
         let (sink, source) = aggregate();
-        let metric = sink.new_metric(Kind::Count, "count_a", 1.0);
+        let metric = sink.new_metric(Kind::Count, &"count_a", 1.0);
         let scope = sink.new_scope();
-        b.iter(|| scope(Some((&metric, 1))));
+        b.iter(|| scope(Scope::Write(&metric, 1)));
     }
 
     #[bench]
     fn time_bench_read_event(b: &mut Bencher) {
         let (sink, source) = aggregate();
-        let metric = sink.new_metric(MetricKind::Event, "event_a", 1.0);
+        let metric = sink.new_metric(Kind::Event, &"event_a", 1.0);
         b.iter(|| metric.read_and_reset());
     }
 
     #[bench]
     fn time_bench_read_count(b: &mut Bencher) {
         let (sink, source) = aggregate();
-        let metric = sink.new_metric(MetricKind::Count, "count_a", 1.0);
+        let metric = sink.new_metric(Kind::Count, &"count_a", 1.0);
         b.iter(|| metric.read_and_reset());
     }
 

@@ -37,7 +37,7 @@ pub struct Event<M> {
 impl<M> Event<M> {
     /// Record a single event occurence.
     pub fn mark(&self) {
-        self.next_scope.as_ref()(Some((&self.metric, 1)));
+        self.next_scope.as_ref()(Scope::Write(&self.metric, 1));
     }
 }
 
@@ -50,7 +50,7 @@ pub struct Counter<M> {
 impl<M> Counter<M> {
     /// Record a value count.
     pub fn count<V>(&self, count: V) where V: ToPrimitive {
-        self.next_scope.as_ref()(Some((&self.metric, count.to_u64().unwrap())));
+        self.next_scope.as_ref()(Scope::Write(&self.metric, count.to_u64().unwrap()));
     }
 }
 
@@ -63,7 +63,7 @@ pub struct Gauge<M> {
 impl<M> Gauge<M> {
     /// Record a value point for this gauge.
     pub fn value<V>(&self, value: V) where V: ToPrimitive {
-        self.next_scope.as_ref()(Some((&self.metric, value.to_u64().unwrap())));
+        self.next_scope.as_ref()(Scope::Write(&self.metric, value.to_u64().unwrap()));
     }
 }
 
@@ -82,7 +82,7 @@ impl<M> Timer<M> {
     /// Record a microsecond interval for this timer
     /// Can be used in place of start()/stop() if an external time interval source is used
     pub fn interval_us<V>(&self, interval_us: V) -> V where V: ToPrimitive {
-        self.next_scope.as_ref()(Some((&self.metric, interval_us.to_u64().unwrap())));
+        self.next_scope.as_ref()(Scope::Write(&self.metric, interval_us.to_u64().unwrap()));
         interval_us
     }
 
