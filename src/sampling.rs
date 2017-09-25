@@ -2,13 +2,15 @@
 
 use core::*;
 use pcg32;
+
 use std::marker::PhantomData;
+use std::sync::Arc;
 
 /// Perform random sampling of values according to the specified rate.
-pub fn sample<'ph, M, W, S>(rate: Rate, sink: S) -> SamplingSink<'ph, M, W, S>
-    where W: Writer<M>, S: Sink<M, W>
+pub fn sample<'ph, M, S>(sampling_rate: Rate, sink: S) -> SamplingSink<'ph, M, S>
+    where S: Sink<M>, M: Send + Sync
 {
-    SamplingSink::new(sink, rate)
+    SamplingSink { next_sink: sink, sampling_rate, phantom: PhantomData {} }
 }
 
 /// The metric sampling key also holds the sampling rate to apply to it.
@@ -18,51 +20,37 @@ pub struct SamplingMetric<M> {
     int_sampling_rate: u32,
 }
 
-/// The writer applies sampling logic each time a metric value is reported.
-pub struct SamplingWriter<'ph, M: 'ph, W> {
-    target: W,
-    metric: PhantomData<&'ph M>,
-}
-
-impl<'ph, M, W> Writer<SamplingMetric<M>> for SamplingWriter<'ph, M, W> where W: Writer<M> {
-    fn write(&self, metric: &SamplingMetric<M>, value: Value) {
-        if pcg32::accept_sample(metric.int_sampling_rate) {
-            self.target.write(&metric.target, value)
-        }
-    }
-}
-
 /// A sampling sink adapter.
-pub struct SamplingSink<'ph, M: 'ph, W: 'ph, S> {
-    target: S,
+pub struct SamplingSink<'ph, M: 'ph, S> {
+    next_sink: S,
     sampling_rate: Rate,
-    phantom: PhantomData<&'ph (M, W)>,
+    phantom: PhantomData<&'ph M>,
 }
 
-impl<'ph, M, W, S> SamplingSink<'ph, M, W, S> where W: Writer<M>, S: Sink<M, W> {
-    /// Create a new sampling sink adapter.
-    pub fn new(target: S, sampling_rate: Rate) -> SamplingSink<'ph, M, W, S> {
-        SamplingSink { target, sampling_rate, phantom: PhantomData {} }
-    }
-}
-
-impl<'ph, M, W, S> Sink<SamplingMetric<M>, SamplingWriter<'ph, M, W>> for SamplingSink<'ph, M, W, S>
-    where W: Writer<M>, S: Sink<M, W>
+impl<'ph, M, S> Sink<SamplingMetric<M>> for SamplingSink<'ph, M, S>
+    where S: Sink<M>, M: 'static + Send + Sync
 {
     #[allow(unused_variables)]
-    fn new_metric<STR: AsRef<str>>(&self, kind: MetricKind, name: STR, sampling: Rate)
-                                   -> SamplingMetric<M> {
+    fn new_metric(&self, kind: Kind, name: &str, sampling: Rate) -> SamplingMetric<M> {
         // TODO override only if FULL_SAMPLING else warn!()
         assert_eq!(sampling, FULL_SAMPLING_RATE, "Overriding previously set sampling rate");
 
-        let pm = self.target.new_metric(kind, name, self.sampling_rate);
+        let pm = self.next_sink.new_metric(kind, name, self.sampling_rate);
         SamplingMetric {
             target: pm,
             int_sampling_rate: pcg32::to_int_rate(self.sampling_rate),
         }
     }
 
-    fn new_writer(&self) -> SamplingWriter<'ph, M, W>   {
-        SamplingWriter { target: self.target.new_writer(), metric: PhantomData {} }
+    fn new_scope(&self) -> ScopeFn<SamplingMetric<M>> {
+        let next_scope = self.next_sink.new_scope();
+        Arc::new(move |cmd| {
+            if let Scope::Write(metric, value) = cmd {
+                if pcg32::accept_sample(metric.int_sampling_rate) {
+                    next_scope(Scope::Write(&metric.target, value))
+                }
+            }
+            next_scope(Scope::Flush)
+        })
     }
 }
