@@ -14,7 +14,7 @@ fn main() {
 
 pub fn sample_scheduled_statsd_aggregation() {
 
-    let metrics = metrics(queue(0, stdout("metrics:")));
+    let metrics = metrics(queue(0, print()));
 
     let counter = metrics.counter("counter_a");
     let timer = metrics.timer("timer_b");

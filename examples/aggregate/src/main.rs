@@ -83,7 +83,7 @@ pub fn raw_write() {
 
     // define and send metrics using raw channel API
     let counter = metrics_log.new_metric(core::Kind::Count, "count_a", core::FULL_SAMPLING_RATE);
-    metrics_log.new_scope().write(&counter, 1);
+    metrics_log.new_scope()(Some((&counter, 1)));
 }
 
 pub fn counter_to_log() {

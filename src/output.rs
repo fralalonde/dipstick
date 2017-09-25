@@ -1,42 +1,42 @@
 //! Write metrics to Generic
 
 use core::*;
+use std::sync::Arc;
 
 pub fn print() -> FnSink<String> {
     make_sink(|k, n, r| format!("{:?} {} {}", k, n, r),
               |cmd| if let Some((m, v)) = cmd {println!("{}: {}", m, v)})
 }
 
-pub fn log<STR: AsRef<str> + 'static>(prefix: STR) -> FnSink<String> {
+pub fn log<STR: AsRef<str> + 'static + Send + Sync>(prefix: STR) -> FnSink<String> {
     make_sink(move |k, n, r| format!("{}{:?} {} {}", prefix.as_ref(), k, n, r),
               |cmd| if let Some((m, v)) = cmd {info!("{}: {}", m, v)})
 }
 
 pub fn make_sink<M, MF, WF  >(make_metric: MF, make_scope: WF) -> FnSink<M>
-    where MF: Fn(Kind, &str, Rate) -> M + 'static,
-          WF: Fn(Option<(&M, Value)>) + 'static,
+    where MF: Fn(Kind, &str, Rate) -> M + Send + Sync + 'static,
+          WF: Fn(Option<(&M, Value)>) + Send + Sync + 'static,
+          M: Send + Sync,
 {
     FnSink {
-        metric_fn: Box::new(make_metric),
-        scope_fn: Box::new(make_scope),
+        metric_fn: Arc::new(make_metric),
+        scope_fn: Arc::new(make_scope),
     }
 }
 
-pub struct FnSink<M> {
-    metric_fn: Box<Fn(Kind, &str, Rate) -> M>,
-    scope_fn: Box<Fn(Option<(&M, Value)>)>,
+pub struct FnSink<M> where M: Send + Sync  {
+    metric_fn: MetricFn<M>,
+    scope_fn: ScopeFn<M>,
 }
 
-impl <M> Sink<M> for FnSink<M> {
+impl <M> Sink<M> for FnSink<M> where M: Send + Sync {
     #[allow(unused_variables)]
-    fn new_metric<STR>(&self, kind: Kind, name: STR, sampling: Rate) -> M
-        where STR: AsRef<str>
-    {
-        self.metric_fn.as_ref()(kind, name.as_ref(), sampling)
+    fn new_metric(&self, kind: Kind, name: &str, sampling: Rate) -> M {
+        self.metric_fn.as_ref()(kind, name, sampling)
     }
 
-    fn new_scope(&self) -> Box<Fn(Option<(&M, Value)>)> {
-        self.scope_fn
+    fn new_scope(&self) -> ScopeFn<M> {
+        self.scope_fn.clone()
     }
 }
 
