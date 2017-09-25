@@ -15,11 +15,12 @@ pub use num::ToPrimitive;
 
 
 /// Wrap the metrics backend to provide an application-friendly interface.
-pub fn metrics<'ph, M, S>(sink: S) -> AppMetrics<'ph, M, S> where S: Sink<M> + 'static, M: 'static {
+pub fn metrics<'ph, M, S>(sink: S) -> AppMetrics<'ph, M, S>
+    where S: Sink<M> + 'static, M: 'static, M: Send + Sync {
     let next_scope = sink.new_scope();
     AppMetrics {
         prefix: "".to_string(),
-        next_scope: Arc::from(next_scope),
+        next_scope,
         next_sink: Arc::new(sink),
         phantom: PhantomData {},
     }
@@ -30,7 +31,7 @@ pub fn metrics<'ph, M, S>(sink: S) -> AppMetrics<'ph, M, S> where S: Sink<M> + '
 /// preventing potential problems.
 pub struct Event<M> {
     metric: M,
-    next_scope: Arc<Fn(Option<(&M, Value)>)>,
+    next_scope: ScopeFn<M>,
 }
 
 impl<M> Event<M> {
@@ -43,7 +44,7 @@ impl<M> Event<M> {
 /// A counter that sends values to the metrics backend
 pub struct Counter<M> {
     metric: M,
-    next_scope: Arc<Fn(Option<(&M, Value)>)>,
+    next_scope: ScopeFn<M>,
 }
 
 impl<M> Counter<M> {
@@ -56,7 +57,7 @@ impl<M> Counter<M> {
 /// A gauge that sends values to the metrics backend
 pub struct Gauge<M> {
     metric: M,
-    next_scope: Arc<Fn(Option<(&M, Value)>)>,
+    next_scope: ScopeFn<M>,
 }
 
 impl<M> Gauge<M> {
@@ -74,7 +75,7 @@ impl<M> Gauge<M> {
 /// - with the interval_us() method, providing an externally determined microsecond interval
 pub struct Timer<M> {
     metric: M,
-    next_scope: Arc<Fn(Option<(&M, Value)>)>,
+    next_scope: ScopeFn<M>,
 }
 
 impl<M> Timer<M> {
@@ -114,14 +115,15 @@ impl<M> Timer<M> {
 }
 
 /// Variations of this should also provide control of the metric recording scope.
-pub struct AppMetrics<'ph, M, S> where M: 'ph, S: Sink<M>  {
+pub struct AppMetrics<'ph, M, S>
+    where M: 'ph, S: Sink<M>, M: Send + Sync {
     prefix: String,
-    next_scope: Arc<Fn(Option<(&M, Value)>)>,
+    next_scope: ScopeFn<M>,
     next_sink: Arc<S>,
     phantom: PhantomData<&'ph M>,
 }
 
-impl <'ph, M, S> AppMetrics<'ph, M, S> where S: Sink<M> {
+impl <'ph, M, S> AppMetrics<'ph, M, S> where S: Sink<M>, M: Send + Sync {
 
     fn qualified_name<AS>(&self, name: AS) -> String
         where AS: Into<String> + AsRef<str>
@@ -137,33 +139,33 @@ impl <'ph, M, S> AppMetrics<'ph, M, S> where S: Sink<M> {
 
     /// Get an event counter of the provided name.
     pub fn event<AS>(&self, name: AS) -> Event<M>
-        where AS: Into<String> + AsRef<str>
+        where AS: Into<String> + AsRef<str>, M: Send + Sync
     {
-        let metric = self.next_sink.new_metric(Kind::Event, self.qualified_name(name), 1.0);
+        let metric = self.next_sink.new_metric(Kind::Event, &self.qualified_name(name), 1.0);
         Event { metric, next_scope: self.next_scope.clone(), }
     }
 
     /// Get a counter of the provided name.
     pub fn counter<AS>(&self, name: AS) -> Counter<M>
-        where AS: Into<String> + AsRef<str>
+        where AS: Into<String> + AsRef<str>, M: Send + Sync
     {
-        let metric = self.next_sink.new_metric(Kind::Count, self.qualified_name(name), 1.0);
+        let metric = self.next_sink.new_metric(Kind::Count, &self.qualified_name(name), 1.0);
         Counter { metric, next_scope: self.next_scope.clone(), }
     }
 
     /// Get a timer of the provided name.
     pub fn timer<AS>(&self, name: AS) -> Timer<M>
-        where AS: Into<String> + AsRef<str>
+        where AS: Into<String> + AsRef<str>, M: Send + Sync
     {
-        let metric = self.next_sink.new_metric(Kind::Time, self.qualified_name(name), 1.0);
+        let metric = self.next_sink.new_metric(Kind::Time, &self.qualified_name(name), 1.0);
         Timer { metric, next_scope: self.next_scope.clone(), }
     }
 
     /// Get a gauge of the provided name.
     pub fn gauge<AS>(&self, name: AS) -> Gauge<M>
-        where AS: Into<String> + AsRef<str>
+        where AS: Into<String> + AsRef<str>, M: Send + Sync
     {
-        let metric = self.next_sink.new_metric(Kind::Gauge, self.qualified_name(name), 1.0);
+        let metric = self.next_sink.new_metric(Kind::Gauge, &self.qualified_name(name), 1.0);
         Gauge { metric, next_scope: self.next_scope.clone(), }
     }
 

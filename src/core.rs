@@ -1,4 +1,5 @@
 use time;
+use std::sync::Arc;
 
 /// Base type for recorded metric values.
 // TODO should this be f64? f32?
@@ -48,6 +49,22 @@ pub enum Kind {
     Time,
 }
 
+/// Metric definition function.
+/// Metrics can be defined from any thread, concurrently.
+/// The resulting metrics themselves can be also be safely shared across threads.
+/// Concurrent usage of a metric is done using threaded scopes.
+/// Shared concurrent scopes may be provided by some backends (aggregate).
+pub type MetricFn<M> = Arc<Fn(Kind, &str, Rate) -> M + Send + Sync>;
+
+/// Scope creation function.
+/// Returns a callback function to send commands to the metric scope.
+/// Used to write values to the scope or flush the scope buffer (if applicable).
+/// Simple applications may use only one scope.
+/// Complex applications may define a new scope fo each operation or request.
+/// Scopes can be moved acrossed threads (Send) but are not required to be thread-safe (Sync).
+/// Some implementations _may_ be 'Sync', otherwise queue()ing or threadlocal() can be used.
+pub type ScopeFn<M> = Arc<Fn(Option<(&M, Value)>) + Send + Sync>;
+
 /// Main trait of the metrics backend API.
 /// Defines a component that can be used when setting up a metrics backend stack.
 /// Intermediate sinks transform how metrics are defined and written:
@@ -59,18 +76,17 @@ pub enum Kind {
 /// - Log
 /// - Aggregate
 /// Print metrics to Generic.
-///
-pub trait Sink<M> {
-    fn new_metric<STR: AsRef<str>>(&self, kind: Kind, name: STR, sampling: Rate) -> M;
+pub trait Sink<M> where M: Send + Sync {
+    fn new_metric(&self, kind: Kind, name: &str, sampling: Rate) -> M;
 
     /// Returns a callback function to send scope commands.
     /// Writes can be performed by passing Some((&Metric, Value))
     /// Flushes can be performed by passing None
-    fn new_scope(&self) -> Box<Fn(Option<(&M, Value)>)>;
+    fn new_scope(&self) -> ScopeFn<M>;
 }
 
 
-pub trait AsSink<M, S: Sink<M>> {
+pub trait AsSink<M, S: Sink<M>> where M: Send + Sync {
     /// Get the metric sink.
     fn as_sink(&self) -> S;
 }

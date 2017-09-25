@@ -5,7 +5,7 @@ use ::error;
 
 use std::io::Result;
 use std::net::UdpSocket;
-use std::sync::Arc;
+use std::sync::{Arc,RwLock};
 
 pub use std::net::ToSocketAddrs;
 
@@ -35,6 +35,43 @@ pub struct StatsdMetric {
 /// Use a safe maximum size for UDP to prevent fragmentation.
 const MAX_UDP_PAYLOAD: usize = 576;
 
+//thread_local! {
+//    static SEND_BUFFER: RefCell<String> = RefCell::new(String::with_capacity(MAX_UDP_PAYLOAD));
+//}
+//
+//fn write(&self) {
+//    SEND_BUFFER.with(|cell| {
+//        let ref mut buf = cell.borrow_mut();
+//        if entry_len > buf.capacity() {
+//            // TODO report entry too big to fit in buffer (!?)
+//            return;
+//        }
+//
+//        let remaining = buf.capacity() - buf.len();
+//        if entry_len + 1 > remaining {
+//            // buffer is full, flush before appending
+//            flush(buf, &self.socket);
+//        } else {
+//            if !buf.is_empty() {
+//                // separate from previous entry
+//                buf.push('\n')
+//            }
+//            buf.push_str(&metric.prefix);
+//            buf.push_str(&value_str);
+//            buf.push_str(&metric.suffix);
+//        }
+//    });
+//}
+//
+//fn flush(&self) {
+//    SEND_BUFFER.with(|cell| {
+//        let ref mut buf = cell.borrow_mut();
+//        if !buf.is_empty() {
+//            // operation complete, flush any metrics in buffer
+//            flush(buf, &self.socket)
+//        }
+//    })
+//}
 
 /// Wrapped buffer & socket as one so that any remainding data can be flushed on Drop.
 struct ScopeBuffer {
@@ -69,7 +106,7 @@ pub struct StatsdSink {
 
 impl Sink<StatsdMetric> for StatsdSink {
 
-    fn new_metric<S: AsRef<str>>(&self, kind: Kind, name: S, sampling: Rate) -> StatsdMetric {
+    fn new_metric(&self, kind: Kind, name: &str, sampling: Rate) -> StatsdMetric {
         let mut prefix = String::with_capacity(32);
         prefix.push_str(&self.prefix);
         prefix.push_str(name.as_ref());
@@ -96,41 +133,45 @@ impl Sink<StatsdMetric> for StatsdSink {
         StatsdMetric { prefix, suffix, scale }
     }
 
-    fn new_scope(&self) -> Box<Fn(Option<(&StatsdMetric, Value)>)> {
-        let mut buf = ScopeBuffer { str: String::with_capacity(MAX_UDP_PAYLOAD), socket: self.socket.clone() };
-        Box::new(|cmd| match cmd {
+    fn new_scope(&self) -> ScopeFn<StatsdMetric> {
+        let buf = RwLock::new(ScopeBuffer { str: String::with_capacity(MAX_UDP_PAYLOAD), socket: self.socket.clone() });
+        Arc::new(move |cmd| match cmd {
             Some((metric, value)) => {
-                let scaled_value = if metric.scale != 1 {
-                    value / metric.scale
-                } else {
-                    value
-                };
-                let value_str = scaled_value.to_string();
-                let entry_len = metric.prefix.len() + value_str.len() + metric.suffix.len();
+                if let Ok(mut buf) = buf.try_write() {
+                    let scaled_value = if metric.scale != 1 {
+                        value / metric.scale
+                    } else {
+                        value
+                    };
+                    let value_str = scaled_value.to_string();
+                    let entry_len = metric.prefix.len() + value_str.len() + metric.suffix.len();
 
-                if entry_len > buf.str.capacity() {
-                    // TODO report entry too big to fit in buffer (!?)
-                    return;
-                }
-
-                let remaining = buf.str.capacity() - buf.str.len();
-                if entry_len + 1 > remaining {
-                    // buffer is full, flush before appending
-                    buf.flush();
-                } else {
-                    if !buf.str.is_empty() {
-                        // separate from previous entry
-                        buf.str.push('\n')
+                    if entry_len > buf.str.capacity() {
+                        // TODO report entry too big to fit in buffer (!?)
+                        return;
                     }
-                    buf.str.push_str(&metric.prefix);
-                    buf.str.push_str(&value_str);
-                    buf.str.push_str(&metric.suffix);
+
+                    let remaining = buf.str.capacity() - buf.str.len();
+                    if entry_len + 1 > remaining {
+                        // buffer is full, flush before appending
+                        buf.flush();
+                    } else {
+                        if !buf.str.is_empty() {
+                            // separate from previous entry
+                            buf.str.push('\n')
+                        }
+                        buf.str.push_str(&metric.prefix);
+                        buf.str.push_str(&value_str);
+                        buf.str.push_str(&metric.suffix);
+                    }
                 }
             },
             None => {
-                if !buf.str.is_empty() {
-                    // operation complete, flush any metrics in buffer
-                    buf.flush();
+                if let Ok(mut buf) = buf.try_write() {
+                    if !buf.str.is_empty() {
+                        // operation complete, flush any metrics in buffer
+                        buf.flush();
+                    }
                 }
             }
         })

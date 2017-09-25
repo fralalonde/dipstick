@@ -19,14 +19,16 @@ lazy_static! {
 }
 
 /// Schedules the publisher to run at recurrent intervals
-pub fn publish_every<M, S>(duration: Duration, source: AggregateSource, target: S) where S: Sink<M> + 'static + Send + Sync {
+pub fn publish_every<M, S>(duration: Duration, source: AggregateSource, target: S)
+    where S: Sink<M> + 'static + Send + Sync, M: Send + Sync {
     EXEC.schedule_fixed_rate(duration, duration, move |_| publish(&source, &target) );
 }
 
 /// Define and write metrics from aggregated scores to the target channel
 /// If this is called repeatedly it can be a good idea to use the metric cache
 /// to prevent new metrics from being created every time.
-pub fn publish<M, S>(source: &AggregateSource, target: &S) where S: Sink<M> {
+pub fn publish<M, S>(source: &AggregateSource, target: &S)
+    where S: Sink<M>, M: Send + Sync {
     let scope = target.new_scope();
     source.for_each(|metric| {
         match metric.read_and_reset() {
@@ -36,7 +38,7 @@ pub fn publish<M, S>(source: &AggregateSource, target: &S) where S: Sink<M> {
             }
             ScoresSnapshot::Event { hit } => {
                 let name = format!("{}.hit", &metric.name);
-                let temp_metric = target.new_metric(Kind::Count, name, 1.0);
+                let temp_metric = target.new_metric(Kind::Count, &name, 1.0);
                 scope(Some((&temp_metric, hit)));
             }
             ScoresSnapshot::Value { hit, sum, max, min } => {
@@ -50,7 +52,7 @@ pub fn publish<M, S>(source: &AggregateSource, target: &S) where S: Sink<M> {
                             // - integer division is not rounding
                             // assuming values will still be good enough to be useful
                             let name = format!("{}.avg", &metric.name);
-                            let temp_metric = target.new_metric(metric.kind, name, 1.0);
+                            let temp_metric = target.new_metric(metric.kind, &name, 1.0);
                             scope(Some((&temp_metric, sum / hit)));
                         }
                         _ => (),
@@ -61,22 +63,22 @@ pub fn publish<M, S>(source: &AggregateSource, target: &S) where S: Sink<M> {
                         &Kind::Count |
                         &Kind::Time => {
                             let name = format!("{}.sum", &metric.name);
-                            let temp_metric = target.new_metric(metric.kind, name, 1.0);
+                            let temp_metric = target.new_metric(metric.kind, &name, 1.0);
                             scope(Some((&temp_metric, sum)));
 
                             let name = format!("{}.hit", &metric.name);
-                            let temp_metric = target.new_metric(metric.kind, name, 1.0);
+                            let temp_metric = target.new_metric(metric.kind, &name, 1.0);
                             scope(Some((&temp_metric, hit)));
                         }
                         _ => (),
                     }
 
                     let name = format!("{}.max", &metric.name);
-                    let temp_metric = target.new_metric(Kind::Gauge, name, 1.0);
+                    let temp_metric = target.new_metric(Kind::Gauge, &name, 1.0);
                     scope(Some((&temp_metric, max)));
 
                     let name = format!("{}.min", &metric.name);
-                    let temp_metric = target.new_metric(Kind::Gauge, name, 1.0);
+                    let temp_metric = target.new_metric(Kind::Gauge, &name, 1.0);
                     scope(Some((&temp_metric, min)));
                 }
             }

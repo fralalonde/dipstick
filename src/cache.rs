@@ -2,14 +2,15 @@
 
 // TODO one cache per metric kind (why?)
 
-use core::{Sink, Value, Kind, Rate};
+use core::*;
 use cached::{SizedCache, Cached};
 use std::sync::{Arc,RwLock};
 
 /// Cache metrics to prevent them from being re-defined on every use.
 /// Use of this should be transparent, this has no effect on the values.
 /// Stateful sinks (i.e. Aggregate) may naturally cache their definitions.
-pub fn cache<M, S>(size: usize, sink: S) -> MetricCache<M, S> where S: Sink<M>
+pub fn cache<M, S>(size: usize, sink: S) -> MetricCache<M, S>
+    where S: Sink<M>, M: Send + Sync
 {
     let cache = RwLock::new(SizedCache::with_capacity(size));
     MetricCache { next_sink: sink, cache }
@@ -26,14 +27,12 @@ pub struct MetricCache<M, S> {
 }
 
 impl<M, S> Sink<Arc<M>> for MetricCache<M, S>
-    where S: Sink<M>, M: 'static
+    where S: Sink<M>, M: 'static + Send + Sync
 {
     #[allow(unused_variables)]
-    fn new_metric<STR>(&self, kind: Kind, name: STR, sampling: Rate) -> Arc<M>
-            where STR: AsRef<str>
-    {
+    fn new_metric(&self, kind: Kind, name: &str, sampling: Rate) -> Arc<M> {
         // TODO use ref for key, not owned
-        let key = name.as_ref().to_string();
+        let key = name.to_string();
         {
             let mut cache = self.cache.write().unwrap();
             let cached_metric = cache.cache_get(&key);
@@ -49,10 +48,10 @@ impl<M, S> Sink<Arc<M>> for MetricCache<M, S>
         new_metric
     }
 
-    fn new_scope(&self) -> Box<Fn(Option<(&Arc<M>, Value)>)> {
+    fn new_scope(&self) -> ScopeFn<Arc<M>> {
         let next_scope = self.next_sink.new_scope();
-       Box::new(|cmd| match cmd {
-            Some((metric, value)) => next_scope(Some((metric.as_ref(), value))),
+        Arc::new(move |cmd| match cmd {
+            Some((metric, value)) => next_scope(Some((metric, value))),
             None => next_scope(None)
         })
     }

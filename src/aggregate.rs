@@ -194,8 +194,8 @@ pub struct AggregateSink(Arc<RwLock<Vec<Arc<MetricScores>>>>);
 
 impl Sink<Arc<MetricScores>> for AggregateSink {
     #[allow(unused_variables)]
-    fn new_metric<S: AsRef<str>>(&self, kind: Kind, name: S, sampling: Rate) -> Arc<MetricScores> {
-        let name = name.as_ref().to_string();
+    fn new_metric(&self, kind: Kind, name: &str, sampling: Rate) -> Arc<MetricScores> {
+        let name = name.to_string();
         let metric = Arc::new(MetricScores {
             kind,
             name,
@@ -214,8 +214,8 @@ impl Sink<Arc<MetricScores>> for AggregateSink {
         metric
     }
 
-    fn new_scope(&self) -> Box<Fn(Option<(&Arc<MetricScores>, Value)>)> {
-        Box::new(|cmd| match cmd {
+    fn new_scope(&self) -> ScopeFn<Arc<MetricScores>> {
+        Arc::new(|cmd| match cmd {
             Some((metric, value)) => metric.write(value as usize),
             None => {}
         })
