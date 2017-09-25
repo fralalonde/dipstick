@@ -2,10 +2,7 @@
 //! sending the aggregated results to the console every three seconds.
 
 #[macro_use] extern crate dipstick;
-extern crate scheduled_executor;
 
-use std::thread::sleep;
-use scheduled_executor::CoreExecutor;
 use std::time::Duration;
 use dipstick::*;
 

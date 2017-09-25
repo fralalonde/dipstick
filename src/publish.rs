@@ -12,16 +12,26 @@
 use core::*;
 use aggregate::{AggregateSource, ScoresSnapshot};
 use std::time::Duration;
-use scheduled_executor::CoreExecutor;
+use std::thread;
+use std::sync::atomic::AtomicUsize;
 
-lazy_static! {
-    static ref EXEC: CoreExecutor = CoreExecutor::new().unwrap();
+fn schedule<F>(every: Duration, operation: F)
+    where F: Fn() -> () + Send + 'static
+{
+    thread::spawn(move || {
+        loop {
+            thread::sleep(every);
+            // TODO add cancel
+            operation();
+        }
+    });
 }
 
 /// Schedules the publisher to run at recurrent intervals
 pub fn publish_every<M, S>(duration: Duration, source: AggregateSource, target: S)
-    where S: Sink<M> + 'static + Send + Sync, M: Send + Sync {
-    EXEC.schedule_fixed_rate(duration, duration, move |_| publish(&source, &target) );
+    where S: Sink<M> + 'static + Send + Sync, M: Send + Sync
+{
+    schedule(duration, move || publish(&source, &target))
 }
 
 /// Define and write metrics from aggregated scores to the target channel
