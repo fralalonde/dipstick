@@ -24,15 +24,11 @@ extern crate test;
 extern crate log as log_crate; // avoid namespace conflict with local 'log' module
 
 #[macro_use]
-extern crate lazy_static;
-
-#[macro_use]
 extern crate error_chain;
 
 extern crate time;
 extern crate cached;
 extern crate num;
-extern crate scheduled_executor;
 
 mod pcg32;
 
