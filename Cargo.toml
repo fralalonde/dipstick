@@ -1,8 +1,9 @@
 [workspace]
 members = [
   "./",
+  "examples/counter_timer_gauge/",
   "examples/multi_outs/",
-  "examples/aggregate_statsd/",
+  "examples/aggregate_print/",
   "examples/async_print/",
   "examples/raw_log/",
 ]
