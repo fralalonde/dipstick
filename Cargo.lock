@@ -1,5 +1,5 @@
 [root]
-name = "queued"
+name = "raw_sink"
 version = "0.0.0"
 dependencies = [
  "dipstick 0.3.5-pre",
@@ -220,6 +220,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "multi_print"
+version = "0.0.0"
+dependencies = [
+ "dipstick 0.3.5-pre",
+ "scheduled-executor 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "net2"
 version = "0.2.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -303,6 +311,14 @@ version = "1.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "libc 0.2.29 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "queued"
+version = "0.0.0"
+dependencies = [
+ "dipstick 0.3.5-pre",
+ "scheduled-executor 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

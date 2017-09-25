@@ -36,7 +36,7 @@ extern crate scheduled_executor;
 
 mod pcg32;
 
-pub mod error {
+mod error {
     //! Dipstick uses error_chain to handle the critical errors that might crop up when assembling the backend.
     error_chain! {
         foreign_links {
@@ -45,33 +45,37 @@ pub mod error {
     }
 }
 
+pub mod core;
+pub mod macros;
+pub mod output;
+pub mod app;
+
 pub mod sampling;
 pub mod aggregate;
 pub mod publish;
 pub mod statsd;
-pub mod log;
 pub mod cache;
 pub mod multi;
 pub mod queue;
-pub mod app;
-pub mod macros;
-pub mod core;
-pub mod console;
-pub mod source;
+pub mod fnsink;
 
 // input
 pub use app::metrics;
+
+// generic
+pub use fnsink::make_sink;
+
+// buffering
+pub use queue::queue;
 
 // transform
 pub use cache::cache;
 pub use sampling::sample;
 
-// store + forward
+// pack + forward
 pub use aggregate::aggregate;
 pub use publish::{publish, publish_every};
 
 // output
-pub use log::log;
-pub use console::stdout;
+pub use output::{log, print};
 pub use statsd::statsd;
-pub use queue::queue;

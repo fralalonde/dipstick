@@ -1,4 +1,9 @@
+//! Dipstick metrics core types and traits.
+//! This is mostly centered around the backend.
+//! Application-facing types are in the `app` module.
+
 use time;
+use std::sync::Arc;
 
 /// Base type for recorded metric values.
 // TODO should this be f64? f32?
@@ -37,7 +42,7 @@ pub const FULL_SAMPLING_RATE: Rate = 1.0;
 
 /// Used to differentiate between metric kinds in the backend.
 #[derive(Debug, Copy, Clone)]
-pub enum MetricKind {
+pub enum Kind {
     /// Was one item handled?
     Event,
     /// How many items were handled?
@@ -46,6 +51,30 @@ pub enum MetricKind {
     Gauge,
     /// How long did this take?
     Time,
+}
+
+/// Metric definition function.
+/// Metrics can be defined from any thread, concurrently.
+/// The resulting metrics themselves can be also be safely shared across threads.
+/// Concurrent usage of a metric is done using threaded scopes.
+/// Shared concurrent scopes may be provided by some backends (aggregate).
+pub type MetricFn<M> = Arc<Fn(Kind, &str, Rate) -> M + Send + Sync>;
+
+/// Scope creation function.
+/// Returns a callback function to send commands to the metric scope.
+/// Used to write values to the scope or flush the scope buffer (if applicable).
+/// Simple applications may use only one scope.
+/// Complex applications may define a new scope fo each operation or request.
+/// Scopes can be moved acrossed threads (Send) but are not required to be thread-safe (Sync).
+/// Some implementations _may_ be 'Sync', otherwise queue()ing or threadlocal() can be used.
+pub type ScopeFn<M> = Arc<Fn(Scope<M>) + Send + Sync>;
+
+/// Whether to write or flush the scope.
+pub enum Scope<'a, M: 'a> {
+    /// Write the value for the metric.
+    Write(&'a M, Value),
+    /// Flush the scope buffer, if applicable.
+    Flush,
 }
 
 /// Main trait of the metrics backend API.
@@ -58,27 +87,19 @@ pub enum MetricKind {
 /// - Statsd
 /// - Log
 /// - Aggregate
-pub trait Sink<M, W> where W: Writer<M> {
-    /// Define a new sink-specific metric that can be used for writing values.
-    fn new_metric<STR: AsRef<str>>(&self, kind: MetricKind, name: STR, sampling: Rate) -> M;
+/// Print metrics to Generic.
+pub trait Sink<M> where M: Send + Sync {
+    /// Define a new metric instrument of the requested kind, with the specified name and sample rate.
+    fn new_metric(&self, kind: Kind, name: &str, sampling: Rate) -> M;
 
-    /// Open a metric writer to write metrics to.
-    /// Some sinks reuse the same writer while others allocate resources for every new writer.
-    fn new_writer(&self) -> W;
+    /// Returns a callback function to send scope commands.
+    /// Writes can be performed by passing Some((&Metric, Value))
+    /// Flushes can be performed by passing None
+    fn new_scope(&self) -> ScopeFn<M>;
 }
 
-/// A sink-specific target for writing metrics to.
-pub trait Writer<M> {
-    /// Write a single metric value
-    fn write(&self, metric: &M, value: Value);
-
-    /// Some sinks may have buffering capability.
-    /// Flushing makes sure all previously written metrics are propagated
-    /// down the sink chain and to any applicable external outputs.
-    fn flush(&self) {}
-}
-
-pub trait AsSink<M, W, S> where W: Writer<M>, S: Sink<M, W> {
+/// Expose the `Sink` nature of a multi-faceted struct.
+pub trait AsSink<M, S: Sink<M>> where M: Send + Sync {
     /// Get the metric sink.
     fn as_sink(&self) -> S;
 }

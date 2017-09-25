@@ -1,3 +1,6 @@
+//! A sample application continuously aggregating metrics and
+//! sending the aggregated results to statsd every second.
+
 #[macro_use] extern crate dipstick;
 extern crate scheduled_executor;
 
@@ -5,9 +8,6 @@ use std::thread::sleep;
 use scheduled_executor::CoreExecutor;
 use std::time::Duration;
 use dipstick::*;
-
-// TODO have separate _raw_ example
-use dipstick::core::{Sink, Writer, self};
 
 fn main() {
     sample_scheduled_statsd_aggregation()
@@ -62,33 +62,4 @@ pub fn sample_scheduled_statsd_aggregation() {
 //        });
     }
 
-}
-
-pub fn logging_and_statsd() {
-
-    let statsd = statsd("localhost:8125", "goodbye.").unwrap();
-    let logging = log("metrics");
-    metrics((logging, statsd));
-
-}
-
-pub fn sampling_statsd() -> dipstick::error::Result<()> {
-    metrics(sample(0.1, statsd("localhost:8125", "goodbye.")?));
-    Ok(())
-}
-
-pub fn raw_write() {
-    // setup dual metric channels
-    let metrics_log = log("metrics");
-
-    // define and send metrics using raw channel API
-    let counter = metrics_log.new_metric(core::MetricKind::Count, "count_a", core::FULL_SAMPLING_RATE);
-    metrics_log.new_writer().write(&counter, 1);
-}
-
-pub fn counter_to_log() {
-    let metrics_log = log("metrics");
-    let metrics = metrics(metrics_log);
-    let counter = metrics.counter("count_a");
-    counter.count(10.2);
 }

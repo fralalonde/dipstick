@@ -1,3 +1,5 @@
+//! A sample application asynchronously printing metrics to stdout.
+
 #[macro_use] extern crate dipstick;
 extern crate scheduled_executor;
 
@@ -6,15 +8,11 @@ use scheduled_executor::CoreExecutor;
 use std::time::Duration;
 use dipstick::*;
 
-use dipstick::core::{Sink, Writer, self};
+use dipstick::core::{Sink, self};
 
 fn main() {
-    sample_scheduled_statsd_aggregation()
-}
 
-pub fn sample_scheduled_statsd_aggregation() {
-
-    let metrics = metrics(queue(0, stdout("metrics:")));
+    let metrics = metrics(queue(0, print()));
 
     let counter = metrics.counter("counter_a");
     let timer = metrics.timer("timer_b");
