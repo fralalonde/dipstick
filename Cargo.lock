@@ -1,6 +1,6 @@
 [root]
 name = "raw_sink"
-version = "0.0.0"
+version = "0.4.2"
 dependencies = [
  "dipstick 0.4.2-alpha.0",
  "scheduled-executor 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
