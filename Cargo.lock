@@ -75,6 +75,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "counter_timer_gauge"
+version = "0.0.0"
+dependencies = [
+ "dipstick 0.3.5-pre",
+ "scheduled-executor 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "custom_derive"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
