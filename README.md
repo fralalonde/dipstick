@@ -79,3 +79,4 @@ of any kind at this point. See the following list for any potential caveats :
 - more example apps
 - A cool logo 
 - method annotation processors `#[timer("name")]`
+- fastsinks (M / &M) vs. safesinks (Arc<M>) 

@@ -181,21 +181,23 @@ impl AsSource for Aggregator {
     }
 }
 
-impl AsSink<Arc<MetricScores>, AggregateSink> for Aggregator {
+impl AsSink<Aggregate, AggregateSink> for Aggregator {
     fn as_sink(&self) -> AggregateSink {
         AggregateSink(self.metrics.clone())
     }
 }
 
+pub type Aggregate = Arc<MetricScores>;
+
 /// A sink where to send metrics for aggregation.
 /// The parameters of aggregation may be set upon creation.
 /// Just `clone()` to use as a shared aggregator.
 #[derive(Clone)]
-pub struct AggregateSink(Arc<RwLock<Vec<Arc<MetricScores>>>>);
+pub struct AggregateSink(Arc<RwLock<Vec<Aggregate>>>);
 
-impl Sink<Arc<MetricScores>> for AggregateSink {
+impl Sink<Aggregate> for AggregateSink {
     #[allow(unused_variables)]
-    fn new_metric(&self, kind: Kind, name: &str, sampling: Rate) -> Arc<MetricScores> {
+    fn new_metric(&self, kind: Kind, name: &str, sampling: Rate) -> Aggregate {
         let name = name.to_string();
         let metric = Arc::new(MetricScores {
             kind,
@@ -215,7 +217,7 @@ impl Sink<Arc<MetricScores>> for AggregateSink {
         metric
     }
 
-    fn new_scope(&self) -> ScopeFn<Arc<MetricScores>> {
+    fn new_scope(&self) -> ScopeFn<Aggregate> {
         Arc::new(|cmd| match cmd {
             Scope::Write(metric, value) => metric.write(value as usize),
             Scope::Flush => {}

@@ -53,13 +53,6 @@ pub enum Kind {
     Time,
 }
 
-/// Metric definition function.
-/// Metrics can be defined from any thread, concurrently.
-/// The resulting metrics themselves can be also be safely shared across threads.
-/// Concurrent usage of a metric is done using threaded scopes.
-/// Shared concurrent scopes may be provided by some backends (aggregate).
-pub type MetricFn<M> = Arc<Fn(Kind, &str, Rate) -> M + Send + Sync>;
-
 /// Scope creation function.
 /// Returns a callback function to send commands to the metric scope.
 /// Used to write values to the scope or flush the scope buffer (if applicable).
@@ -69,10 +62,14 @@ pub type MetricFn<M> = Arc<Fn(Kind, &str, Rate) -> M + Send + Sync>;
 /// Some implementations _may_ be 'Sync', otherwise queue()ing or threadlocal() can be used.
 pub type ScopeFn<M> = Arc<Fn(Scope<M>) + Send + Sync>;
 
-/// Whether to write or flush the scope.
+/// An method dispatching command enum to manipulate metric scopes.
+/// Replaces a potential `Writer` trait that would have methods `write` and `flush`.
+/// Using a command pattern allows buffering, async queuing and inline definition of writers.
 pub enum Scope<'a, M: 'a> {
     /// Write the value for the metric.
+    /// Takes a reference to minimize overhead in single-threaded scenarios.
     Write(&'a M, Value),
+
     /// Flush the scope buffer, if applicable.
     Flush,
 }

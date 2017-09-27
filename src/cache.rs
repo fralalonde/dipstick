@@ -3,7 +3,7 @@
 // TODO one cache per metric kind (why?)
 
 use core::*;
-use cached::{SizedCache, Cached};
+use cached::{Cached as CCC, self};
 use std::sync::{Arc,RwLock};
 
 /// Cache metrics to prevent them from being re-defined on every use.
@@ -12,25 +12,25 @@ use std::sync::{Arc,RwLock};
 pub fn cache<M, S>(size: usize, sink: S) -> MetricCache<M, S>
     where S: Sink<M>, M: Send + Sync
 {
-    let cache = RwLock::new(SizedCache::with_capacity(size));
+    let cache = RwLock::new(cached::SizedCache::with_capacity(size));
     MetricCache { next_sink: sink, cache }
 }
 
 /// The cache key copies the target key.
-pub type CachedKey<M> = Arc<M>;
+pub type Cached<M> = Arc<M>;
 
 /// A cache to help with ad-hoc defined metrics
 /// Does not alter the values of the metrics
 pub struct MetricCache<M, S> {
     next_sink: S,
-    cache: RwLock<SizedCache<String, CachedKey<M>>>,
+    cache: RwLock<cached::SizedCache<String, Cached<M>>>,
 }
 
-impl<M, S> Sink<Arc<M>> for MetricCache<M, S>
+impl<M, S> Sink<Cached<M>> for MetricCache<M, S>
     where S: Sink<M>, M: 'static + Send + Sync
 {
     #[allow(unused_variables)]
-    fn new_metric(&self, kind: Kind, name: &str, sampling: Rate) -> Arc<M> {
+    fn new_metric(&self, kind: Kind, name: &str, sampling: Rate) -> Cached<M> {
         // TODO use ref for key, not owned
         let key = name.to_string();
         {
