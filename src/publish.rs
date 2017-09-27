@@ -4,16 +4,13 @@
 //! use dipstick::*;
 //!
 //! let (sink, source) = aggregate();
-//! let publisher = publish(source, log("aggregated"));
-//!
-//! publisher.publish()
+//! publish(&source, &log("aggregated"));
 //! ```
 
 use core::*;
 use aggregate::{AggregateSource, ScoresSnapshot};
 use std::time::Duration;
 use std::thread;
-use std::sync::atomic::AtomicUsize;
 
 fn schedule<F>(every: Duration, operation: F)
     where F: Fn() -> () + Send + 'static
@@ -48,14 +45,14 @@ pub fn publish<M, S>(source: &AggregateSource, target: &S)
             }
             ScoresSnapshot::Event { hit } => {
                 let name = format!("{}.hit", &metric.name);
-                let temp_metric = target.new_metric(Kind::Count, &name, 1.0);
+                let temp_metric = target.new_metric(Kind::Counter, &name, 1.0);
                 scope(Scope::Write(&temp_metric, hit));
             }
             ScoresSnapshot::Value { hit, sum, max, min } => {
                 if hit > 0 {
                     match &metric.kind {
-                        &Kind::Count |
-                        &Kind::Time |
+                        &Kind::Counter |
+                        &Kind::Timer |
                         &Kind::Gauge => {
                             // NOTE best-effort averaging
                             // - hit and sum are not incremented nor read as one
@@ -70,8 +67,8 @@ pub fn publish<M, S>(source: &AggregateSource, target: &S)
 
                     match &metric.kind {
                         // do not report gauges sum and hit, they are meaningless
-                        &Kind::Count |
-                        &Kind::Time => {
+                        &Kind::Counter |
+                        &Kind::Timer => {
                             let name = format!("{}.sum", &metric.name);
                             let temp_metric = target.new_metric(metric.kind, &name, 1.0);
                             scope(Scope::Write(&temp_metric, sum));

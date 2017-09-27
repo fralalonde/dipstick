@@ -30,14 +30,14 @@ mod test {
     #[test]
     fn sink_print() {
         let c = super::print();
-        let m = c.new_metric(Kind::Event, "test", 1.0);
+        let m = c.new_metric(Kind::Marker, "test", 1.0);
         c.new_scope()(Scope::Write(&m, 33));
     }
 
     #[test]
     fn log_print() {
         let c = super::log("log prefix");
-        let m = c.new_metric(Kind::Event, "test", 1.0);
+        let m = c.new_metric(Kind::Marker, "test", 1.0);
         c.new_scope()(Scope::Write(&m, 33));
     }
 
