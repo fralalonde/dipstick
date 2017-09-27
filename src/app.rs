@@ -5,24 +5,20 @@
 //!
 //! It should also allows additional per-metric configuration parameters.
 
-use std::sync::Arc;
-
 use core::*;
-use std::marker::PhantomData;
+use std::sync::Arc;
 
 // TODO define an 'AsValue' trait + impl for supported number types, then drop 'num' crate
 pub use num::ToPrimitive;
 
-
 /// Wrap the metrics backend to provide an application-friendly interface.
-pub fn metrics<'ph, M, S>(sink: S) -> AppMetrics<'ph, M, S>
+pub fn metrics<M, S>(sink: S) -> AppMetrics<M, S>
     where S: Sink<M> + 'static, M: 'static, M: Send + Sync {
     let next_scope = sink.new_scope();
     AppMetrics {
         prefix: "".to_string(),
         next_scope,
         next_sink: Arc::new(sink),
-        phantom: PhantomData {},
     }
 }
 
@@ -115,15 +111,14 @@ impl<M> Timer<M> {
 }
 
 /// Variations of this should also provide control of the metric recording scope.
-pub struct AppMetrics<'ph, M, S>
-    where M: 'ph, S: Sink<M>, M: Send + Sync {
+pub struct AppMetrics<M, S>
+    where  S: Sink<M>, M: Send + Sync {
     prefix: String,
     next_scope: ScopeFn<M>,
     next_sink: Arc<S>,
-    phantom: PhantomData<&'ph M>,
 }
 
-impl <'ph, M, S> AppMetrics<'ph, M, S> where S: Sink<M>, M: Send + Sync {
+impl <M, S> AppMetrics<M, S> where S: Sink<M>, M: Send + Sync {
 
     fn qualified_name<AS>(&self, name: AS) -> String
         where AS: Into<String> + AsRef<str>
@@ -176,7 +171,6 @@ impl <'ph, M, S> AppMetrics<'ph, M, S> where S: Sink<M>, M: Send + Sync {
             prefix: prefix.into(),
             next_sink: self.next_sink.clone(),
             next_scope: self.next_scope.clone(),
-            phantom: PhantomData {},
         }
     }
 }

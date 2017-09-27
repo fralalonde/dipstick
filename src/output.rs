@@ -5,13 +5,17 @@ use fnsink::*;
 /// Write metric values to stdout using `println!`.
 pub fn print() -> FnSink<String> {
     make_sink(|k, n, r| format!("{:?} {} {}", k, n, r),
-                 |cmd| if let Scope::Write(m, v) = cmd {println!("{}: {}", m, v)})
+                 |cmd| if let Scope::Write(m, v) = cmd {
+                     println!("{}: {}", m, v)
+                 })
 }
 
 /// Write metric values to the standard log using `info!`.
 pub fn log<STR: AsRef<str> + 'static + Send + Sync>(prefix: STR) -> FnSink<String> {
     make_sink(move |k, n, r| format!("{}{:?} {} {}", prefix.as_ref(), k, n, r),
-                 |cmd| if let Scope::Write(m, v) = cmd {info!("{}: {}", m, v)})
+                 |cmd| if let Scope::Write(m, v) = cmd {
+                     info!("{}: {}", m, v)
+                 })
 }
 
 /// Special sink that discards all metric values sent to it.
