@@ -30,6 +30,7 @@ pub fn queue<M, S>(queue_size: usize, sink: S) -> MetricQueue<M, S>
 /// Thread safe sender to the queue
 pub type QueueSender<M> = mpsc::SyncSender<QueueCommand<M>>;
 
+/// Carry the scope command over the queue, from the sender, to be executed by the receiver.
 pub struct QueueCommand<M> {
     /// If Some(), the metric and value to write.
     /// If None, flush the scope

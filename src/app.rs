@@ -25,12 +25,12 @@ pub fn metrics<M, S>(sink: S) -> AppMetrics<M, S>
 /// A monotonic counter metric.
 /// Since value is only ever increased by one, no value parameter is provided,
 /// preventing potential problems.
-pub struct Event<M> {
+pub struct Marker<M> {
     metric: M,
     next_scope: ScopeFn<M>,
 }
 
-impl<M> Event<M> {
+impl<M> Marker<M> {
     /// Record a single event occurence.
     pub fn mark(&self) {
         self.next_scope.as_ref()(Scope::Write(&self.metric, 1));
@@ -133,18 +133,18 @@ impl <M, S> AppMetrics<M, S> where S: Sink<M>, M: Send + Sync {
     }
 
     /// Get an event counter of the provided name.
-    pub fn event<AS>(&self, name: AS) -> Event<M>
+    pub fn marker<AS>(&self, name: AS) -> Marker<M>
         where AS: Into<String> + AsRef<str>, M: Send + Sync
     {
-        let metric = self.next_sink.new_metric(Kind::Event, &self.qualified_name(name), 1.0);
-        Event { metric, next_scope: self.next_scope.clone(), }
+        let metric = self.next_sink.new_metric(Kind::Marker, &self.qualified_name(name), 1.0);
+        Marker { metric, next_scope: self.next_scope.clone(), }
     }
 
     /// Get a counter of the provided name.
     pub fn counter<AS>(&self, name: AS) -> Counter<M>
         where AS: Into<String> + AsRef<str>, M: Send + Sync
     {
-        let metric = self.next_sink.new_metric(Kind::Count, &self.qualified_name(name), 1.0);
+        let metric = self.next_sink.new_metric(Kind::Counter, &self.qualified_name(name), 1.0);
         Counter { metric, next_scope: self.next_scope.clone(), }
     }
 
@@ -152,7 +152,7 @@ impl <M, S> AppMetrics<M, S> where S: Sink<M>, M: Send + Sync {
     pub fn timer<AS>(&self, name: AS) -> Timer<M>
         where AS: Into<String> + AsRef<str>, M: Send + Sync
     {
-        let metric = self.next_sink.new_metric(Kind::Time, &self.qualified_name(name), 1.0);
+        let metric = self.next_sink.new_metric(Kind::Timer, &self.qualified_name(name), 1.0);
         Timer { metric, next_scope: self.next_scope.clone(), }
     }
 

@@ -76,9 +76,9 @@ impl Sink<StatsdMetric> for StatsdSink {
         let mut suffix = String::with_capacity(16);
         suffix.push('|');
         suffix.push_str(match kind {
-            Kind::Event | Kind::Count => "c",
+            Kind::Marker | Kind::Counter => "c",
             Kind::Gauge => "g",
-            Kind::Time => "ms",
+            Kind::Timer => "ms",
         });
 
         if sampling < FULL_SAMPLING_RATE {
@@ -87,7 +87,7 @@ impl Sink<StatsdMetric> for StatsdSink {
         }
 
         let scale = match kind {
-            Kind::Time => 1000,
+            Kind::Timer => 1000,
             _ => 1
         };
 

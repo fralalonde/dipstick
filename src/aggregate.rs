@@ -15,8 +15,8 @@ use std::usize;
 /// let (sink, source) = aggregate();
 /// let metrics = metrics(sink);
 ///
-/// metrics.event("my_event").mark();
-/// metrics.event("my_event").mark();
+/// metrics.marker("my_event").mark();
+/// metrics.marker("my_event").mark();
 /// ```
 pub fn aggregate() -> (AggregateSink, AggregateSource) {
     let agg = Aggregator::new();
@@ -203,7 +203,7 @@ impl Sink<Aggregate> for AggregateSink {
             kind,
             name,
             score: match kind {
-                Kind::Event => InnerScores::Event { hit: AtomicUsize::new(0) },
+                Kind::Marker => InnerScores::Event { hit: AtomicUsize::new(0) },
                 _ => InnerScores::Value {
                     hit: AtomicUsize::new(0),
                     sum: AtomicUsize::new(0),
@@ -236,7 +236,7 @@ mod microbench {
     #[bench]
     fn time_bench_write_event(b: &mut Bencher) {
         let (sink, source) = aggregate();
-        let metric = sink.new_metric(Kind::Event, &"event_a", 1.0);
+        let metric = sink.new_metric(Kind::Marker, &"event_a", 1.0);
         let scope = sink.new_scope();
         b.iter(|| scope(Scope::Write(&metric, 1)));
     }
@@ -245,7 +245,7 @@ mod microbench {
     #[bench]
     fn time_bench_write_count(b: &mut Bencher) {
         let (sink, source) = aggregate();
-        let metric = sink.new_metric(Kind::Count, &"count_a", 1.0);
+        let metric = sink.new_metric(Kind::Counter, &"count_a", 1.0);
         let scope = sink.new_scope();
         b.iter(|| scope(Scope::Write(&metric, 1)));
     }
@@ -260,7 +260,7 @@ mod microbench {
     #[bench]
     fn time_bench_read_count(b: &mut Bencher) {
         let (sink, source) = aggregate();
-        let metric = sink.new_metric(Kind::Count, &"count_a", 1.0);
+        let metric = sink.new_metric(Kind::Counter, &"count_a", 1.0);
         b.iter(|| metric.read_and_reset());
     }
 

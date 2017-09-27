@@ -1,8 +1,8 @@
 [root]
 name = "raw_sink"
-version = "0.4.4-alpha.0"
+version = "0.0.0"
 dependencies = [
- "dipstick 0.4.3-alpha.0",
+ "dipstick 0.4.4-alpha.0",
  "scheduled-executor 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -10,7 +10,7 @@ dependencies = [
 name = "aggregate"
 version = "0.0.0"
 dependencies = [
- "dipstick 0.4.3-alpha.0",
+ "dipstick 0.4.4-alpha.0",
  "scheduled-executor 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -83,7 +83,7 @@ dependencies = [
 name = "counter_timer_gauge"
 version = "0.0.0"
 dependencies = [
- "dipstick 0.4.3-alpha.0",
+ "dipstick 0.4.4-alpha.0",
  "scheduled-executor 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -103,7 +103,7 @@ dependencies = [
 
 [[package]]
 name = "dipstick"
-version = "0.4.3-alpha.0"
+version = "0.4.4-alpha.0"
 dependencies = [
  "cached 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "error-chain 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -217,7 +217,7 @@ dependencies = [
 name = "multi_print"
 version = "0.0.0"
 dependencies = [
- "dipstick 0.4.3-alpha.0",
+ "dipstick 0.4.4-alpha.0",
  "scheduled-executor 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -311,7 +311,7 @@ dependencies = [
 name = "queued"
 version = "0.0.0"
 dependencies = [
- "dipstick 0.4.3-alpha.0",
+ "dipstick 0.4.4-alpha.0",
  "scheduled-executor 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 

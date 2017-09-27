@@ -44,13 +44,13 @@ pub const FULL_SAMPLING_RATE: Rate = 1.0;
 #[derive(Debug, Copy, Clone)]
 pub enum Kind {
     /// Was one item handled?
-    Event,
+    Marker,
     /// How many items were handled?
-    Count,
+    Counter,
     /// How much are we using or do we have left?
     Gauge,
     /// How long did this take?
-    Time,
+    Timer,
 }
 
 /// Scope creation function.
