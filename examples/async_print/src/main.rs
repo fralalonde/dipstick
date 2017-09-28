@@ -12,7 +12,7 @@ use dipstick::core::{Sink, self};
 
 fn main() {
 
-    let metrics = metrics(queue(0, print()));
+    let metrics = metrics(async(0, to_stdout()));
 
     let counter = metrics.counter("counter_a");
     let timer = metrics.timer("timer_b");
