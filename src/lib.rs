@@ -28,6 +28,7 @@ extern crate error_chain;
 extern crate time;
 extern crate cached;
 extern crate num;
+#[macro_use] extern crate lazy_static;
 
 mod pcg32;
 
@@ -51,8 +52,10 @@ pub mod publish;
 pub mod statsd;
 pub mod cache;
 pub mod multi;
-pub mod queue;
+pub mod async;
 pub mod fnsink;
+pub mod schedule;
+pub mod selfmetrics;
 
 // input
 pub use app::metrics;
@@ -61,7 +64,7 @@ pub use app::metrics;
 pub use fnsink::make_sink;
 
 // buffering
-pub use queue::queue;
+pub use async::async;
 
 // transform
 pub use cache::cache;
@@ -69,8 +72,8 @@ pub use sampling::sample;
 
 // pack + forward
 pub use aggregate::aggregate;
-pub use publish::{publish, publish_every};
+pub use publish::{publish, publish_every, all_stats, summary, average};
 
 // output
-pub use output::{log, print};
-pub use statsd::statsd;
+pub use output::{to_log, to_stdout};
+pub use statsd::to_statsd;

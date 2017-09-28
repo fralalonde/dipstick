@@ -13,7 +13,7 @@ fn main() {
 
 pub fn raw_write() {
     // setup dual metric channels
-    let metrics_log = log("metrics");
+    let metrics_log = to_log("metrics");
 
     // define and send metrics using raw channel API
     let counter = metrics_log.new_metric(Kind::Counter, "count_a", FULL_SAMPLING_RATE);

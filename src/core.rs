@@ -43,13 +43,13 @@ pub const FULL_SAMPLING_RATE: Rate = 1.0;
 /// Used to differentiate between metric kinds in the backend.
 #[derive(Debug, Copy, Clone)]
 pub enum Kind {
-    /// Was one item handled?
+    /// Handling one item at a time.
     Marker,
-    /// How many items were handled?
+    /// Handling quantities or multiples.
     Counter,
-    /// How much are we using or do we have left?
+    /// Reporting instant measurement of a resource at a point in time.
     Gauge,
-    /// How long did this take?
+    /// Measuring a time interval, internal to the app or provided by an external source.
     Timer,
 }
 
