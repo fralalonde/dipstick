@@ -1,12 +1,13 @@
 //! A sample application asynchronously printing metrics to stdout.
 
-#[macro_use] extern crate dipstick;
+#[macro_use]
+extern crate dipstick;
 
 use std::thread::sleep;
 use std::time::Duration;
 use dipstick::*;
 
-use dipstick::core::{Sink, self};
+use dipstick::core::{self, Sink};
 
 fn main() {
 

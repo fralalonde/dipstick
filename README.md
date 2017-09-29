@@ -1,15 +1,15 @@
-# Dipstick
+# dipstick
 
-A fast and modular metrics toolkit for all Rust applications. 
+A fast and modular metrics toolkit for all Rust applications.
 Similar to popular logging frameworks, but with counters, markers, gauges and timers.
 
 Out of the box, Dipstick _can_ aggregate, sample, cache and queue metrics (async).
 If aggregated, statistics can be published on demand or on schedule.
-  
-Dipstick does not bind application code to a single metrics output implementation. 
-Outputs `to_log`, `to_stdout` and `to_statsd` are currently provided. 
+
+Dipstick does not bind application code to a single metrics output implementation.
+Outputs `to_log`, `to_stdout` and `to_statsd` are currently provided.
 Adding a new module is easy and PRs are welcome :)
- 
+
 Dipstick builds on stable Rust with minimal dependencies.
 
 ```rust
@@ -22,8 +22,8 @@ Metrics can be sent to multiple outputs at the same time.
 ```rust
 let app_metrics = metrics((to_stdout(), to_statsd("localhost:8125", "app1.host.")));
 ```
-Since instruments are decoupled from the backend, outputs can be swapped easily.     
- 
+Since instruments are decoupled from the backend, outputs can be swapped easily.
+
 Metrics can be aggregated and scheduled to be published periodically in the background.
 ```rust
 use std::time::Duration;
@@ -31,38 +31,48 @@ let (to_aggregate, from_aggregate) = aggregate();
 publish_every(Duration::from_secs(10), from_aggregate, to_log("last_ten_secs:"), all_stats);
 let app_metrics = metrics(to_aggregate);
 ```
-Aggregation is performed locklessly and is very fast. 
+Aggregation is performed locklessly and is very fast.
 Count, sum, min, max and average are tracked where they make sense.
 
-Publishing can use predefined strategies `all_stats`, `summary`, `average` or a custom one. 
+Publishing can use predefined strategies `all_stats`, `summary`, `average` or a custom one.
 ```rust
 let (_to_aggregate, from_aggregate) = aggregate();
-publish(from_aggregate, to_log("my_custom_stats:"), 
+publish(from_aggregate, to_log("my_custom_stats:"),
     |kind, name, score| match score {
         HitCount(hit) => Some((Counter, vec![name, ".per_thousand"], hit / 1000)),
         _ => None
     });
-```     
+```
 
 Metrics can be statistically sampled.
 ```rust
 let app_metrics = metrics(sample(0.001, to_statsd("server:8125", "app.sampled.")));
 ```
-A fast random algorithm is used to pick samples. 
-Outputs can use sample rate to expand or format published data. 
+A fast random algorithm is used to pick samples.
+Outputs can use sample rate to expand or format published data.
 
 Metrics can be recorded asynchronously.
 ```rust
 let app_metrics = metrics(async(48, to_stdout()));
 ```
-The async queue uses a Rust channel and a standalone thread. Its current behavior is to block when full. 
+The async queue uses a Rust channel and a standalone thread. Its current behavior is to block when full.
 
 Metric definitions can be cached to make using _ad-hoc metrics_ faster.
 ```rust
 let app_metrics = metrics(cache(512, to_log()));
 app_metrics.gauge(format!("my_gauge_{}", 34)).value(44);
 ```
-The preferred way is to _predefine metrics_, possibly in a [lazy_static!](https://crates.io/crates/lazy_static) block.  
+
+The preferred way is to _predefine metrics_, possibly in a [lazy_static!](https://crates.io/crates/lazy_static) block.
+```rust
+#[macro_use] external crate lazy_static;
+
+lazy_static! {
+    pub static ref METRICS: AppMetrics<String, FnSink<String>> = metrics(to_stdout());
+    pub static ref COUNTER_A: Counter<Aggregate> = METRICS.counter("counter_a");
+}
+COUNTER_A.count(11);
+```
 
 Timers can be used multiple ways.
 ```rust
@@ -81,8 +91,10 @@ Related metrics can share a namespace.
 ```rust
 let db_metrics = app_metrics.with_prefix("database.");
 let db_timer = db_metrics.timer("db_timer");
-let db_counter = db_metrics.counter("db_counter"); 
+let db_counter = db_metrics.counter("db_counter");
 ```
+
+
 
 ## Design
 Dipstick's design goals are to:
@@ -93,13 +105,13 @@ Dipstick's design goals are to:
 
 ## Performance
 Predefined timers use a bit more code but are generally faster because their initialization cost is is only paid once.
-Ad-hoc timers are redefined "inline" on each use. They are more flexible, but have more overhead because their init cost is paid on each use. 
-Defining a metric `cache()` reduces that cost for recurring metrics.    
+Ad-hoc timers are redefined "inline" on each use. They are more flexible, but have more overhead because their init cost is paid on each use.
+Defining a metric `cache()` reduces that cost for recurring metrics.
 
 Run benchmarks with `cargo +nightly bench --features bench`.
 
-## TODO 
-Although already usable, Dipstick is still under heavy development and makes no guarantees 
+## TODO
+Although already usable, Dipstick is still under heavy development and makes no guarantees
 of any kind at this point. See the following list for any potential caveats :
 - META turn TODOs into GitHub issues
 - generic publisher / sources
@@ -115,7 +127,11 @@ of any kind at this point. See the following list for any potential caveats :
 - more tests & benchmarks
 - complete doc / inline samples
 - more example apps
-- A cool logo 
+- A cool logo
 - method annotation processors `#[timer("name")]`
-- fastsinks (M / &M) vs. safesinks (Arc<M>) 
-- `static_metric!` macro to replace `lazy_static!` blocks and handle generics boilerplate. 
+- fastsinks (M / &M) vs. safesinks (Arc<M>)
+- `static_metric!` macro to replace `lazy_static!` blocks and handle generics boilerplate.
+
+License: MIT/Apache-2.0
+
+_this file was generated using cargo readme_
