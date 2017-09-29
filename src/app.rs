@@ -187,8 +187,8 @@ mod microbench {
     fn time_bench_direct_dispatch_event(b: &mut Bencher) {
         let (sink, source) = aggregate();
         let metrics = metrics(sink);
-        let event = metrics.event("aaa");
-        b.iter(|| event.mark());
+        let marker = metrics.marker("aaa");
+        b.iter(|| marker.mark());
     }
 
 }
