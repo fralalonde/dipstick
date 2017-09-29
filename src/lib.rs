@@ -42,38 +42,42 @@ mod error {
 }
 
 pub mod core;
+pub use core::*;
+
 pub mod macros;
-pub mod output;
-pub mod app;
 
-pub mod sampling;
-pub mod aggregate;
-pub mod publish;
-pub mod statsd;
-pub mod cache;
-pub mod multi;
-pub mod async;
-pub mod fnsink;
-pub mod schedule;
-pub mod selfmetrics;
+mod output;
+pub use output::*;
 
-// input
-pub use app::metrics;
+mod app;
+pub use app::*;
 
-// generic
-pub use fnsink::make_sink;
+mod sampling;
+pub use sampling::*;
 
-// buffering
-pub use async::async;
+mod aggregate;
+pub use aggregate::*;
 
-// transform
-pub use cache::cache;
-pub use sampling::sample;
+mod publish;
+pub use publish::*;
 
-// pack + forward
-pub use aggregate::aggregate;
-pub use publish::{publish, publish_every, all_stats, summary, average};
+mod statsd;
+pub use statsd::*;
 
-// output
-pub use output::{to_log, to_stdout};
-pub use statsd::to_statsd;
+mod cache;
+pub use cache::*;
+
+mod multi;
+pub use multi::*;
+
+mod async;
+pub use async::*;
+
+mod fnsink;
+pub use fnsink::*;
+
+mod schedule;
+pub use schedule::*;
+
+mod selfmetrics;
+pub use selfmetrics::METRICS_SOURCE;

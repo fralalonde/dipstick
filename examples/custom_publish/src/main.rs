@@ -5,8 +5,6 @@ extern crate dipstick;
 
 use std::time::Duration;
 use dipstick::*;
-use dipstick::aggregate::ScoreType;
-use dipstick::core::Kind;
 
 fn main() {
     // send application metrics to both aggregator and to sampling log
