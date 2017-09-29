@@ -1,10 +1,8 @@
 //! A sample application asynchronously printing metrics to stdout.
 
 #[macro_use] extern crate dipstick;
-extern crate scheduled_executor;
 
 use std::thread::sleep;
-use scheduled_executor::CoreExecutor;
 use std::time::Duration;
 use dipstick::*;
 
@@ -18,7 +16,7 @@ fn main() {
     let timer = metrics.timer("timer_b");
 
     let subsystem_metrics = metrics.with_prefix("subsystem.");
-    let event = subsystem_metrics.event("event_c");
+    let event = subsystem_metrics.marker("event_c");
     let gauge = subsystem_metrics.gauge("gauge_d");
 
     loop {

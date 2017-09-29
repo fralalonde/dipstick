@@ -11,7 +11,7 @@ lazy_static! {
     static ref AGGREGATE: (AggregateSink, AggregateSource) = aggregate();
 
     /// Source of dipstick inner metrics, for eventual publication.
-    pub static ref SOURCE: AggregateSource = AGGREGATE.1.clone();
+    pub static ref METRICS_SOURCE: AggregateSource = AGGREGATE.1.clone();
 
     /// Application metrics are collected to the aggregator
     pub static ref SELF_METRICS: AppMetrics<Aggregate, AggregateSink> =

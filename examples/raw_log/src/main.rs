@@ -5,8 +5,6 @@ extern crate dipstick;
 
 use dipstick::*;
 
-use dipstick::core::*;
-
 fn main() {
     raw_write()
 }

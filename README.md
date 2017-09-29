@@ -118,3 +118,4 @@ of any kind at this point. See the following list for any potential caveats :
 - A cool logo 
 - method annotation processors `#[timer("name")]`
 - fastsinks (M / &M) vs. safesinks (Arc<M>) 
+- `static_metric!` macro to replace `lazy_static!` blocks and handle generics boilerplate. 
