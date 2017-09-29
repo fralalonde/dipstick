@@ -1,5 +1,5 @@
 [package]
-name = "aggregate_print"
+name = "custom_publish"
 version = "0.0.0"
 workspace = "../../"
 

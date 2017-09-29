@@ -1,7 +1,8 @@
 //! Maintain aggregated metrics for deferred reporting,
 
 use core::*;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering::*;
 use std::sync::{Arc, RwLock};
 use std::usize;
 
@@ -43,30 +44,23 @@ enum InnerScores {
     },
 }
 
-/// To-be-published snapshot of aggregated score values.
 #[derive(Debug, Clone, Copy)]
-pub enum ScoresSnapshot {
-    /// No data was reported (yet) for this metric.
-    NoData,
-
-    /// Simple score for event counters
-    Event {
-        /// Number of times the metric was used.
-        hit: u64
-    },
-
-    /// Score structure for counters, timers and gauges.
-    Value {
-        /// Number of times the metric was used.
-        hit: u64,
-        /// Sum of metric values reported.
-        sum: u64,
-        /// Biggest value reported.
-        max: u64,
-        /// Smallest value reported.
-        min: u64,
-    },
+/// Possibly aggregated scores.
+pub enum ScoreType {
+    /// Number of times the metric was used.
+    HitCount(u64),
+    /// Sum of metric values reported.
+    SumOfValues(u64),
+    /// Biggest value reported.
+    MaximumValue(u64),
+    /// Smallest value reported.
+    MinimumValue(u64),
+    /// Approximative average value (hit count / sum, non-atomic)
+    AverageValue(u64),
 }
+
+/// To-be-published snapshot of aggregated score values for a metric.
+pub type ScoresSnapshot = Vec<ScoreType>;
 
 /// A metric that holds aggregated values.
 /// Some fields are kept public to ease publishing.
@@ -85,13 +79,13 @@ pub struct MetricScores {
 /// Retries until success or clear loss to concurrent update.
 #[inline]
 fn compare_and_swap<F>(counter: &AtomicUsize, new_value: usize, retry: F) where F: Fn(usize) -> bool {
-    let mut loaded = counter.load(Ordering::Acquire);
+    let mut loaded = counter.load(Acquire);
     while retry(loaded) {
-        if counter.compare_and_swap(loaded, new_value, Ordering::Release) == new_value {
+        if counter.compare_and_swap(loaded, new_value, Release) == new_value {
             // success
             break;
         }
-        loaded = counter.load(Ordering::Acquire);
+        loaded = counter.load(Acquire);
     }
 }
 
@@ -100,39 +94,58 @@ impl MetricScores {
     pub fn write(&self, value: usize) -> () {
         match &self.score {
             &InnerScores::Event { ref hit, .. } => {
-                hit.fetch_add(1, Ordering::SeqCst);
+                hit.fetch_add(1, SeqCst);
             }
             &InnerScores::Value { ref hit, ref sum, ref max, ref min, .. } => {
                 compare_and_swap(max, value, |loaded| value > loaded);
                 compare_and_swap(min, value, |loaded| value < loaded);
-                sum.fetch_add(value, Ordering::Acquire);
+                sum.fetch_add(value, Acquire);
                 // TODO report any concurrent updates / resets for measurement of contention
-                hit.fetch_add(1, Ordering::Acquire);
+                hit.fetch_add(1, Acquire);
             }
         }
     }
 
     /// reset aggregate values, return previous values
     pub fn read_and_reset(&self) -> ScoresSnapshot {
+        let mut snapshot = Vec::new();
         match self.score {
             InnerScores::Event { ref hit } => {
-                match hit.swap(0, Ordering::Release) as u64 {
-                    0 => ScoresSnapshot::NoData,
-                    hit => ScoresSnapshot::Event { hit }
+                match hit.swap(0, Release) as u64 {
+                    // hit count is the only meaningful metric for markers
+                    // rate could be nice too but we don't time-derived (yet)
+                    hit if hit > 0 => snapshot.push(ScoreType::HitCount(hit)),
+                    _ => {}
                 }
             }
             InnerScores::Value { ref hit, ref sum, ref max, ref min, .. } => {
-                match hit.swap(0, Ordering::Release) as u64 {
-                    0 => ScoresSnapshot::NoData,
-                    hit => ScoresSnapshot::Value {
-                        hit,
-                        sum: sum.swap(0, Ordering::Release) as u64,
-                        max: max.swap(usize::MIN, Ordering::Release) as u64,
-                        min: min.swap(usize::MAX, Ordering::Release) as u64,
-                    }
+                match hit.swap(0, Release) as u64 {
+                    hit if hit > 0  => {
+                        let sum = sum.swap(0, Release) as u64;
+
+                        match self.kind {
+                            Kind::Gauge => {
+                                // sum and hit are meaningless for Gauge metrics
+                            },
+                            _ => {
+                                snapshot.push(ScoreType::HitCount(hit));
+                                snapshot.push(ScoreType::SumOfValues(sum));
+                            }
+                        }
+
+                        // NOTE best-effort averaging
+                        // - hit and sum are not incremented nor read as one
+                        // - integer division is not rounding
+                        // assuming values will still be good enough to be useful
+                        snapshot.push(ScoreType::AverageValue(sum / hit));
+                        snapshot.push(ScoreType::MaximumValue(max.swap(usize::MIN, Release) as u64));
+                        snapshot.push(ScoreType::MinimumValue(min.swap(usize::MAX, Release) as u64));
+                    },
+                    _ => {}
                 }
             }
         }
+        snapshot
     }
 }
 
@@ -187,6 +200,8 @@ impl AsSink<Aggregate, AggregateSink> for Aggregator {
     }
 }
 
+/// The type of metric created by the AggregateSink.
+/// Each Aggregate
 pub type Aggregate = Arc<MetricScores>;
 
 /// A sink where to send metrics for aggregation.

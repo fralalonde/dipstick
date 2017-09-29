@@ -1,15 +1,15 @@
 //! Send metrics to a statsd server.
 
-use ::core::*;
-use ::error;
+use core::*;
+use error;
+use selfmetrics::*;
 
 use std::net::UdpSocket;
 use std::sync::{Arc,RwLock};
-
 pub use std::net::ToSocketAddrs;
 
 /// Send metrics to a statsd server at the address and port provided.
-pub fn statsd<STR, ADDR>(address: ADDR, prefix: STR) -> error::Result<StatsdSink>
+pub fn to_statsd<STR, ADDR>(address: ADDR, prefix: STR) -> error::Result<StatsdSink>
     where STR: Into<String>, ADDR: ToSocketAddrs
 {
     let socket = Arc::new(UdpSocket::bind("0.0.0.0:0")?); // NB: CLOEXEC by default
@@ -23,6 +23,14 @@ pub fn statsd<STR, ADDR>(address: ADDR, prefix: STR) -> error::Result<StatsdSink
     })
 }
 
+lazy_static! {
+    static ref STATSD_METRICS: AppMetrics<Aggregate, AggregateSink> =
+                                            SELF_METRICS.with_prefix("statsd.");
+
+    static ref SEND_ERR: Marker<Aggregate> = STATSD_METRICS.marker("send_failed");
+    static ref SENT_BYTES: Counter<Aggregate> = STATSD_METRICS.counter("sent_bytes");
+}
+
 /// Key of a statsd metric.
 #[derive(Debug)]
 pub struct StatsdMetric {
@@ -34,12 +42,13 @@ pub struct StatsdMetric {
 /// Use a safe maximum size for UDP to prevent fragmentation.
 const MAX_UDP_PAYLOAD: usize = 576;
 
-/// Wrapped buffer & socket as one so that any remainding data can be flushed on Drop.
+/// Wrapped string buffer & socket as one.
 struct ScopeBuffer {
     str: String,
     socket: Arc<UdpSocket>,
 }
 
+/// Any remaining buffered data is flushed on Drop.
 impl Drop for ScopeBuffer {
     fn drop(&mut self) {
         self.flush()
@@ -49,11 +58,15 @@ impl Drop for ScopeBuffer {
 impl  ScopeBuffer {
 
     fn flush(&mut self) {
-        debug!("statsd sending {} bytes", self.str.len());
-        // TODO check for and report any send() error
         match self.socket.send(self.str.as_bytes()) {
-            Ok(size) => { /* TODO update selfstats */ },
-            Err(e) => { /* TODO metric faults */ }
+            Ok(size) => {
+                SENT_BYTES.count(size);
+                trace!("Sent {} bytes to statsd", self.str.len());
+            },
+            Err(e) => {
+                SEND_ERR.mark();
+                debug!("Failed to send packet to statsd: {}", e);
+            }
         };
         self.str.clear();
     }
