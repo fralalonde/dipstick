@@ -1,7 +1,8 @@
 //! An app demonstrating the basics of the metrics front-end.
 //! Defines metrics of each kind and use them to print values to the console in multiple ways.
 
-#[macro_use] extern crate dipstick;
+#[macro_use]
+extern crate dipstick;
 use std::thread::sleep;
 use std::time::Duration;
 use dipstick::*;

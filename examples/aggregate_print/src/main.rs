@@ -13,9 +13,19 @@ fn main() {
 
     let app_metrics = metrics((to_quick_aggregate, to_slow_aggregate));
 
-    publish_every(Duration::from_secs(3), from_quick_aggregate, to_stdout(), summary);
+    publish_every(
+        Duration::from_secs(3),
+        from_quick_aggregate,
+        to_stdout(),
+        summary,
+    );
 
-    publish_every(Duration::from_secs(10), from_slow_aggregate, to_stdout(), all_stats);
+    publish_every(
+        Duration::from_secs(10),
+        from_slow_aggregate,
+        to_stdout(),
+        all_stats,
+    );
 
     let counter = app_metrics.counter("counter_a");
     loop {
