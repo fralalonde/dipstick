@@ -1,47 +1,68 @@
-# dipstick
+# Dipstick
 
 A fast and modular metrics toolkit for all Rust applications. 
-Similar to popular logging frameworks, but with counters and timers.
+Similar to popular logging frameworks, but with counters, markers, gauges and timers.
 
-- Does not bind application code to a single metrics implementation.
-- Builds on stable Rust with minimal dependencies.
+Out of the box, Dipstick _can_ aggregate, sample, cache and queue metrics (async).
+If aggregated, statistics can be published on demand or on schedule.
+  
+Dipstick does not bind application code to a single metrics output implementation. 
+Outputs `to_log`, `to_stdout` and `to_statsd` are currently provided. 
+Adding a new module is easy and PRs are welcome :)
+ 
+Dipstick builds on stable Rust with minimal dependencies.
 
 ```rust
 use dipstick::*;
-let app_metrics = metrics(to_stdout());
+let app_metrics = metrics(to_log("metrics:"));
 app_metrics.counter("my_counter").count(3);
 ```
 
 Metrics can be sent to multiple outputs at the same time.
 ```rust
-let app_metrics = metrics((to_log("log_this:"), to_statsd("localhost:8125")));
+let app_metrics = metrics((to_stdout(), to_statsd("localhost:8125", "app1.host.")));
 ```
 Since instruments are decoupled from the backend, outputs can be swapped easily.     
  
-Metrics can be aggregated and sent periodically in the background.
+Metrics can be aggregated and scheduled to be published periodically in the background.
 ```rust
 use std::time::Duration;
 let (to_aggregate, from_aggregate) = aggregate();
 publish_every(Duration::from_secs(10), from_aggregate, to_log("last_ten_secs:"), all_stats);
 let app_metrics = metrics(to_aggregate);
 ```
-Use predefined publishing strategies `all_stats`, `summary`, `average` or roll your own. 
+Aggregation is performed locklessly and is very fast. 
+Count, sum, min, max and average are tracked where they make sense.
+
+Publishing can use predefined strategies `all_stats`, `summary`, `average` or a custom one. 
+```rust
+let (_to_aggregate, from_aggregate) = aggregate();
+publish(from_aggregate, to_log("my_custom_stats:"), 
+    |kind, name, score| match score {
+        HitCount(hit) => Some((Counter, vec![name, ".per_thousand"], hit / 1000)),
+        _ => None
+    });
+```     
 
 Metrics can be statistically sampled.
 ```rust
-let app_metrics = metrics(sample(0.001, to_statsd("localhost:8125")));
+let app_metrics = metrics(sample(0.001, to_statsd("server:8125", "app.sampled.")));
 ```
+A fast random algorithm is used to pick samples. 
+Outputs can use sample rate to expand or format published data. 
 
 Metrics can be recorded asynchronously.
 ```rust
-let app_metrics = metrics(async(to_stdout()));
+let app_metrics = metrics(async(48, to_stdout()));
 ```
+The async queue uses a Rust channel and a standalone thread. Its current behavior is to block when full. 
 
-Metric definitions can be cached to make using ad-hoc metrics faster.
+Metric definitions can be cached to make using _ad-hoc metrics_ faster.
 ```rust
 let app_metrics = metrics(cache(512, to_log()));
 app_metrics.gauge(format!("my_gauge_{}", 34)).value(44);
 ```
+The preferred way is to _predefine metrics_, possibly in a [lazy_static!](https://crates.io/crates/lazy_static) block.  
 
 Timers can be used multiple ways.
 ```rust
