@@ -250,7 +250,7 @@ mod microbench {
 
     #[bench]
     fn time_bench_write_event(b: &mut Bencher) {
-        let (sink, source) = aggregate();
+        let (sink, _source) = aggregate();
         let metric = sink.new_metric(Kind::Marker, &"event_a", 1.0);
         let scope = sink.new_scope();
         b.iter(|| scope(Scope::Write(&metric, 1)));
@@ -259,7 +259,7 @@ mod microbench {
 
     #[bench]
     fn time_bench_write_count(b: &mut Bencher) {
-        let (sink, source) = aggregate();
+        let (sink, _source) = aggregate();
         let metric = sink.new_metric(Kind::Counter, &"count_a", 1.0);
         let scope = sink.new_scope();
         b.iter(|| scope(Scope::Write(&metric, 1)));
@@ -267,14 +267,14 @@ mod microbench {
 
     #[bench]
     fn time_bench_read_event(b: &mut Bencher) {
-        let (sink, source) = aggregate();
-        let metric = sink.new_metric(Kind::Event, &"event_a", 1.0);
+        let (sink, _source) = aggregate();
+        let metric = sink.new_metric(Kind::Marker, &"marker_a", 1.0);
         b.iter(|| metric.read_and_reset());
     }
 
     #[bench]
     fn time_bench_read_count(b: &mut Bencher) {
-        let (sink, source) = aggregate();
+        let (sink, _source) = aggregate();
         let metric = sink.new_metric(Kind::Counter, &"count_a", 1.0);
         b.iter(|| metric.read_and_reset());
     }
