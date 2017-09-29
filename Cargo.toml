@@ -5,6 +5,7 @@ members = [
   "examples/multi_outs/",
   "examples/aggregate_print/",
   "examples/async_print/",
+  "examples/custom_publish/",
   "examples/raw_log/",
 ]
 
@@ -33,6 +34,7 @@ log = "0.3.8"
 time = "0.1"
 num = "0.1.40"
 error-chain = "0.10.0"
+lazy_static = "0.2.9"
 
 [features]
 bench = []

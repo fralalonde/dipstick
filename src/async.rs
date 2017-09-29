@@ -4,6 +4,8 @@
 // TODO option to drop metrics when queue full
 
 use core::*;
+use selfmetrics::*;
+
 use std::sync::Arc;
 use std::sync::mpsc;
 use std::thread;
@@ -11,7 +13,7 @@ use std::thread;
 /// Cache metrics to prevent them from being re-defined on every use.
 /// Use of this should be transparent, this has no effect on the values.
 /// Stateful sinks (i.e. Aggregate) may naturally cache their definitions.
-pub fn queue<M, S>(queue_size: usize, sink: S) -> MetricQueue<M, S>
+pub fn async<M, S>(queue_size: usize, sink: S) -> MetricQueue<M, S>
     where M: 'static + Send + Sync, S: Sink<M>
 {
     let (sender, receiver) = mpsc::sync_channel::<QueueCommand<M>>(queue_size);
@@ -25,6 +27,13 @@ pub fn queue<M, S>(queue_size: usize, sink: S) -> MetricQueue<M, S>
         }
     });
     MetricQueue { next_sink: sink, sender }
+}
+
+lazy_static! {
+    static ref QUEUE_METRICS: AppMetrics<Aggregate, AggregateSink> =
+                                            SELF_METRICS.with_prefix("async.");
+
+    static ref SEND_FAILED: Marker<Aggregate> = QUEUE_METRICS.marker("send_failed");
 }
 
 /// Thread safe sender to the queue
@@ -68,7 +77,10 @@ impl<M, S> Sink<Arc<M>> for MetricQueue<M, S> where S: Sink<M>, M: 'static + Sen
             sender.send(QueueCommand {
                 cmd: send_cmd,
                 next_scope: next_scope.clone(),
-            }).unwrap_or_else(|e| { /* TODO dropping queue command, record fault in selfstats */})
+            }).unwrap_or_else(|e| {
+                SEND_FAILED.mark();
+                trace!("Async metrics could not be sent: {}", e);
+            })
         })
     }
 }

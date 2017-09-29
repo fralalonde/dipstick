@@ -1,11 +1,67 @@
-dipstick
---------
+# dipstick
 
-[![Build Status](https://travis-ci.org/fralalonde/dipstick.svg?branch=master)](https://travis-ci.org/fralalonde/dipstick)
-
-A fast and modular metrics library decoupling app instrumentation from reporting backend.
+A fast and modular metrics toolkit for all Rust applications. 
 Similar to popular logging frameworks, but with counters and timers.
-Can be configured for combined outputs (log + statsd), random sampling, local aggregation of metrics, recurrent background publication, etc.
+
+- Does not bind application code to a single metrics implementation.
+- Builds on stable Rust with minimal dependencies.
+
+```rust
+use dipstick::*;
+let app_metrics = metrics(to_stdout());
+app_metrics.counter("my_counter").count(3);
+```
+
+Metrics can be sent to multiple outputs at the same time.
+```rust
+let app_metrics = metrics((to_log("log_this:"), to_statsd("localhost:8125")));
+```
+Since instruments are decoupled from the backend, outputs can be swapped easily.     
+ 
+Metrics can be aggregated and sent periodically in the background.
+```rust
+use std::time::Duration;
+let (to_aggregate, from_aggregate) = aggregate();
+publish_every(Duration::from_secs(10), from_aggregate, to_log("last_ten_secs:"), all_stats);
+let app_metrics = metrics(to_aggregate);
+```
+Use predefined publishing strategies `all_stats`, `summary`, `average` or roll your own. 
+
+Metrics can be statistically sampled.
+```rust
+let app_metrics = metrics(sample(0.001, to_statsd("localhost:8125")));
+```
+
+Metrics can be recorded asynchronously.
+```rust
+let app_metrics = metrics(async(to_stdout()));
+```
+
+Metric definitions can be cached to make using ad-hoc metrics faster.
+```rust
+let app_metrics = metrics(cache(512, to_log()));
+app_metrics.gauge(format!("my_gauge_{}", 34)).value(44);
+```
+
+Timers can be used multiple ways.
+```rust
+let timer =  app_metrics.timer("my_timer");
+time!(timer, {/* slow code here */} );
+timer.time(|| {/* slow code here */} );
+
+let start = timer.start();
+/* slow code here */
+timer.stop(start);
+
+timer.interval_us(123_456);
+```
+
+Related metrics can share a namespace.
+```rust
+let db_metrics = app_metrics.with_prefix("database.");
+let db_timer = db_metrics.timer("db_timer");
+let db_counter = db_metrics.counter("db_counter"); 
+```
 
 ## Design
 Dipstick's design goals are to:
@@ -14,45 +70,8 @@ Dipstick's design goals are to:
 - promote metrics conventions that facilitate app monitoring and maintenance
 - stay out of the way in the code and at runtime (ergonomic, fast, resilient)
 
-## Code
-Here's an example showing usage of a predefined timer with closure syntax. 
-Each timer value is :
-- Written immediately to the "app_metrics" logger.
-- Sent to statsd immediately, one time out of ten (randomly sampled). 
-```rust
-use dipstick::*;
-
-let app_metrics = metrics((
-    log("app_metrics"),
-    sample(0.1, statsd("stats:8125"))
-    ));
-    
-let timer = app_metrics.timer("timer_b");
-
-let value2 = time!(timer, compute_value2());
-```
-
-In this other example, an _ad-hoc_ timer with macro syntax is used.
-- Each new timer value is aggregated with the previous values.
-- Aggregation tracks count, sum, max and min values (locklessly).
-- Aggregated scores are written to log every 10 seconds.  
-- `cache(sink)` is used to prevent metrics of the same to be created multiple times.  
-```rust
-use dipstick::*;
-use std::time::Duration;
-
-let (sink, source) = aggregate();
-let app_metrics = metrics(cache(sink));
-publish(source, log("last_ten_seconds")).publish_every(Duration::from_secs(10));
-
-let value2 = time!(app_metrics.timer("timer_b"), compute_value2());
-```
-
-Other example(s?) can be found in the /examples dir.
-
 ## Performance
-Predefined timers use a bit more code but are generally faster because their
-initialization cost is is only paid once.
+Predefined timers use a bit more code but are generally faster because their initialization cost is is only paid once.
 Ad-hoc timers are redefined "inline" on each use. They are more flexible, but have more overhead because their init cost is paid on each use. 
 Defining a metric `cache()` reduces that cost for recurring metrics.    
 
@@ -66,13 +85,11 @@ of any kind at this point. See the following list for any potential caveats :
 - dispatch scopes
 - feature flags
 - derive stats
-- non-tokio publish scheduler
-- microsecond-precision intervals
+- time measurement units in metric kind (us, ms, etc.) for naming & scaling
 - heartbeat metric on publish
 - logger templates
 - configurable aggregation
 - non-aggregating buffers
-- tagged / ad-hoc metrics
 - framework glue (rocket, iron, gotham, indicatif, etc.)
 - more tests & benchmarks
 - complete doc / inline samples
