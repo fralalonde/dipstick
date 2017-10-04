@@ -40,17 +40,21 @@ lazy_static! {
 pub type QueueSender<M> = mpsc::SyncSender<QueueCommand<M>>;
 
 /// Carry the scope command over the queue, from the sender, to be executed by the receiver.
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct QueueCommand<M> {
     /// If Some(), the metric and value to write.
     /// If None, flush the scope
     cmd: Option<(Arc<M>, Value)>,
     /// The scope to write the metric to
+    #[derivative(Debug="ignore")]
     next_scope: Arc<ScopeFn<M>>,
 }
 
 /// A metric command-queue using a sync channel.
 /// Each client thread gets it's own scope and sender.
 /// Writes are dispatched by a single receiving thread.
+#[derive(Debug)]
 pub struct MetricQueue<M, S> {
     next_sink: S,
     sender: QueueSender<M>,

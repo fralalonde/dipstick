@@ -97,6 +97,7 @@ let db_counter = db_metrics.counter("db_counter");
 */
 
 #![cfg_attr(feature = "bench", feature(test))]
+//#![feature(custom_attribute)]
 
 #![warn(
 missing_copy_implementations,
@@ -122,6 +123,7 @@ extern crate time;
 extern crate cached;
 extern crate num;
 #[macro_use] extern crate lazy_static;
+#[macro_use] extern crate derivative;
 
 mod pcg32;
 

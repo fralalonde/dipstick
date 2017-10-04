@@ -150,7 +150,7 @@ impl MetricScores {
 }
 
 /// Enumerate the metrics being aggregated and their scores.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct AggregateSource(Arc<RwLock<Vec<Arc<MetricScores>>>>);
 
 impl AggregateSource {
@@ -166,6 +166,7 @@ impl AggregateSource {
 /// Central aggregation structure.
 /// Since `AggregateKey`s themselves contain scores, the aggregator simply maintains
 /// a shared list of metrics for enumeration when used as source.
+#[derive(Debug, Clone)]
 pub struct Aggregator {
     metrics: Arc<RwLock<Vec<Arc<MetricScores>>>>,
 }
@@ -207,7 +208,7 @@ pub type Aggregate = Arc<MetricScores>;
 /// A sink where to send metrics for aggregation.
 /// The parameters of aggregation may be set upon creation.
 /// Just `clone()` to use as a shared aggregator.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct AggregateSink(Arc<RwLock<Vec<Aggregate>>>);
 
 impl Sink<Aggregate> for AggregateSink {
@@ -246,37 +247,37 @@ mod microbench {
 
     use super::*;
     use ::*;
-    use test::Bencher;
+    use test;
 
     #[bench]
-    fn time_bench_write_event(b: &mut Bencher) {
+    fn time_bench_write_event(b: &mut test::Bencher) {
         let (sink, _source) = aggregate();
         let metric = sink.new_metric(Kind::Marker, &"event_a", 1.0);
         let scope = sink.new_scope();
-        b.iter(|| scope(Scope::Write(&metric, 1)));
+        b.iter(|| test::black_box(scope(Scope::Write(&metric, 1))));
     }
 
 
     #[bench]
-    fn time_bench_write_count(b: &mut Bencher) {
+    fn time_bench_write_count(b: &mut test::Bencher) {
         let (sink, _source) = aggregate();
         let metric = sink.new_metric(Kind::Counter, &"count_a", 1.0);
         let scope = sink.new_scope();
-        b.iter(|| scope(Scope::Write(&metric, 1)));
+        b.iter(|| test::black_box(scope(Scope::Write(&metric, 1))));
     }
 
     #[bench]
-    fn time_bench_read_event(b: &mut Bencher) {
+    fn time_bench_read_event(b: &mut test::Bencher) {
         let (sink, _source) = aggregate();
         let metric = sink.new_metric(Kind::Marker, &"marker_a", 1.0);
-        b.iter(|| metric.read_and_reset());
+        b.iter(|| test::black_box(metric.read_and_reset()));
     }
 
     #[bench]
-    fn time_bench_read_count(b: &mut Bencher) {
+    fn time_bench_read_count(b: &mut test::Bencher) {
         let (sink, _source) = aggregate();
         let metric = sink.new_metric(Kind::Counter, &"count_a", 1.0);
-        b.iter(|| metric.read_and_reset());
+        b.iter(|| test::black_box(metric.read_and_reset()));
     }
 
 }

@@ -7,7 +7,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::SeqCst;
 
 /// A handle that allows cancelling a scheduled task.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct CancelHandle (Arc<AtomicBool>);
 
 impl CancelHandle {
