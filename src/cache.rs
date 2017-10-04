@@ -21,8 +21,11 @@ pub type Cached<M> = Arc<M>;
 
 /// A cache to help with ad-hoc defined metrics
 /// Does not alter the values of the metrics
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct MetricCache<M, S> {
     next_sink: S,
+    #[derivative(Debug="ignore")]
     cache: RwLock<cached::SizedCache<String, Cached<M>>>,
 }
 

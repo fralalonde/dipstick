@@ -7,6 +7,7 @@
 
 use core::*;
 use std::sync::Arc;
+//use std::fmt::{Debug, Formatter, Result};
 
 // TODO define an 'AsValue' trait + impl for supported number types, then drop 'num' crate
 pub use num::ToPrimitive;
@@ -25,8 +26,11 @@ pub fn metrics<M, S>(sink: S) -> AppMetrics<M, S>
 /// A monotonic counter metric.
 /// Since value is only ever increased by one, no value parameter is provided,
 /// preventing potential problems.
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct Marker<M> {
     metric: M,
+    #[derivative(Debug="ignore")]
     next_scope: ScopeFn<M>,
 }
 
@@ -37,9 +41,18 @@ impl<M> Marker<M> {
     }
 }
 
+//impl<M> Debug for Marker<M> {
+//    fn fmt(&self, f: &mut Formatter) -> Result {
+//        f.
+//    }
+//}
+
 /// A counter that sends values to the metrics backend
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct Counter<M> {
     metric: M,
+    #[derivative(Debug="ignore")]
     next_scope: ScopeFn<M>,
 }
 
@@ -51,8 +64,11 @@ impl<M> Counter<M> {
 }
 
 /// A gauge that sends values to the metrics backend
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct Gauge<M> {
     metric: M,
+    #[derivative(Debug="ignore")]
     next_scope: ScopeFn<M>,
 }
 
@@ -69,8 +85,11 @@ impl<M> Gauge<M> {
 /// - with the time(Fn) methodhich wraps a closure with start() and stop() calls.
 /// - with start() and stop() methodsrapping around the operation to time
 /// - with the interval_us() method, providing an externally determined microsecond interval
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct Timer<M> {
     metric: M,
+    #[derivative(Debug="ignore")]
     next_scope: ScopeFn<M>,
 }
 
@@ -111,9 +130,12 @@ impl<M> Timer<M> {
 }
 
 /// Variations of this should also provide control of the metric recording scope.
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct AppMetrics<M, S>
     where  S: Sink<M>, M: Send + Sync {
     prefix: String,
+    #[derivative(Debug="ignore")]
     next_scope: ScopeFn<M>,
     next_sink: Arc<S>,
 }
@@ -179,16 +201,15 @@ impl <M, S> AppMetrics<M, S> where S: Sink<M>, M: Send + Sync {
 #[cfg(feature = "bench")]
 mod microbench {
 
-    use aggregate::Aggregator;
     use ::*;
-    use test::Bencher;
+    use test;
 
     #[bench]
-    fn time_bench_direct_dispatch_event(b: &mut Bencher) {
-        let (sink, source) = aggregate();
+    fn time_bench_direct_dispatch_event(b: &mut test::Bencher) {
+        let (sink, _source) = aggregate();
         let metrics = metrics(sink);
         let marker = metrics.marker("aaa");
-        b.iter(|| marker.mark());
+        b.iter(|| test::black_box(marker.mark()));
     }
 
 }

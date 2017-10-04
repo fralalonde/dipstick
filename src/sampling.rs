@@ -20,6 +20,7 @@ pub struct Sampled<M> {
 }
 
 /// A sampling sink adapter.
+#[derive(Debug)]
 pub struct SamplingSink<S> {
     next_sink: S,
     sampling_rate: Rate,

@@ -33,8 +33,12 @@ pub fn make_sink<M, MF, WF  >(make_metric: MF, make_scope: WF) -> FnSink<M>
 
 /// FnSink delegates metric creation and scoping to the
 /// functions or closures it was provided upon its creation.
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct FnSink<M> where M: Send + Sync  {
+    #[derivative(Debug="ignore")]
     metric_fn: MetricFn<M>,
+    #[derivative(Debug="ignore")]
     scope_fn: ScopeFn<M>,
 }
 

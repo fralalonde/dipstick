@@ -43,6 +43,7 @@ pub struct StatsdMetric {
 const MAX_UDP_PAYLOAD: usize = 576;
 
 /// Wrapped string buffer & socket as one.
+#[derive(Debug)]
 struct ScopeBuffer {
     str: String,
     socket: Arc<UdpSocket>,
@@ -73,6 +74,7 @@ impl  ScopeBuffer {
 }
 
 /// Allows sending metrics to a statsd server
+#[derive(Debug)]
 pub struct StatsdSink {
     socket: Arc<UdpSocket>,
     prefix: String,
