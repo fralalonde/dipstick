@@ -42,13 +42,14 @@ pub struct FnSink<M> where M: Send + Sync  {
     scope_fn: ScopeFn<M>,
 }
 
-impl <M> Sink<M> for FnSink<M> where M: Send + Sync {
+impl <M> Sink<M> for FnSink<M> where M: Clone + Send + Sync {
     #[allow(unused_variables)]
     fn new_metric(&self, kind: Kind, name: &str, sampling: Rate) -> M {
         self.metric_fn.as_ref()(kind, name, sampling)
     }
 
-    fn new_scope(&self) -> ScopeFn<M> {
+    #[allow(unused_variables)]
+    fn new_scope(&self, auto_flush: bool) -> ScopeFn<M> {
         self.scope_fn.clone()
     }
 }

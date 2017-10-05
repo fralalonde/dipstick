@@ -30,13 +30,16 @@ license = "MIT/Apache-2.0"
 travis-ci = { repository = "fralalonde/dipstick", branch = "master" }
 
 [dependencies]
-cached = "0.4.1"
-log = "0.3.8"
+cached = "0.4"
+log = "0.3"
 time = "0.1"
-num = "0.1.40"
-error-chain = "0.10.0"
+error-chain = "0.10"
 lazy_static = "0.2.9"
-derivative = "1.0.0"
+derivative = "1.0"
+
+[dependencies.num]
+default-features = false
+version = "0.1"
 
 [features]
 bench = []

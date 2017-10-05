@@ -21,13 +21,11 @@ Although already usable, Dipstick is still under heavy development and makes no 
 of any kind at this point. See the following list for any potential caveats :
 - META turn TODOs into GitHub issues
 - generic publisher / sources
-- dispatch scopes
 - feature flags
-- derive stats
 - time measurement units in metric kind (us, ms, etc.) for naming & scaling
 - heartbeat metric on publish
 - logger templates
-- configurable aggregation
+- configurable aggregation (?)
 - non-aggregating buffers
 - framework glue (rocket, iron, gotham, indicatif, etc.)
 - more tests & benchmarks
@@ -40,4 +38,4 @@ of any kind at this point. See the following list for any potential caveats :
 
 License: {{license}}
 
-_this file was generated using cargo readme_
+_this file was generated using [cargo readme](https://github.com/livioribeiro/cargo-readme)_

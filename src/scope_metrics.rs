@@ -1,81 +1,83 @@
-//! This module regroups the application metrics front-end.
+//! Scope metrics allow an application to emit per-operation statistics,
+//! like generating a per-request performance log.
 //!
-//! It provides the differentiated, high-level instruments (timers, counters, gauges...) objects,
-//! along with consistent metric naming / grouping facilities.
-//!
-//! It should also allows additional per-metric configuration parameters.
+//! Although the scope metrics can be predefined like in [AppMetrics], the application needs to
+//! create a scope that will be passed back when reporting scoped metric values.
+/*!
+Per-operation metrics can be recorded and published using `scope_metrics`:
+```rust
+let scope_metrics = scope_metrics(to_log());
+let request_counter = scope_metrics.counter("scope_counter");
+{
+let request_scope = scope_metrics.new_scope();
+request_counter.count(request_scope, 42);
+request_counter.count(request_scope, 42);
+}
+```
+*/
 
 use core::*;
-use std::sync::Arc;
-//use std::fmt::{Debug, Formatter, Result};
+use std::sync::{Arc, RwLock};
+use std::marker::PhantomData;
 
 // TODO define an 'AsValue' trait + impl for supported number types, then drop 'num' crate
 pub use num::ToPrimitive;
 
 /// Wrap the metrics backend to provide an application-friendly interface.
-pub fn metrics<M, S>(sink: S) -> AppMetrics<M, S>
-    where S: Sink<M> + 'static, M: 'static, M: Send + Sync {
-    let next_scope = sink.new_scope();
-    AppMetrics {
+/// When reporting a value, scoped metrics also need to be passed a [Scope].
+/// New scopes can be obtained from
+pub fn scope_metrics<'ph, M, S>(sink: S) -> ScopedMetrics<'ph, M, S>
+    where S: Sink<M> + 'static,
+          M: 'static + Clone + Send + Sync
+{
+    ScopedMetrics {
         prefix: "".to_string(),
-        next_scope,
         next_sink: Arc::new(sink),
+        phantom: PhantomData,
     }
 }
 
 /// A monotonic counter metric.
 /// Since value is only ever increased by one, no value parameter is provided,
-/// preventing potential problems.
+/// preventing programming errors.
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub struct Marker<M> {
+pub struct ScopeMarker<M> {
     metric: M,
-    #[derivative(Debug="ignore")]
-    next_scope: ScopeFn<M>,
 }
 
-impl<M> Marker<M> {
+impl<M> ScopeMarker<M> {
     /// Record a single event occurence.
-    pub fn mark(&self) {
-        self.next_scope.as_ref()(Scope::Write(&self.metric, 1));
+    pub fn mark(&self, scope: ScopeFn<M>) {
+        scope.as_ref()(Scope::Write(&self.metric, 1));
     }
 }
-
-//impl<M> Debug for Marker<M> {
-//    fn fmt(&self, f: &mut Formatter) -> Result {
-//        f.
-//    }
-//}
 
 /// A counter that sends values to the metrics backend
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub struct Counter<M> {
+pub struct ScopeCounter<M> {
     metric: M,
-    #[derivative(Debug="ignore")]
-    next_scope: ScopeFn<M>,
 }
 
-impl<M> Counter<M> {
+impl<M> ScopeCounter<M> {
     /// Record a value count.
-    pub fn count<V>(&self, count: V) where V: ToPrimitive {
-        self.next_scope.as_ref()(Scope::Write(&self.metric, count.to_u64().unwrap()));
+    pub fn count<V>(&self, scope: &mut ScopeFn<M>, count: V) where V: ToPrimitive {
+        scope.as_ref()(Scope::Write(&self.metric, count.to_u64().unwrap()));
     }
 }
 
 /// A gauge that sends values to the metrics backend
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub struct Gauge<M> {
+pub struct ScopeGauge<M> {
     metric: M,
-    #[derivative(Debug="ignore")]
-    next_scope: ScopeFn<M>,
 }
 
-impl<M> Gauge<M> {
+impl<M: Clone> ScopeGauge<M> {
     /// Record a value point for this gauge.
-    pub fn value<V>(&self, value: V) where V: ToPrimitive {
-        self.next_scope.as_ref()(Scope::Write(&self.metric, value.to_u64().unwrap()));
+    pub fn value<V>(&self, scope: &mut ScopeFn<M>, value: V) where V: ToPrimitive {
+        scope.as_ref()(Scope::Write(&self.metric, value.to_u64().unwrap()));
     }
 }
 
@@ -87,17 +89,15 @@ impl<M> Gauge<M> {
 /// - with the interval_us() method, providing an externally determined microsecond interval
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub struct Timer<M> {
+pub struct ScopeTimer<M> {
     metric: M,
-    #[derivative(Debug="ignore")]
-    next_scope: ScopeFn<M>,
 }
 
-impl<M> Timer<M> {
+impl<M: Clone> ScopeTimer<M> {
     /// Record a microsecond interval for this timer
     /// Can be used in place of start()/stop() if an external time interval source is used
-    pub fn interval_us<V>(&self, interval_us: V) -> V where V: ToPrimitive {
-        self.next_scope.as_ref()(Scope::Write(&self.metric, interval_us.to_u64().unwrap()));
+    pub fn interval_us<V>(&self, scope: &mut ScopeFn<M>, interval_us: V) -> V where V: ToPrimitive {
+        scope.as_ref()(Scope::Write(&self.metric, interval_us.to_u64().unwrap()));
         interval_us
     }
 
@@ -115,16 +115,16 @@ impl<M> Timer<M> {
     /// This call can be performed multiple times using the same handle,
     /// reporting distinct time intervals each time.
     /// Returns the microsecond interval value that was recorded.
-    pub fn stop(&self, start_time: TimeHandle) -> u64 {
+    pub fn stop(&self, scope: &mut ScopeFn<M>, start_time: TimeHandle) -> u64 {
         let elapsed_us = start_time.elapsed_us();
-        self.interval_us(elapsed_us)
+        self.interval_us(scope, elapsed_us)
     }
 
     /// Record the time taken to execute the provided closure
-    pub fn time<F, R>(&self, operations: F) -> R where F: FnOnce() -> R {
+    pub fn time<F, R>(&self, scope: &mut ScopeFn<M>, operations: F) -> R where F: FnOnce() -> R {
         let start_time = self.start();
         let value: R = operations();
-        self.stop(start_time);
+        self.stop(scope, start_time);
         value
     }
 }
@@ -132,15 +132,13 @@ impl<M> Timer<M> {
 /// Variations of this should also provide control of the metric recording scope.
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub struct AppMetrics<M, S>
-    where  S: Sink<M>, M: Send + Sync {
+pub struct ScopedMetrics<'ph, M: 'ph, S> {
     prefix: String,
-    #[derivative(Debug="ignore")]
-    next_scope: ScopeFn<M>,
     next_sink: Arc<S>,
+    phantom: PhantomData<&'ph M>,
 }
 
-impl <M, S> AppMetrics<M, S> where S: Sink<M>, M: Send + Sync {
+impl <'ph, M, S> ScopedMetrics<'ph, M, S> where S: Sink<M>, M: 'static + Clone + Send + Sync {
 
     fn qualified_name<AS>(&self, name: AS) -> String
         where AS: Into<String> + AsRef<str>
@@ -155,48 +153,91 @@ impl <M, S> AppMetrics<M, S> where S: Sink<M>, M: Send + Sync {
     }
 
     /// Get an event counter of the provided name.
-    pub fn marker<AS>(&self, name: AS) -> Marker<M>
+    pub fn marker<AS>(&self, name: AS) -> ScopeMarker<M>
         where AS: Into<String> + AsRef<str>, M: Send + Sync
     {
         let metric = self.next_sink.new_metric(Kind::Marker, &self.qualified_name(name), 1.0);
-        Marker { metric, next_scope: self.next_scope.clone(), }
+        ScopeMarker { metric }
     }
 
     /// Get a counter of the provided name.
-    pub fn counter<AS>(&self, name: AS) -> Counter<M>
+    pub fn counter<AS>(&self, name: AS) -> ScopeCounter<M>
         where AS: Into<String> + AsRef<str>, M: Send + Sync
     {
         let metric = self.next_sink.new_metric(Kind::Counter, &self.qualified_name(name), 1.0);
-        Counter { metric, next_scope: self.next_scope.clone(), }
+        ScopeCounter { metric}
     }
 
     /// Get a timer of the provided name.
-    pub fn timer<AS>(&self, name: AS) -> Timer<M>
+    pub fn timer<AS>(&self, name: AS) -> ScopeTimer<M>
         where AS: Into<String> + AsRef<str>, M: Send + Sync
     {
         let metric = self.next_sink.new_metric(Kind::Timer, &self.qualified_name(name), 1.0);
-        Timer { metric, next_scope: self.next_scope.clone(), }
+        ScopeTimer { metric }
     }
 
     /// Get a gauge of the provided name.
-    pub fn gauge<AS>(&self, name: AS) -> Gauge<M>
+    pub fn gauge<AS>(&self, name: AS) -> ScopeGauge<M>
         where AS: Into<String> + AsRef<str>, M: Send + Sync
     {
         let metric = self.next_sink.new_metric(Kind::Gauge, &self.qualified_name(name), 1.0);
-        Gauge { metric, next_scope: self.next_scope.clone(), }
+        ScopeGauge { metric }
     }
 
     /// Prepend the metrics name with a prefix.
     /// Does not affect metrics that were already obtained.
     pub fn with_prefix<IS>(&self, prefix: IS) -> Self where IS: Into<String> {
-        AppMetrics {
+        ScopedMetrics {
             prefix: prefix.into(),
             next_sink: self.next_sink.clone(),
-            next_scope: self.next_scope.clone(),
+            phantom: PhantomData,
         }
+    }
+
+    /// Create a new scope to report metric values.
+    pub fn new_scope(&self) -> ScopeFn<M> {
+        let scope_buffer = RwLock::new(ScopeBuffer{
+            buffer: Vec::new(),
+            scope: self.next_sink.new_scope(false),
+        });
+        Arc::new(move |cmd: Scope<M>| {
+            let mut buf = scope_buffer.write().expect("Could not lock scope.");
+            match cmd {
+                Scope::Write(metric, value) => buf.buffer.push(ScopeCommand {
+                    metric: (*metric).clone(),
+                    value
+                }),
+                Scope::Flush => buf.flush(),
+            }
+        })
     }
 }
 
+/// Save the metrics for delivery upon scope close.
+struct ScopeCommand<M> {
+    metric: M,
+    value: Value,
+}
+
+struct ScopeBuffer<M: Clone> {
+    buffer: Vec<ScopeCommand<M>>,
+    scope: ScopeFn<M>,
+}
+
+impl<M: Clone> ScopeBuffer<M> {
+    fn flush(&mut self) {
+        for cmd in self.buffer.drain(..) {
+            self.scope.as_ref()(Scope::Write(&cmd.metric, cmd.value))
+        }
+        self.scope.as_ref()(Scope::Flush)
+    }
+}
+
+impl<M: Clone> Drop for ScopeBuffer<M> {
+    fn drop(&mut self) {
+        self.flush()
+    }
+}
 
 #[cfg(feature = "bench")]
 mod microbench {
