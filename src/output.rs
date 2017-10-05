@@ -23,6 +23,7 @@ pub fn to_void() -> FnSink<String> {
     make_sink(move |_, name, _| String::from(name),  |_| {})
 }
 
+#[cfg(test)]
 mod test {
     use core::*;
 
@@ -30,21 +31,21 @@ mod test {
     fn sink_print() {
         let c = super::to_stdout();
         let m = c.new_metric(Kind::Marker, "test", 1.0);
-        c.new_scope()(Scope::Write(&m, 33));
+        c.new_scope(true)(Scope::Write(&m, 33));
     }
 
     #[test]
     fn test_to_log() {
         let c = super::to_log("log prefix");
         let m = c.new_metric(Kind::Marker, "test", 1.0);
-        c.new_scope()(Scope::Write(&m, 33));
+        c.new_scope(true)(Scope::Write(&m, 33));
     }
 
     #[test]
     fn test_to_void() {
         let c = super::to_void();
         let m = c.new_metric(Kind::Marker, "test", 1.0);
-        c.new_scope()(Scope::Write(&m, 33));
+        c.new_scope(true)(Scope::Write(&m, 33));
     }
 
 }

@@ -14,7 +14,8 @@ use std::thread;
 /// Use of this should be transparent, this has no effect on the values.
 /// Stateful sinks (i.e. Aggregate) may naturally cache their definitions.
 pub fn async<M, S>(queue_size: usize, sink: S) -> MetricQueue<M, S>
-    where M: 'static + Send + Sync, S: Sink<M>
+    where S: Sink<M>,
+          M: 'static + Clone + Send + Sync
 {
     let (sender, receiver) = mpsc::sync_channel::<QueueCommand<M>>(queue_size);
     thread::spawn(move || loop {
@@ -60,15 +61,15 @@ pub struct MetricQueue<M, S> {
     sender: QueueSender<M>,
 }
 
-impl<M, S> Sink<Arc<M>> for MetricQueue<M, S> where S: Sink<M>, M: 'static + Send + Sync {
+impl<M, S> Sink<Arc<M>> for MetricQueue<M, S> where S: Sink<M>, M: 'static + Clone + Send + Sync {
     #[allow(unused_variables)]
     fn new_metric(&self, kind: Kind, name: &str, sampling: Rate) -> Arc<M> {
         Arc::new(self.next_sink.new_metric(kind, name, sampling))
     }
 
-    fn new_scope(&self) -> ScopeFn<Arc<M>> {
+    fn new_scope(&self, auto_flush: bool) -> ScopeFn<Arc<M>> {
         // open next scope, make it Arc to move across queue
-        let next_scope: Arc<ScopeFn<M>> = Arc::from(self.next_sink.new_scope());
+        let next_scope: Arc<ScopeFn<M>> = Arc::from(self.next_sink.new_scope(auto_flush));
 
         let sender = self.sender.clone();
 

@@ -28,35 +28,25 @@ use schedule::{schedule, CancelHandle};
 
 /// Schedules the publisher to run at recurrent intervals
 pub fn publish_every<E, M, S>(duration: Duration, source: AggregateSource, target: S, export: E) -> CancelHandle
-    where S: Sink<M> + 'static + Send + Sync, M: Send + Sync, E: Fn(Kind, &str, ScoreType) -> Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static
+    where S: Sink<M> + 'static + Send + Sync,
+          M: Clone + Send + Sync,
+          E: Fn(Kind, &str, ScoreType) -> Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static
 {
     schedule(duration, move || {
-        let scope = target.new_scope();
-        source.for_each(|metric| {
-            let snapshot = metric.read_and_reset();
-            if snapshot.is_empty() {
-                // no data was collected for this period
-                // TODO repeat previous frame min/max ?
-                // TODO update some canary metric ?
-            } else {
-                for score in snapshot {
-                    if let Some(ex) = export(metric.kind, &metric.name, score) {
-                        let temp_metric = target.new_metric(ex.0, &ex.1.concat(), 1.0);
-                        scope(Scope::Write(&temp_metric, ex.2));
-                    }
-                }
-            }
-        })
+        publish(&source, &target, &export)
     })
 }
 
 /// Define and write metrics from aggregated scores to the target channel
 /// If this is called repeatedly it can be a good idea to use the metric cache
 /// to prevent new metrics from being created every time.
-pub fn publish<E, M, S>(source: &AggregateSource, target: &S, export: E)
-    where S: Sink<M>, M: Send + Sync, E: Fn(Kind, &str, ScoreType) -> Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static
+// TODO require ScopeMetrics instead of Sink
+pub fn publish<E, M, S>(source: &AggregateSource, target: &S, export: &E)
+    where S: Sink<M>,
+          M: Clone + Send + Sync,
+          E: Fn(Kind, &str, ScoreType) -> Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static
 {
-    let scope = target.new_scope();
+    let scope = target.new_scope(false);
     source.for_each(|metric| {
         let snapshot = metric.read_and_reset();
         if snapshot.is_empty() {
@@ -71,7 +61,8 @@ pub fn publish<E, M, S>(source: &AggregateSource, target: &S, export: E)
                 }
             }
         }
-    })
+    });
+    scope(Scope::Flush)
 }
 
 /// A predefined export strategy reporting all aggregated stats for all metric types.

@@ -10,7 +10,8 @@ use std::sync::{Arc,RwLock};
 /// Use of this should be transparent, this has no effect on the values.
 /// Stateful sinks (i.e. Aggregate) may naturally cache their definitions.
 pub fn cache<M, S>(size: usize, sink: S) -> MetricCache<M, S>
-    where S: Sink<M>, M: Send + Sync
+    where S: Sink<M>,
+          M: Clone + Send + Sync
 {
     let cache = RwLock::new(cached::SizedCache::with_capacity(size));
     MetricCache { next_sink: sink, cache }
@@ -30,7 +31,8 @@ pub struct MetricCache<M, S> {
 }
 
 impl<M, S> Sink<Cached<M>> for MetricCache<M, S>
-    where S: Sink<M>, M: 'static + Send + Sync
+    where S: Sink<M>,
+          M: 'static + Clone + Send + Sync
 {
     #[allow(unused_variables)]
     fn new_metric(&self, kind: Kind, name: &str, sampling: Rate) -> Cached<M> {
@@ -51,8 +53,8 @@ impl<M, S> Sink<Cached<M>> for MetricCache<M, S>
         new_metric
     }
 
-    fn new_scope(&self) -> ScopeFn<Arc<M>> {
-        let next_scope = self.next_sink.new_scope();
+    fn new_scope(&self, auto_flush: bool) -> ScopeFn<Arc<M>> {
+        let next_scope = self.next_sink.new_scope(auto_flush);
         Arc::new(move |cmd| match cmd {
             Scope::Write(metric, value) => next_scope(Scope::Write(metric, value)),
             Scope::Flush => next_scope(Scope::Flush)

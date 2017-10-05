@@ -85,18 +85,18 @@ pub enum Scope<'a, M: 'a> {
 /// - Log
 /// - Aggregate
 /// Print metrics to Generic.
-pub trait Sink<M> where M: Send + Sync {
+pub trait Sink<M> where M: Clone + Send + Sync {
     /// Define a new metric instrument of the requested kind, with the specified name and sample rate.
     fn new_metric(&self, kind: Kind, name: &str, sampling: Rate) -> M;
 
     /// Returns a callback function to send scope commands.
     /// Writes can be performed by passing Some((&Metric, Value))
     /// Flushes can be performed by passing None
-    fn new_scope(&self) -> ScopeFn<M>;
+    fn new_scope(&self, auto_flush: bool) -> ScopeFn<M>;
 }
 
 /// Expose the `Sink` nature of a multi-faceted struct.
-pub trait AsSink<M, S: Sink<M>> where M: Send + Sync {
+pub trait AsSink<M, S: Sink<M>> where M: Clone + Send + Sync {
     /// Get the metric sink.
     fn as_sink(&self) -> S;
 }

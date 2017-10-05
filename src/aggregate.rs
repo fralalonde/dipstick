@@ -233,7 +233,8 @@ impl Sink<Aggregate> for AggregateSink {
         metric
     }
 
-    fn new_scope(&self) -> ScopeFn<Aggregate> {
+    #[allow(unused_variables)]
+    fn new_scope(&self, auto_flush: bool) -> ScopeFn<Aggregate> {
         Arc::new(|cmd| match cmd {
             Scope::Write(metric, value) => metric.write(value as usize),
             Scope::Flush => {}

@@ -30,7 +30,7 @@ fn main() {
     let counter = app_metrics.counter("counter_a");
     loop {
         // add counts forever, non-stop
-        counter.count(11);
+        counter.count(4.6);
         counter.count(12);
         counter.count(13);
     }

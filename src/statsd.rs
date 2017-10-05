@@ -32,7 +32,7 @@ lazy_static! {
 }
 
 /// Key of a statsd metric.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct StatsdMetric {
     prefix: String,
     suffix: String,
@@ -56,7 +56,7 @@ impl Drop for ScopeBuffer {
     }
 }
 
-impl  ScopeBuffer {
+impl ScopeBuffer {
 
     fn flush(&mut self) {
         match self.socket.send(self.str.as_bytes()) {
@@ -109,7 +109,8 @@ impl Sink<StatsdMetric> for StatsdSink {
         StatsdMetric { prefix, suffix, scale }
     }
 
-    fn new_scope(&self) -> ScopeFn<StatsdMetric> {
+    #[allow(unused_variables)]
+    fn new_scope(&self, auto_flush: bool) -> ScopeFn<StatsdMetric> {
         let buf = RwLock::new(ScopeBuffer { str: String::with_capacity(MAX_UDP_PAYLOAD), socket: self.socket.clone() });
         Arc::new(move |cmd| match cmd {
             Scope::Write(metric, value) => {

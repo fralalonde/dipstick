@@ -2,7 +2,7 @@
 //! Collect statistics about various metrics modules at runtime.
 //! Stats can can be obtained for publication from `selfstats::SOURCE`.
 
-pub use app::*;
+pub use app_metrics::*;
 pub use aggregate::*;
 
 lazy_static! {
