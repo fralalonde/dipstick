@@ -101,7 +101,6 @@ let db_counter = db_metrics.counter("db_counter");
 */
 
 #![cfg_attr(feature = "bench", feature(test))]
-//#![feature(custom_attribute)]
 
 #![warn(
 missing_copy_implementations,
@@ -124,6 +123,7 @@ extern crate log as log_crate; // avoid namespace conflict with local 'log' modu
 extern crate error_chain;
 
 extern crate time;
+#[cfg(cached)]
 extern crate cached;
 extern crate num;
 #[macro_use] extern crate lazy_static;
@@ -163,10 +163,14 @@ pub use aggregate::*;
 mod publish;
 pub use publish::*;
 
+#[cfg(statsd)]
 mod statsd;
+#[cfg(statsd)]
 pub use statsd::*;
 
+#[cfg(cached)]
 mod cache;
+#[cfg(cached)]
 pub use cache::*;
 
 mod multi;
