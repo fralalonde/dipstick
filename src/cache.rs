@@ -17,9 +17,6 @@ pub fn cache<M, S>(size: usize, sink: S) -> MetricCache<M, S>
     MetricCache { next_sink: sink, cache }
 }
 
-/// The cache key copies the target key.
-pub type Cached<M> = Arc<M>;
-
 /// A cache to help with ad-hoc defined metrics
 /// Does not alter the values of the metrics
 #[derive(Derivative)]
@@ -30,30 +27,24 @@ pub struct MetricCache<M, S> {
     cache: RwLock<cached::SizedCache<String, Cached<M>>>,
 }
 
-impl<M, S> Sink<Cached<M>> for MetricCache<M, S>
+impl<M, S> Sink<M> for MetricCache<M, S>
     where S: Sink<M>,
           M: 'static + Clone + Send + Sync
 {
     #[allow(unused_variables)]
     fn new_metric(&self, kind: Kind, name: &str, sampling: Rate) -> Cached<M> {
-        // TODO use ref for key, not owned
-        let key = name.to_string();
-        {
-            let mut cache = self.cache.write().unwrap();
-            let cached_metric = cache.cache_get(&key);
-            if let Some(cached_metric) = cached_metric {
-                return cached_metric.clone();
-            }
+        let mut cache = self.cache.write().expect("Failed to acquire metric cache");
+        let cached_metric = cache.cache_get(&name);
+        if let Some(cached_metric) = cached_metric {
+            return cached_metric.clone();
         }
 
-        let target_metric = self.next_sink.new_metric(kind, name, sampling);
-        let new_metric = Arc::new(target_metric);
-        let mut cache = self.cache.write().unwrap();
-        cache.cache_set(key, new_metric.clone());
+        let new_metric = self.next_sink.new_metric(kind, name, sampling);
+        cache.cache_set(name.to_string(), new_metric.clone());
         new_metric
     }
 
-    fn new_scope(&self, auto_flush: bool) -> ScopeFn<Arc<M>> {
+    fn new_scope(&self, auto_flush: bool) -> ScopeFn<M> {
         let next_scope = self.next_sink.new_scope(auto_flush);
         Arc::new(move |cmd| match cmd {
             Scope::Write(metric, value) => next_scope(Scope::Write(metric, value)),
