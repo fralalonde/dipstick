@@ -1,6 +1,6 @@
 [root]
 name = "static_metrics"
-version = "0.0.0"
+version = "0.4.8"
 dependencies = [
  "dipstick 0.4.8-alpha.0",
  "lazy_static 0.2.9 (registry+https://github.com/rust-lang/crates.io-index)",
