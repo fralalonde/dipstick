@@ -5,5 +5,4 @@ workspace = "../../"
 
 [dependencies]
 dipstick = { path = '../../' }
-scheduled-executor = "0.3.0"
 
