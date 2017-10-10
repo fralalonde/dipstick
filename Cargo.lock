@@ -1,8 +1,8 @@
 [root]
 name = "static_metrics"
-version = "0.4.8-alpha.0"
+version = "0.0.0"
 dependencies = [
- "dipstick 0.4.7",
+ "dipstick 0.4.8-alpha.0",
  "lazy_static 0.2.9 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -10,7 +10,7 @@ dependencies = [
 name = "aggregate_print"
 version = "0.0.0"
 dependencies = [
- "dipstick 0.4.7",
+ "dipstick 0.4.8-alpha.0",
 ]
 
 [[package]]
@@ -55,14 +55,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "counter_timer_gauge"
 version = "0.0.0"
 dependencies = [
- "dipstick 0.4.7",
+ "dipstick 0.4.8-alpha.0",
 ]
 
 [[package]]
 name = "custom_publish"
 version = "0.0.0"
 dependencies = [
- "dipstick 0.4.7",
+ "dipstick 0.4.8-alpha.0",
 ]
 
 [[package]]
@@ -86,7 +86,7 @@ dependencies = [
 
 [[package]]
 name = "dipstick"
-version = "0.4.7"
+version = "0.4.8-alpha.0"
 dependencies = [
  "cached 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "derivative 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -146,7 +146,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "multi_print"
 version = "0.0.0"
 dependencies = [
- "dipstick 0.4.7",
+ "dipstick 0.4.8-alpha.0",
 ]
 
 [[package]]
@@ -185,7 +185,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "queued"
 version = "0.0.0"
 dependencies = [
- "dipstick 0.4.7",
+ "dipstick 0.4.8-alpha.0",
 ]
 
 [[package]]
@@ -197,7 +197,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "raw_sink"
 version = "0.0.0"
 dependencies = [
- "dipstick 0.4.7",
+ "dipstick 0.4.8-alpha.0",
 ]
 
 [[package]]

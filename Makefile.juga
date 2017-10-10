@@ -1,0 +1,28 @@
+# Customizing release-flow
+
+[tasks.default]
+description = "GAGAGA"
+alias = "GAGA-flow"
+
+[tasks.pre-publish]
+dependencies = [
+    "update-readme",
+    "git-add",
+]
+
+[tasks.update-readme]
+description = "Update the README using cargo readme."
+script = [
+    "#!/usr/bin/env bash",
+    "cargo readme > README.md",
+]
+
+[tasks.post-publish]
+dependencies = [
+    "update-examples",
+]
+
+[tasks.update-examples]
+description = "Update the examples dependencies."
+command = "cargo"
+args = ["update", "-p", "dipstick"]

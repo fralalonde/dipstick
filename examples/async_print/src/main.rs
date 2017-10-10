@@ -7,8 +7,6 @@ use std::thread::sleep;
 use std::time::Duration;
 use dipstick::*;
 
-use dipstick::core::{self, Sink};
-
 fn main() {
 
     let metrics = metrics(async(0, to_stdout()));

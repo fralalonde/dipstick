@@ -27,14 +27,18 @@ use std::time::Duration;
 use schedule::{schedule, CancelHandle};
 
 /// Schedules the publisher to run at recurrent intervals
-pub fn publish_every<E, M, S>(duration: Duration, source: AggregateSource, target: S, export: E) -> CancelHandle
-    where S: Sink<M> + 'static + Send + Sync,
-          M: Clone + Send + Sync,
-          E: Fn(Kind, &str, ScoreType) -> Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static
+pub fn publish_every<E, M, S>(
+    duration: Duration,
+    source: AggregateSource,
+    target: S,
+    export: E,
+) -> CancelHandle
+where
+    S: Sink<M> + 'static + Send + Sync,
+    M: Clone + Send + Sync,
+    E: Fn(Kind, &str, ScoreType) -> Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static,
 {
-    schedule(duration, move || {
-        publish(&source, &target, &export)
-    })
+    schedule(duration, move || publish(&source, &target, &export))
 }
 
 /// Define and write metrics from aggregated scores to the target channel
@@ -42,9 +46,10 @@ pub fn publish_every<E, M, S>(duration: Duration, source: AggregateSource, targe
 /// to prevent new metrics from being created every time.
 // TODO require ScopeMetrics instead of Sink
 pub fn publish<E, M, S>(source: &AggregateSource, target: &S, export: &E)
-    where S: Sink<M>,
-          M: Clone + Send + Sync,
-          E: Fn(Kind, &str, ScoreType) -> Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static
+where
+    S: Sink<M>,
+    M: Clone + Send + Sync,
+    E: Fn(Kind, &str, ScoreType) -> Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static,
 {
     let scope = target.new_scope(false);
     source.for_each(|metric| {
@@ -84,14 +89,16 @@ pub fn all_stats(kind: Kind, name: &str, score: ScoreType) -> Option<(Kind, Vec<
 /// and so exported stats copy their metric's name.
 pub fn average(kind: Kind, name: &str, score: ScoreType) -> Option<(Kind, Vec<&str>, Value)> {
     match kind {
-        Marker => match score {
-            HitCount(hit) => Some((Counter, vec![name], hit)),
-            _ => None
-        },
+        Marker => {
+            match score {
+                HitCount(hit) => Some((Counter, vec![name], hit)),
+                _ => None,
+            }
+        }
         _ => {
             match score {
                 AverageValue(avg) => Some((Gauge, vec![name], avg)),
-                _ => None
+                _ => None,
             }
         }
     }
@@ -106,17 +113,23 @@ pub fn average(kind: Kind, name: &str, score: ScoreType) -> Option<(Kind, Vec<&s
 /// and so exported stats copy their metric's name.
 pub fn summary(kind: Kind, name: &str, score: ScoreType) -> Option<(Kind, Vec<&str>, Value)> {
     match kind {
-        Marker => match score {
-            HitCount(hit) => Some((Counter, vec![name], hit)),
-            _ => None
-        },
-        Counter | Timer => match score {
-            SumOfValues(sum) => Some((kind, vec![name], sum)),
-            _ => None
-        },
-        Gauge => match score {
-            AverageValue(avg) => Some((Gauge, vec![name], avg)),
-            _ => None
-        },
+        Marker => {
+            match score {
+                HitCount(hit) => Some((Counter, vec![name], hit)),
+                _ => None,
+            }
+        }
+        Counter | Timer => {
+            match score {
+                SumOfValues(sum) => Some((kind, vec![name], sum)),
+                _ => None,
+            }
+        }
+        Gauge => {
+            match score {
+                AverageValue(avg) => Some((Gauge, vec![name], avg)),
+                _ => None,
+            }
+        }
     }
 }

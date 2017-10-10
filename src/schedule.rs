@@ -8,7 +8,7 @@ use std::sync::atomic::Ordering::SeqCst;
 
 /// A handle to cancel a scheduled task if required.
 #[derive(Debug, Clone)]
-pub struct CancelHandle (Arc<AtomicBool>);
+pub struct CancelHandle(Arc<AtomicBool>);
 
 impl CancelHandle {
     fn new() -> CancelHandle {
@@ -28,19 +28,18 @@ impl CancelHandle {
 /// Schedule a task to run periodically.
 /// Starts a new thread for every task.
 pub fn schedule<F>(every: Duration, operation: F) -> CancelHandle
-    where F: Fn() -> () + Send + 'static
+where
+    F: Fn() -> () + Send + 'static,
 {
     let handle = CancelHandle::new();
     let inner_handle = handle.clone();
 
-    thread::spawn(move || {
-        loop {
-            thread::sleep(every);
-            if inner_handle.is_cancelled() {
-                break
-            }
-            operation();
+    thread::spawn(move || loop {
+        thread::sleep(every);
+        if inner_handle.is_cancelled() {
+            break;
         }
+        operation();
     });
     handle
 }

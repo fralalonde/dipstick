@@ -5,12 +5,14 @@ use error;
 use selfmetrics::*;
 
 use std::net::UdpSocket;
-use std::sync::{Arc,RwLock};
+use std::sync::{Arc, RwLock};
 pub use std::net::ToSocketAddrs;
 
 /// Send metrics to a statsd server at the address and port provided.
 pub fn to_statsd<STR, ADDR>(address: ADDR, prefix: STR) -> error::Result<StatsdSink>
-    where STR: Into<String>, ADDR: ToSocketAddrs
+where
+    STR: Into<String>,
+    ADDR: ToSocketAddrs,
 {
     let socket = Arc::new(UdpSocket::bind("0.0.0.0:0")?); // NB: CLOEXEC by default
     socket.set_nonblocking(true)?;
@@ -57,13 +59,12 @@ impl Drop for ScopeBuffer {
 }
 
 impl ScopeBuffer {
-
     fn flush(&mut self) {
         match self.socket.send(self.str.as_bytes()) {
             Ok(size) => {
                 SENT_BYTES.count(size);
                 trace!("Sent {} bytes to statsd", self.str.len());
-            },
+            }
             Err(e) => {
                 SEND_ERR.mark();
                 debug!("Failed to send packet to statsd: {}", e);
@@ -81,7 +82,6 @@ pub struct StatsdSink {
 }
 
 impl Sink<StatsdMetric> for StatsdSink {
-
     fn new_metric(&self, kind: Kind, name: &str, sampling: Rate) -> StatsdMetric {
         let mut prefix = String::with_capacity(32);
         prefix.push_str(&self.prefix);
@@ -103,15 +103,22 @@ impl Sink<StatsdMetric> for StatsdSink {
 
         let scale = match kind {
             Kind::Timer => 1000,
-            _ => 1
+            _ => 1,
         };
 
-        StatsdMetric { prefix, suffix, scale }
+        StatsdMetric {
+            prefix,
+            suffix,
+            scale,
+        }
     }
 
     #[allow(unused_variables)]
     fn new_scope(&self, auto_flush: bool) -> ScopeFn<StatsdMetric> {
-        let buf = RwLock::new(ScopeBuffer { str: String::with_capacity(MAX_UDP_PAYLOAD), socket: self.socket.clone() });
+        let buf = RwLock::new(ScopeBuffer {
+            str: String::with_capacity(MAX_UDP_PAYLOAD),
+            socket: self.socket.clone(),
+        });
         Arc::new(move |cmd| match cmd {
             Scope::Write(metric, value) => {
                 if let Ok(mut buf) = buf.try_write() {
@@ -142,7 +149,7 @@ impl Sink<StatsdMetric> for StatsdSink {
                         buf.str.push_str(&metric.suffix);
                     }
                 }
-            },
+            }
             Scope::Flush => {
                 if let Ok(mut buf) = buf.try_write() {
                     if !buf.str.is_empty() {
