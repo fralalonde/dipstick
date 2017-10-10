@@ -4,23 +4,25 @@ use fnsink::*;
 
 /// Write metric values to stdout using `println!`.
 pub fn to_stdout() -> FnSink<String> {
-    make_sink(|_, name, _| String::from(name),
-                 |cmd| if let Scope::Write(m, v) = cmd {
-                     println!("{}: {}", m, v)
-                 })
+    make_sink(|_, name, _| String::from(name), |cmd| {
+        if let Scope::Write(m, v) = cmd {
+            println!("{}: {}", m, v)
+        }
+    })
 }
 
 /// Write metric values to the standard log using `info!`.
 pub fn to_log<STR: AsRef<str> + 'static + Send + Sync>(prefix: STR) -> FnSink<String> {
-    make_sink(move |_, name, _| [prefix.as_ref(), name].concat(),
-                 |cmd| if let Scope::Write(m, v) = cmd {
-                     info!("{}: {}", m, v)
-                 })
+    make_sink(move |_, name, _| [prefix.as_ref(), name].concat(), |cmd| {
+        if let Scope::Write(m, v) = cmd {
+            info!("{}: {}", m, v)
+        }
+    })
 }
 
 /// Special sink that discards all metric values sent to it.
 pub fn to_void() -> FnSink<String> {
-    make_sink(move |_, name, _| String::from(name),  |_| {})
+    make_sink(move |_, name, _| String::from(name), |_| {})
 }
 
 #[cfg(test)]

@@ -7,10 +7,14 @@ use std::sync::Arc;
 
 /// Perform random sampling of values according to the specified rate.
 pub fn sample<M, S>(sampling_rate: Rate, sink: S) -> SampleSink<S>
-    where S: Sink<M>,
-          M: Clone + Send + Sync
+where
+    S: Sink<M>,
+    M: Clone + Send + Sync,
 {
-    SampleSink { next_sink: sink, sampling_rate}
+    SampleSink {
+        next_sink: sink,
+        sampling_rate,
+    }
 }
 
 /// The metric sampling key also holds the sampling rate to apply to it.
@@ -28,13 +32,18 @@ pub struct SampleSink<S> {
 }
 
 impl<M, S> Sink<Sample<M>> for SampleSink<S>
-    where S: Sink<M>,
-          M: 'static + Clone + Send + Sync
+where
+    S: Sink<M>,
+    M: 'static + Clone + Send + Sync,
 {
     #[allow(unused_variables)]
     fn new_metric(&self, kind: Kind, name: &str, sampling: Rate) -> Sample<M> {
         // TODO override only if FULL_SAMPLING else warn!()
-        assert_eq!(sampling, FULL_SAMPLING_RATE, "Overriding previously set sampling rate");
+        assert_eq!(
+            sampling,
+            FULL_SAMPLING_RATE,
+            "Overriding previously set sampling rate"
+        );
 
         let pm = self.next_sink.new_metric(kind, name, self.sampling_rate);
         Sample {

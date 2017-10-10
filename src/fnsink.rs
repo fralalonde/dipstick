@@ -19,10 +19,11 @@ pub type MetricFn<M> = Box<Fn(Kind, &str, Rate) -> M + Send + Sync>;
 /// Performance impact of method delegation should be negligible
 /// when compared actual method cost for most use cases.
 // TODO assert actual performance vs hard-compiled impl
-pub fn make_sink<M, MF, WF  >(make_metric: MF, make_scope: WF) -> FnSink<M>
-    where MF: Fn(Kind, &str, Rate) -> M + Send + Sync + 'static,
-          WF: Fn(Scope<M>) + Send + Sync + 'static,
-          M: Send + Sync,
+pub fn make_sink<M, MF, WF>(make_metric: MF, make_scope: WF) -> FnSink<M>
+where
+    MF: Fn(Kind, &str, Rate) -> M + Send + Sync + 'static,
+    WF: Fn(Scope<M>) + Send + Sync + 'static,
+    M: Send + Sync,
 {
     FnSink {
         // capture the provided closures in Arc to provide cheap clones
@@ -35,14 +36,20 @@ pub fn make_sink<M, MF, WF  >(make_metric: MF, make_scope: WF) -> FnSink<M>
 /// functions or closures it was provided upon its creation.
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub struct FnSink<M> where M: Send + Sync  {
-    #[derivative(Debug="ignore")]
+pub struct FnSink<M>
+where
+    M: Send + Sync,
+{
+    #[derivative(Debug = "ignore")]
     metric_fn: MetricFn<M>,
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     scope_fn: ScopeFn<M>,
 }
 
-impl <M> Sink<M> for FnSink<M> where M: Clone + Send + Sync {
+impl<M> Sink<M> for FnSink<M>
+where
+    M: Clone + Send + Sync,
+{
     #[allow(unused_variables)]
     fn new_metric(&self, kind: Kind, name: &str, sampling: Rate) -> M {
         self.metric_fn.as_ref()(kind, name, sampling)

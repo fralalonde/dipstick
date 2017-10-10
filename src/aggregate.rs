@@ -31,9 +31,7 @@ pub fn aggregate() -> (AggregateSink, AggregateSource) {
 #[derive(Debug)]
 enum InnerScores {
     /// Event metrics need not record more than a hit count.
-    Event {
-        hit: AtomicUsize
-    },
+    Event { hit: AtomicUsize },
 
     /// Value metrics keep track of key highlights.
     Value {
@@ -78,7 +76,10 @@ pub struct MetricScores {
 /// Spinlock update of max and min values.
 /// Retries until success or clear loss to concurrent update.
 #[inline]
-fn compare_and_swap<F>(counter: &AtomicUsize, new_value: usize, retry: F) where F: Fn(usize) -> bool {
+fn compare_and_swap<F>(counter: &AtomicUsize, new_value: usize, retry: F)
+where
+    F: Fn(usize) -> bool,
+{
     let mut loaded = counter.load(Acquire);
     while retry(loaded) {
         if counter.compare_and_swap(loaded, new_value, Release) == new_value {
@@ -96,7 +97,13 @@ impl MetricScores {
             &InnerScores::Event { ref hit, .. } => {
                 hit.fetch_add(1, SeqCst);
             }
-            &InnerScores::Value { ref hit, ref sum, ref max, ref min, .. } => {
+            &InnerScores::Value {
+                ref hit,
+                ref sum,
+                ref max,
+                ref min,
+                ..
+            } => {
                 compare_and_swap(max, value, |loaded| value > loaded);
                 compare_and_swap(min, value, |loaded| value < loaded);
                 sum.fetch_add(value, Acquire);
@@ -118,15 +125,21 @@ impl MetricScores {
                     _ => {}
                 }
             }
-            InnerScores::Value { ref hit, ref sum, ref max, ref min, .. } => {
+            InnerScores::Value {
+                ref hit,
+                ref sum,
+                ref max,
+                ref min,
+                ..
+            } => {
                 match hit.swap(0, Release) as u64 {
-                    hit if hit > 0  => {
+                    hit if hit > 0 => {
                         let sum = sum.swap(0, Release) as u64;
 
                         match self.kind {
                             Kind::Gauge => {
                                 // sum and hit are meaningless for Gauge metrics
-                            },
+                            }
                             _ => {
                                 snapshot.push(ScoreType::HitCount(hit));
                                 snapshot.push(ScoreType::SumOfValues(sum));
@@ -138,9 +151,13 @@ impl MetricScores {
                         // - integer division is not rounding
                         // assuming values will still be good enough to be useful
                         snapshot.push(ScoreType::AverageValue(sum / hit));
-                        snapshot.push(ScoreType::MaximumValue(max.swap(usize::MIN, Release) as u64));
-                        snapshot.push(ScoreType::MinimumValue(min.swap(usize::MAX, Release) as u64));
-                    },
+                        snapshot.push(ScoreType::MaximumValue(
+                            max.swap(usize::MIN, Release) as u64,
+                        ));
+                        snapshot.push(ScoreType::MinimumValue(
+                            min.swap(usize::MAX, Release) as u64,
+                        ));
+                    }
                     _ => {}
                 }
             }
@@ -154,9 +171,11 @@ impl MetricScores {
 pub struct AggregateSource(Arc<RwLock<Vec<Arc<MetricScores>>>>);
 
 impl AggregateSource {
-
     /// Iterate over every aggregated metric.
-    pub fn for_each<F>(&self, ops: F) where F: Fn(&MetricScores) {
+    pub fn for_each<F>(&self, ops: F)
+    where
+        F: Fn(&MetricScores),
+    {
         for metric in self.0.read().unwrap().iter() {
             ops(&metric)
         }
@@ -240,7 +259,6 @@ impl Sink<Aggregate> for AggregateSink {
             Scope::Flush => {}
         })
     }
-
 }
 
 #[cfg(feature = "bench")]
@@ -254,7 +272,7 @@ mod microbench {
     fn time_bench_write_event(b: &mut test::Bencher) {
         let (sink, _source) = aggregate();
         let metric = sink.new_metric(Kind::Marker, &"event_a", 1.0);
-        let scope = sink.new_scope();
+        let scope = sink.new_scope(false);
         b.iter(|| test::black_box(scope(Scope::Write(&metric, 1))));
     }
 
@@ -263,7 +281,7 @@ mod microbench {
     fn time_bench_write_count(b: &mut test::Bencher) {
         let (sink, _source) = aggregate();
         let metric = sink.new_metric(Kind::Counter, &"count_a", 1.0);
-        let scope = sink.new_scope();
+        let scope = sink.new_scope(false);
         b.iter(|| test::black_box(scope(Scope::Write(&metric, 1))));
     }
 

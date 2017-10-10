@@ -14,20 +14,32 @@ use std::thread;
 /// Use of this should be transparent, this has no effect on the values.
 /// Stateful sinks (i.e. Aggregate) may naturally cache their definitions.
 pub fn async<M, S>(queue_size: usize, sink: S) -> MetricQueue<M, S>
-    where S: Sink<M>,
-          M: 'static + Clone + Send + Sync
+where
+    S: Sink<M>,
+    M: 'static + Clone + Send + Sync,
 {
     let (sender, receiver) = mpsc::sync_channel::<QueueCommand<M>>(queue_size);
     thread::spawn(move || loop {
         while let Ok(cmd) = receiver.recv() {
             // apply scope commands received from channel
             match cmd {
-                QueueCommand {cmd: Some((metric, value)), next_scope, .. } => next_scope(Scope::Write(metric.as_ref(), value)),
-                QueueCommand {cmd: None, next_scope, .. } => next_scope(Scope::Flush),
+                QueueCommand {
+                    cmd: Some((metric, value)),
+                    next_scope,
+                    ..
+                } => next_scope(Scope::Write(metric.as_ref(), value)),
+                QueueCommand {
+                    cmd: None,
+                    next_scope,
+                    ..
+                } => next_scope(Scope::Flush),
             }
         }
     });
-    MetricQueue { next_sink: sink, sender }
+    MetricQueue {
+        next_sink: sink,
+        sender,
+    }
 }
 
 lazy_static! {
@@ -48,7 +60,7 @@ pub struct QueueCommand<M> {
     /// If None, flush the scope
     cmd: Option<(Arc<M>, Value)>,
     /// The scope to write the metric to
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     next_scope: Arc<ScopeFn<M>>,
 }
 
@@ -61,7 +73,11 @@ pub struct MetricQueue<M, S> {
     sender: QueueSender<M>,
 }
 
-impl<M, S> Sink<Arc<M>> for MetricQueue<M, S> where S: Sink<M>, M: 'static + Clone + Send + Sync {
+impl<M, S> Sink<Arc<M>> for MetricQueue<M, S>
+where
+    S: Sink<M>,
+    M: 'static + Clone + Send + Sync,
+{
     #[allow(unused_variables)]
     fn new_metric(&self, kind: Kind, name: &str, sampling: Rate) -> Arc<M> {
         Arc::new(self.next_sink.new_metric(kind, name, sampling))
@@ -79,13 +95,15 @@ impl<M, S> Sink<Arc<M>> for MetricQueue<M, S> where S: Sink<M>, M: 'static + Clo
                 Scope::Write(metric, value) => Some(((*metric).clone(), value)),
                 Scope::Flush => None,
             };
-            sender.send(QueueCommand {
-                cmd: send_cmd,
-                next_scope: next_scope.clone(),
-            }).unwrap_or_else(|e| {
-                SEND_FAILED.mark();
-                trace!("Async metrics could not be sent: {}", e);
-            })
+            sender
+                .send(QueueCommand {
+                    cmd: send_cmd,
+                    next_scope: next_scope.clone(),
+                })
+                .unwrap_or_else(|e| {
+                    SEND_FAILED.mark();
+                    trace!("Async metrics could not be sent: {}", e);
+                })
         })
     }
 }

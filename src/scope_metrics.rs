@@ -27,8 +27,9 @@ pub use num::ToPrimitive;
 /// When reporting a value, scoped metrics also need to be passed a [Scope].
 /// New scopes can be obtained from
 pub fn scope_metrics<'ph, M, S>(sink: S) -> ScopedMetrics<'ph, M, S>
-    where S: Sink<M> + 'static,
-          M: 'static + Clone + Send + Sync
+where
+    S: Sink<M> + 'static,
+    M: 'static + Clone + Send + Sync,
 {
     ScopedMetrics {
         prefix: "".to_string(),
@@ -62,7 +63,10 @@ pub struct ScopeCounter<M> {
 
 impl<M> ScopeCounter<M> {
     /// Record a value count.
-    pub fn count<V>(&self, scope: &mut ScopeFn<M>, count: V) where V: ToPrimitive {
+    pub fn count<V>(&self, scope: &mut ScopeFn<M>, count: V)
+    where
+        V: ToPrimitive,
+    {
         scope.as_ref()(Scope::Write(&self.metric, count.to_u64().unwrap()));
     }
 }
@@ -76,7 +80,10 @@ pub struct ScopeGauge<M> {
 
 impl<M: Clone> ScopeGauge<M> {
     /// Record a value point for this gauge.
-    pub fn value<V>(&self, scope: &mut ScopeFn<M>, value: V) where V: ToPrimitive {
+    pub fn value<V>(&self, scope: &mut ScopeFn<M>, value: V)
+    where
+        V: ToPrimitive,
+    {
         scope.as_ref()(Scope::Write(&self.metric, value.to_u64().unwrap()));
     }
 }
@@ -96,7 +103,10 @@ pub struct ScopeTimer<M> {
 impl<M: Clone> ScopeTimer<M> {
     /// Record a microsecond interval for this timer
     /// Can be used in place of start()/stop() if an external time interval source is used
-    pub fn interval_us<V>(&self, scope: &mut ScopeFn<M>, interval_us: V) -> V where V: ToPrimitive {
+    pub fn interval_us<V>(&self, scope: &mut ScopeFn<M>, interval_us: V) -> V
+    where
+        V: ToPrimitive,
+    {
         scope.as_ref()(Scope::Write(&self.metric, interval_us.to_u64().unwrap()));
         interval_us
     }
@@ -121,7 +131,10 @@ impl<M: Clone> ScopeTimer<M> {
     }
 
     /// Record the time taken to execute the provided closure
-    pub fn time<F, R>(&self, scope: &mut ScopeFn<M>, operations: F) -> R where F: FnOnce() -> R {
+    pub fn time<F, R>(&self, scope: &mut ScopeFn<M>, operations: F) -> R
+    where
+        F: FnOnce() -> R,
+    {
         let start_time = self.start();
         let value: R = operations();
         self.stop(scope, start_time);
@@ -138,55 +151,86 @@ pub struct ScopedMetrics<'ph, M: 'ph, S> {
     phantom: PhantomData<&'ph M>,
 }
 
-impl <'ph, M, S> ScopedMetrics<'ph, M, S> where S: Sink<M>, M: 'static + Clone + Send + Sync {
-
+impl<'ph, M, S> ScopedMetrics<'ph, M, S>
+where
+    S: Sink<M>,
+    M: 'static + Clone + Send + Sync,
+{
     fn qualified_name<AS>(&self, name: AS) -> String
-        where AS: Into<String> + AsRef<str>
+    where
+        AS: Into<String> + AsRef<str>,
     {
         // FIXME is there a way to return <S> in both cases?
         if self.prefix.is_empty() {
-            return name.into()
+            return name.into();
         }
-        let mut buf:String = self.prefix.clone();
+        let mut buf: String = self.prefix.clone();
         buf.push_str(name.as_ref());
         buf.to_string()
     }
 
     /// Get an event counter of the provided name.
     pub fn marker<AS>(&self, name: AS) -> ScopeMarker<M>
-        where AS: Into<String> + AsRef<str>, M: Send + Sync
+    where
+        AS: Into<String> + AsRef<str>,
+        M: Send + Sync,
     {
-        let metric = self.next_sink.new_metric(Kind::Marker, &self.qualified_name(name), 1.0);
+        let metric = self.next_sink.new_metric(
+            Kind::Marker,
+            &self.qualified_name(name),
+            1.0,
+        );
         ScopeMarker { metric }
     }
 
     /// Get a counter of the provided name.
     pub fn counter<AS>(&self, name: AS) -> ScopeCounter<M>
-        where AS: Into<String> + AsRef<str>, M: Send + Sync
+    where
+        AS: Into<String> + AsRef<str>,
+        M: Send + Sync,
     {
-        let metric = self.next_sink.new_metric(Kind::Counter, &self.qualified_name(name), 1.0);
-        ScopeCounter { metric}
+        let metric = self.next_sink.new_metric(
+            Kind::Counter,
+            &self.qualified_name(name),
+            1.0,
+        );
+        ScopeCounter { metric }
     }
 
     /// Get a timer of the provided name.
     pub fn timer<AS>(&self, name: AS) -> ScopeTimer<M>
-        where AS: Into<String> + AsRef<str>, M: Send + Sync
+    where
+        AS: Into<String> + AsRef<str>,
+        M: Send + Sync,
     {
-        let metric = self.next_sink.new_metric(Kind::Timer, &self.qualified_name(name), 1.0);
+        let metric = self.next_sink.new_metric(
+            Kind::Timer,
+            &self.qualified_name(name),
+            1.0,
+        );
         ScopeTimer { metric }
     }
 
     /// Get a gauge of the provided name.
     pub fn gauge<AS>(&self, name: AS) -> ScopeGauge<M>
-        where AS: Into<String> + AsRef<str>, M: Send + Sync
+    where
+        AS: Into<String> + AsRef<str>,
+        M: Send + Sync,
     {
-        let metric = self.next_sink.new_metric(Kind::Gauge, &self.qualified_name(name), 1.0);
+        let metric = self.next_sink.new_metric(
+            Kind::Gauge,
+            &self.qualified_name(name),
+            1.0,
+        );
         ScopeGauge { metric }
     }
 
     /// Prepend the metrics name with a prefix.
     /// Does not affect metrics that were already obtained.
-    pub fn with_prefix<IS>(&self, prefix: IS) -> Self where IS: Into<String> {
+    pub fn with_prefix<IS>(&self, prefix: IS) -> Self
+    where
+        IS: Into<String>,
+    {
         ScopedMetrics {
             prefix: prefix.into(),
             next_sink: self.next_sink.clone(),
@@ -196,17 +240,19 @@ impl <'ph, M, S> ScopedMetrics<'ph, M, S> where S: Sink<M>, M: 'static + Clone +
 
     /// Create a new scope to report metric values.
     pub fn new_scope(&self) -> ScopeFn<M> {
-        let scope_buffer = RwLock::new(ScopeBuffer{
+        let scope_buffer = RwLock::new(ScopeBuffer {
             buffer: Vec::new(),
             scope: self.next_sink.new_scope(false),
         });
         Arc::new(move |cmd: Scope<M>| {
             let mut buf = scope_buffer.write().expect("Could not lock scope.");
             match cmd {
-                Scope::Write(metric, value) => buf.buffer.push(ScopeCommand {
-                    metric: (*metric).clone(),
-                    value
-                }),
+                Scope::Write(metric, value) => {
+                    buf.buffer.push(ScopeCommand {
+                        metric: (*metric).clone(),
+                        value,
+                    })
+                }
                 Scope::Flush => buf.flush(),
             }
         })

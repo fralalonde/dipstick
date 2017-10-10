@@ -15,8 +15,9 @@ pub use num::ToPrimitive;
 
 /// Wrap the metrics backend to provide an application-friendly interface.
 pub fn metrics<M, S>(sink: S) -> AppMetrics<M, S>
-    where S: Sink<M> + 'static,
-          M: 'static + Clone + Send + Sync
+where
+    S: Sink<M> + 'static,
+    M: 'static + Clone + Send + Sync,
 {
     let static_scope = sink.new_scope(true);
     AppMetrics {
@@ -33,7 +34,7 @@ pub fn metrics<M, S>(sink: S) -> AppMetrics<M, S>
 #[derivative(Debug)]
 pub struct Marker<M> {
     metric: M,
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     scope: ScopeFn<M>,
 }
 
@@ -49,13 +50,16 @@ impl<M> Marker<M> {
 #[derivative(Debug)]
 pub struct Counter<M> {
     metric: M,
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     scope: ScopeFn<M>,
 }
 
 impl<M> Counter<M> {
     /// Record a value count.
-    pub fn count<V>(&self, count: V) where V: ToPrimitive {
+    pub fn count<V>(&self, count: V)
+    where
+        V: ToPrimitive,
+    {
         self.scope.as_ref()(Scope::Write(&self.metric, count.to_u64().unwrap()));
     }
 }
@@ -65,13 +69,16 @@ impl<M> Counter<M> {
 #[derivative(Debug)]
 pub struct Gauge<M> {
     metric: M,
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     scope: ScopeFn<M>,
 }
 
 impl<M> Gauge<M> {
     /// Record a value point for this gauge.
-    pub fn value<V>(&self, value: V) where V: ToPrimitive {
+    pub fn value<V>(&self, value: V)
+    where
+        V: ToPrimitive,
+    {
         self.scope.as_ref()(Scope::Write(&self.metric, value.to_u64().unwrap()));
     }
 }
@@ -86,14 +93,17 @@ impl<M> Gauge<M> {
 #[derivative(Debug)]
 pub struct Timer<M> {
     metric: M,
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     scope: ScopeFn<M>,
 }
 
 impl<M> Timer<M> {
     /// Record a microsecond interval for this timer
     /// Can be used in place of start()/stop() if an external time interval source is used
-    pub fn interval_us<V>(&self, interval_us: V) -> V where V: ToPrimitive {
+    pub fn interval_us<V>(&self, interval_us: V) -> V
+    where
+        V: ToPrimitive,
+    {
         self.scope.as_ref()(Scope::Write(&self.metric, interval_us.to_u64().unwrap()));
         interval_us
     }
@@ -118,7 +128,10 @@ impl<M> Timer<M> {
     }
 
     /// Record the time taken to execute the provided closure
-    pub fn time<F, R>(&self, operations: F) -> R where F: FnOnce() -> R {
+    pub fn time<F, R>(&self, operations: F) -> R
+    where
+        F: FnOnce() -> R,
+    {
         let start_time = self.start();
         let value: R = operations();
         self.stop(start_time);
@@ -132,61 +145,102 @@ impl<M> Timer<M> {
 pub struct AppMetrics<M, S> {
     prefix: String,
     sink: Arc<S>,
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     scope: ScopeFn<M>,
 }
 
-impl <M, S> AppMetrics<M, S>
-    where S: Sink<M>,
-          M: Clone + Send + Sync
+impl<M, S> AppMetrics<M, S>
+where
+    S: Sink<M>,
+    M: Clone + Send + Sync,
 {
     fn qualified_name<AS>(&self, name: AS) -> String
-        where AS: Into<String> + AsRef<str>
+    where
+        AS: Into<String> + AsRef<str>,
     {
         // FIXME is there a way to return <S> in both cases?
         if self.prefix.is_empty() {
-            return name.into()
+            return name.into();
         }
-        let mut buf:String = self.prefix.clone();
+        let mut buf: String = self.prefix.clone();
         buf.push_str(name.as_ref());
         buf.to_string()
     }
 
     /// Get an event counter of the provided name.
     pub fn marker<AS>(&self, name: AS) -> Marker<M>
-        where AS: Into<String> + AsRef<str>, M: Send + Sync
+    where
+        AS: Into<String> + AsRef<str>,
+        M: Send + Sync,
     {
-        let metric = self.sink.new_metric(Kind::Marker, &self.qualified_name(name), 1.0);
-        Marker { metric, scope: self.scope.clone(), }
+        let metric = self.sink.new_metric(
+            Kind::Marker,
+            &self.qualified_name(name),
+            1.0,
+        );
+        Marker {
+            metric,
+            scope: self.scope.clone(),
+        }
     }
 
     /// Get a counter of the provided name.
     pub fn counter<AS>(&self, name: AS) -> Counter<M>
-        where AS: Into<String> + AsRef<str>, M: Send + Sync
+    where
+        AS: Into<String> + AsRef<str>,
+        M: Send + Sync,
     {
-        let metric = self.sink.new_metric(Kind::Counter, &self.qualified_name(name), 1.0);
-        Counter { metric, scope: self.scope.clone(), }
+        let metric = self.sink.new_metric(
+            Kind::Counter,
+            &self.qualified_name(name),
+            1.0,
+        );
+        Counter {
+            metric,
+            scope: self.scope.clone(),
+        }
     }
 
     /// Get a timer of the provided name.
     pub fn timer<AS>(&self, name: AS) -> Timer<M>
-        where AS: Into<String> + AsRef<str>, M: Send + Sync
+    where
+        AS: Into<String> + AsRef<str>,
+        M: Send + Sync,
     {
-        let metric = self.sink.new_metric(Kind::Timer, &self.qualified_name(name), 1.0);
-        Timer { metric, scope: self.scope.clone(), }
+        let metric = self.sink.new_metric(
+            Kind::Timer,
+            &self.qualified_name(name),
+            1.0,
+        );
+        Timer {
+            metric,
+            scope: self.scope.clone(),
+        }
     }
 
     /// Get a gauge of the provided name.
     pub fn gauge<AS>(&self, name: AS) -> Gauge<M>
-        where AS: Into<String> + AsRef<str>, M: Send + Sync
+    where
+        AS: Into<String> + AsRef<str>,
+        M: Send + Sync,
     {
-        let metric = self.sink.new_metric(Kind::Gauge, &self.qualified_name(name), 1.0);
-        Gauge { metric, scope: self.scope.clone(), }
+        let metric = self.sink.new_metric(
+            Kind::Gauge,
+            &self.qualified_name(name),
+            1.0,
+        );
+        Gauge {
+            metric,
+            scope: self.scope.clone(),
+        }
     }
 
     /// Prepend the metrics name with a prefix.
     /// Does not affect metrics that were already obtained.
-    pub fn with_prefix<IS>(&self, prefix: IS) -> Self where IS: Into<String> {
+    pub fn with_prefix<IS>(&self, prefix: IS) -> Self
+    where
+        IS: Into<String>,
+    {
         AppMetrics {
             prefix: prefix.into(),
             sink: self.sink.clone(),

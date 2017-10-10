@@ -30,8 +30,8 @@ license = "MIT/Apache-2.0"
 travis-ci = { repository = "fralalonde/dipstick", branch = "master" }
 
 [dependencies]
-cached = { version = "0.4", optional = true }
-log = { version = "0.3", optional = true }
+cached = { version = "0.4" }
+log = { version = "0.3" }
 time = "0.1"
 error-chain = "0.10"
 lazy_static = "0.2.9"
@@ -43,5 +43,3 @@ version = "0.1"
 
 [features]
 bench = []
-statsd = []
-default = [ "statsd" , "cached", "log" ]

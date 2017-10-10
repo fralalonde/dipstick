@@ -117,17 +117,18 @@ unused_qualifications,
 extern crate test;
 
 #[macro_use]
-extern crate log as log_crate; // avoid namespace conflict with local 'log' module
+extern crate log;
 
 #[macro_use]
 extern crate error_chain;
 
 extern crate time;
-#[cfg(cached)]
 extern crate cached;
 extern crate num;
-#[macro_use] extern crate lazy_static;
-#[macro_use] extern crate derivative;
+#[macro_use]
+extern crate lazy_static;
+#[macro_use]
+extern crate derivative;
 
 mod pcg32;
 
@@ -163,14 +164,10 @@ pub use aggregate::*;
 mod publish;
 pub use publish::*;
 
-#[cfg(statsd)]
 mod statsd;
-#[cfg(statsd)]
 pub use statsd::*;
 
-#[cfg(cached)]
 mod cache;
-#[cfg(cached)]
 pub use cache::*;
 
 mod multi;
@@ -187,4 +184,3 @@ pub use schedule::*;
 
 mod selfmetrics;
 pub use selfmetrics::METRICS_SOURCE;
-
