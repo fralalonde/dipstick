@@ -33,7 +33,6 @@ travis-ci = { repository = "fralalonde/dipstick", branch = "master" }
 cached = { version = "0.4" }
 log = { version = "0.3" }
 time = "0.1"
-error-chain = "0.10"
 lazy_static = "0.2.9"
 derivative = "1.0"
 
