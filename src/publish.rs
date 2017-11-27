@@ -51,7 +51,7 @@ where
     M: Clone + Send + Sync,
     E: Fn(Kind, &str, ScoreType) -> Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static,
 {
-    let scope = target.new_scope(false);
+    let publish_scope_fn = target.new_scope(false);
     source.for_each(|metric| {
         let snapshot = metric.read_and_reset();
         if snapshot.is_empty() {
@@ -62,12 +62,14 @@ where
             for score in snapshot {
                 if let Some(ex) = export(metric.kind, &metric.name, score) {
                     let temp_metric = target.new_metric(ex.0, &ex.1.concat(), 1.0);
-                    scope(Scope::Write(&temp_metric, ex.2));
+                    publish_scope_fn(Scope::Write(&temp_metric, ex.2));
                 }
             }
         }
     });
-    scope(Scope::Flush)
+    // TODO parameterize whether to keep ad-hoc metrics after publish
+    source.cleanup();
+    publish_scope_fn(Scope::Flush)
 }
 
 /// A predefined export strategy reporting all aggregated stats for all metric types.
