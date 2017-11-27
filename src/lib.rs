@@ -119,9 +119,6 @@ extern crate test;
 #[macro_use]
 extern crate log;
 
-#[macro_use]
-extern crate error_chain;
-
 extern crate time;
 extern crate cached;
 extern crate num;
@@ -132,14 +129,8 @@ extern crate derivative;
 
 mod pcg32;
 
-mod error {
-    //! Dipstick uses error_chain to handle the critical errors that might crop up when assembling the backend.
-    error_chain! {
-        foreign_links {
-            Io(::std::io::Error);
-        }
-    }
-}
+pub mod error;
+pub use error::*;
 
 pub mod core;
 pub use core::*;
