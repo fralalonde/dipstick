@@ -1,5 +1,6 @@
 //! Maintain aggregated metrics for deferred reporting,
 
+use std::collections::HashMap;
 use core::*;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::*;
@@ -168,7 +169,7 @@ impl MetricScores {
 
 /// Enumerate the metrics being aggregated and their scores.
 #[derive(Debug, Clone)]
-pub struct AggregateSource(Arc<RwLock<Vec<Arc<MetricScores>>>>);
+pub struct AggregateSource(Arc<RwLock<HashMap<String, Arc<MetricScores>>>>);
 
 impl AggregateSource {
     /// Iterate over every aggregated metric.
@@ -176,10 +177,24 @@ impl AggregateSource {
     where
         F: Fn(&MetricScores),
     {
-        for metric in self.0.read().unwrap().iter() {
+        for metric in self.0.read().unwrap().values() {
             ops(&metric)
         }
     }
+
+    /// Discard scores for ad-hoc metrics.
+    pub fn cleanup(&self) {
+        let orphans: Vec<String> = self.0.read().unwrap().iter()
+            // is aggregator now the sole owner?
+            .filter(|&(_k, v)| Arc::strong_count(v) == 1)
+            .map(|(k, _v)| k.to_string())
+            .collect();
+        if !orphans.is_empty() {
+            let mut remover = self.0.write().unwrap();
+            orphans.iter().for_each(|k| {remover.remove(k);});
+        }
+    }
+
 }
 
 /// Central aggregation structure.
@@ -187,7 +202,7 @@ impl AggregateSource {
 /// a shared list of metrics for enumeration when used as source.
 #[derive(Debug, Clone)]
 pub struct Aggregator {
-    metrics: Arc<RwLock<Vec<Arc<MetricScores>>>>,
+    metrics: Arc<RwLock<HashMap<String, Arc<MetricScores>>>>,
 }
 
 impl Aggregator {
@@ -198,7 +213,7 @@ impl Aggregator {
 
     /// Build a new metric aggregation point with specified initial capacity of metrics to aggregate.
     pub fn with_capacity(size: usize) -> Aggregator {
-        Aggregator { metrics: Arc::new(RwLock::new(Vec::with_capacity(size))) }
+        Aggregator { metrics: Arc::new(RwLock::new(HashMap::with_capacity(size))) }
     }
 }
 
@@ -228,28 +243,25 @@ pub type Aggregate = Arc<MetricScores>;
 /// The parameters of aggregation may be set upon creation.
 /// Just `clone()` to use as a shared aggregator.
 #[derive(Debug, Clone)]
-pub struct AggregateSink(Arc<RwLock<Vec<Aggregate>>>);
+pub struct AggregateSink(Arc<RwLock<HashMap<String, Aggregate>>>);
 
 impl Sink<Aggregate> for AggregateSink {
     #[allow(unused_variables)]
     fn new_metric(&self, kind: Kind, name: &str, sampling: Rate) -> Aggregate {
-        let name = name.to_string();
-        let metric = Arc::new(MetricScores {
-            kind,
-            name,
-            score: match kind {
-                Kind::Marker => InnerScores::Event { hit: AtomicUsize::new(0) },
-                _ => InnerScores::Value {
-                    hit: AtomicUsize::new(0),
-                    sum: AtomicUsize::new(0),
-                    max: AtomicUsize::new(usize::MIN),
-                    min: AtomicUsize::new(usize::MAX),
-                },
-            },
-        });
-
-        self.0.write().unwrap().push(metric.clone());
-        metric
+        self.0.write().unwrap().entry(name.to_string()).or_insert_with(||
+            Arc::new(MetricScores {
+                kind,
+                name: name.to_string(),
+                score: match kind {
+                    Kind::Marker => InnerScores::Event { hit: AtomicUsize::new(0) },
+                    _ => InnerScores::Value {
+                        hit: AtomicUsize::new(0),
+                        sum: AtomicUsize::new(0),
+                        max: AtomicUsize::new(usize::MIN),
+                        min: AtomicUsize::new(usize::MAX),
+                    },
+                }
+            })).clone()
     }
 
     #[allow(unused_variables)]
