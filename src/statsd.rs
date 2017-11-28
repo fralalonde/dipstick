@@ -9,9 +9,8 @@ use std::sync::{Arc, RwLock};
 pub use std::net::ToSocketAddrs;
 
 /// Send metrics to a statsd server at the address and port provided.
-pub fn to_statsd<STR, ADDR>(address: ADDR, prefix: STR) -> error::Result<StatsdSink>
+pub fn to_statsd<ADDR>(address: ADDR, prefix: &str) -> error::Result<StatsdSink>
 where
-    STR: Into<String>,
     ADDR: ToSocketAddrs,
 {
     let socket = Arc::new(UdpSocket::bind("0.0.0.0:0")?); // NB: CLOEXEC by default
@@ -20,7 +19,7 @@ where
 
     Ok(StatsdSink {
         socket,
-        prefix: prefix.into(),
+        prefix: String::from(prefix),
     })
 }
 
