@@ -45,7 +45,7 @@ const MAX_UDP_PAYLOAD: usize = 576;
 /// Wrapped string buffer & socket as one.
 #[derive(Debug)]
 struct ScopeBuffer {
-    str: String,
+    buffer: String,
     socket: Arc<UdpSocket>,
 }
 
@@ -58,17 +58,19 @@ impl Drop for ScopeBuffer {
 
 impl ScopeBuffer {
     fn flush(&mut self) {
-        match self.socket.send(self.str.as_bytes()) {
-            Ok(size) => {
-                SENT_BYTES.count(size);
-                trace!("Sent {} bytes to statsd", self.str.len());
-            }
-            Err(e) => {
-                SEND_ERR.mark();
-                debug!("Failed to send packet to statsd: {}", e);
-            }
-        };
-        self.str.clear();
+        if !self.buffer.is_empty() {
+            match self.socket.send(self.buffer.as_bytes()) {
+                Ok(size) => {
+                    SENT_BYTES.count(size);
+                    trace!("Sent {} bytes to statsd", self.buffer.len());
+                }
+                Err(e) => {
+                    SEND_ERR.mark();
+                    debug!("Failed to send packet to statsd: {}", e);
+                }
+            };
+            self.buffer.clear();
+        }
     }
 }
 
@@ -114,46 +116,41 @@ impl Sink<StatsdMetric> for StatsdSink {
     #[allow(unused_variables)]
     fn new_scope(&self, auto_flush: bool) -> ScopeFn<StatsdMetric> {
         let buf = RwLock::new(ScopeBuffer {
-            str: String::with_capacity(MAX_UDP_PAYLOAD),
+            buffer: String::with_capacity(MAX_UDP_PAYLOAD),
             socket: self.socket.clone(),
         });
-        Arc::new(move |cmd| match cmd {
-            Scope::Write(metric, value) => {
-                if let Ok(mut buf) = buf.try_write() {
-                    let scaled_value = if metric.scale != 1 {
-                        value / metric.scale
-                    } else {
-                        value
-                    };
-                    let value_str = scaled_value.to_string();
-                    let entry_len = metric.prefix.len() + value_str.len() + metric.suffix.len();
+        Arc::new(move |cmd| {
+            if let Ok(mut buf) = buf.try_write() {
+                match cmd {
+                    Scope::Write(metric, value) => {
+                        let scaled_value = if metric.scale != 1 {
+                            value / metric.scale
+                        } else {
+                            value
+                        };
+                        let value_str = scaled_value.to_string();
+                        let entry_len = metric.prefix.len() + value_str.len() + metric.suffix.len();
 
-                    if entry_len > buf.str.capacity() {
-                        // TODO report entry too big to fit in buffer (!?)
-                        return;
-                    }
-
-                    let remaining = buf.str.capacity() - buf.str.len();
-                    if entry_len + 1 > remaining {
-                        // buffer is full, flush before appending
-                        buf.flush();
-                    } else {
-                        if !buf.str.is_empty() {
-                            // separate from previous entry
-                            buf.str.push('\n')
+                        if entry_len > buf.buffer.capacity() {
+                            // TODO report entry too big to fit in buffer (!?)
+                            return;
                         }
-                        buf.str.push_str(&metric.prefix);
-                        buf.str.push_str(&value_str);
-                        buf.str.push_str(&metric.suffix);
-                    }
-                }
-            }
-            Scope::Flush => {
-                if let Ok(mut buf) = buf.try_write() {
-                    if !buf.str.is_empty() {
-                        // operation complete, flush any metrics in buffer
-                        buf.flush();
-                    }
+
+                        let remaining = buf.buffer.capacity() - buf.buffer.len();
+                        if entry_len + 1 > remaining {
+                            // buffer is full, flush before appending
+                            buf.flush();
+                        } else {
+                            if !buf.buffer.is_empty() {
+                                // separate from previous entry
+                                buf.buffer.push('\n')
+                            }
+                            buf.buffer.push_str(&metric.prefix);
+                            buf.buffer.push_str(&value_str);
+                            buf.buffer.push_str(&metric.suffix);
+                        }
+                    },
+                    Scope::Flush => buf.flush(),
                 }
             }
         })

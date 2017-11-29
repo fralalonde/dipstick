@@ -3,8 +3,8 @@
 use core::*;
 use core::Scope::*;
 
-use cached::{Cached, SizedCache};
 use std::sync::{Arc, RwLock};
+use lru_cache::LRUCache;
 
 /// Cache metrics to prevent them from being re-defined on every use.
 /// Use of this should be transparent, this has no effect on the values.
@@ -14,7 +14,7 @@ where
     S: Sink<M>,
     M: Clone + Send + Sync,
 {
-    let cache = RwLock::new(SizedCache::with_capacity(size));
+    let cache = RwLock::new(LRUCache::with_capacity(size));
     MetricCache {
         next_sink: sink,
         cache,
@@ -28,7 +28,7 @@ where
 pub struct MetricCache<M, S> {
     next_sink: S,
     #[derivative(Debug = "ignore")]
-    cache: RwLock<SizedCache<String, M>>,
+    cache: RwLock<LRUCache<String, M>>,
 }
 
 impl<M, S> Sink<M> for MetricCache<M, S>
@@ -38,19 +38,17 @@ where
 {
     #[allow(unused_variables)]
     fn new_metric(&self, kind: Kind, name: &str, sampling: Rate) -> M {
-        {
-            let mut cache = self.cache.write().expect("Failed to acquire metric cache");
-            // FIXME lookup should use straight &str
-            let cached_metric = cache.cache_get(&String::from(name));
-            if let Some(cached_metric) = cached_metric {
-                return cached_metric.clone();
-            }
-        }
-
         let mut cache = self.cache.write().expect("Failed to acquire metric cache");
-        let new_metric = self.next_sink.new_metric(kind, name, sampling);
-        cache.cache_set(name.to_string(), new_metric.clone());
-        new_metric
+        let name_str = String::from(name);
+
+        // FIXME lookup should use straight &str
+        if let Some(value) = cache.get(&name_str) {
+            return value.clone()
+        }
+            let new_value = self.next_sink.new_metric(kind, name, sampling).clone();
+            cache.insert(name_str, new_value.clone());
+            new_value
+
     }
 
     fn new_scope(&self, auto_flush: bool) -> ScopeFn<M> {

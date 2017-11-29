@@ -120,7 +120,6 @@ extern crate test;
 extern crate log;
 
 extern crate time;
-extern crate cached;
 extern crate num;
 #[macro_use]
 extern crate lazy_static;
@@ -128,6 +127,7 @@ extern crate lazy_static;
 extern crate derivative;
 
 mod pcg32;
+mod lru_cache;
 
 pub mod error;
 pub use error::*;
