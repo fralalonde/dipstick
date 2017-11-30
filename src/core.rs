@@ -99,10 +99,13 @@ where
 }
 
 /// Expose the `Sink` nature of a multi-faceted struct.
-pub trait AsSink<M, S: Sink<M>>
-where
-    M: Clone + Send + Sync,
-{
+pub trait AsSink {
+    /// The metric type of this sink
+    type Metric: Clone + Send + Sync;
+
+    /// The sink type
+    type Sink: Sink<Self::Metric>;
+
     /// Get the metric sink.
-    fn as_sink(&self) -> S;
+    fn as_sink(&self) -> Self::Sink;
 }

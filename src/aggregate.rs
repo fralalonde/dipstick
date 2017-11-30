@@ -229,8 +229,12 @@ impl AsSource for Aggregator {
     }
 }
 
-impl AsSink<Aggregate, AggregateSink> for Aggregator {
-    fn as_sink(&self) -> AggregateSink {
+impl AsSink for Aggregator {
+    type Metric = Aggregate;
+    type Sink = AggregateSink;
+
+    /// Get the metric sink.
+    fn as_sink(&self) -> Self::Sink {
         AggregateSink(self.metrics.clone())
     }
 }
