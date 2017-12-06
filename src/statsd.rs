@@ -57,6 +57,31 @@ impl Drop for ScopeBuffer {
 }
 
 impl ScopeBuffer {
+    fn write (&mut self, metric: &StatsdMetric, value: Value) {
+        let scaled_value = value / metric.scale;
+        let value_str = scaled_value.to_string();
+        let entry_len = metric.prefix.len() + value_str.len() + metric.suffix.len();
+
+        if entry_len > self.buffer.capacity() {
+            // TODO report entry too big to fit in buffer (!?)
+            return;
+        }
+
+        let remaining = self.buffer.capacity() - self.buffer.len();
+        if entry_len + 1 > remaining {
+            // buffer is full, flush before appending
+            self.flush();
+        } else {
+            if !self.buffer.is_empty() {
+                // separate from previous entry
+                self.buffer.push('\n')
+            }
+            self.buffer.push_str(&metric.prefix);
+            self.buffer.push_str(&value_str);
+            self.buffer.push_str(&metric.suffix);
+        }
+    }
+
     fn flush(&mut self) {
         if !self.buffer.is_empty() {
             match self.socket.send(self.buffer.as_bytes()) {
@@ -97,11 +122,12 @@ impl Sink<StatsdMetric> for StatsdSink {
         });
 
         if sampling < FULL_SAMPLING_RATE {
-            suffix.push('@');
+            suffix.push_str("|@");
             suffix.push_str(&sampling.to_string());
         }
 
         let scale = match kind {
+            // timers are in µs, statsd wants ms
             Kind::Timer => 1000,
             _ => 1,
         };
@@ -122,37 +148,27 @@ impl Sink<StatsdMetric> for StatsdSink {
         Arc::new(move |cmd| {
             if let Ok(mut buf) = buf.try_write() {
                 match cmd {
-                    Scope::Write(metric, value) => {
-                        let scaled_value = if metric.scale != 1 {
-                            value / metric.scale
-                        } else {
-                            value
-                        };
-                        let value_str = scaled_value.to_string();
-                        let entry_len = metric.prefix.len() + value_str.len() + metric.suffix.len();
-
-                        if entry_len > buf.buffer.capacity() {
-                            // TODO report entry too big to fit in buffer (!?)
-                            return;
-                        }
-
-                        let remaining = buf.buffer.capacity() - buf.buffer.len();
-                        if entry_len + 1 > remaining {
-                            // buffer is full, flush before appending
-                            buf.flush();
-                        } else {
-                            if !buf.buffer.is_empty() {
-                                // separate from previous entry
-                                buf.buffer.push('\n')
-                            }
-                            buf.buffer.push_str(&metric.prefix);
-                            buf.buffer.push_str(&value_str);
-                            buf.buffer.push_str(&metric.suffix);
-                        }
-                    },
+                    Scope::Write(metric, value) => buf.write(metric, value),
                     Scope::Flush => buf.flush(),
                 }
             }
         })
     }
+}
+
+#[cfg(feature = "bench")]
+mod bench {
+
+    use super::*;
+    use test;
+
+    #[bench]
+    pub fn timer_statsd(b: &mut test::Bencher) {
+        let sd = to_statsd("localhost:8125", "a.").unwrap();
+        let timer = sd.new_metric(Kind::Timer, "timer", 1000000.0);
+        let scope = sd.new_scope(false);
+
+        b.iter(|| test::black_box(scope.as_ref()(Scope::Write(&timer, 2000))));
+    }
+
 }

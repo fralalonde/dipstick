@@ -53,7 +53,7 @@ pub enum Kind {
     Timer,
 }
 
-/// Scope creation function.
+/// Scope creation functio
 /// Returns a callback function to send commands to the metric scope.
 /// Used to write values to the scope or flush the scope buffer (if applicable).
 /// Simple applications may use only one scope.

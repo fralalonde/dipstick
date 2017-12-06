@@ -258,7 +258,7 @@ where
 
 
 #[cfg(feature = "bench")]
-mod microbench {
+mod bench {
 
     use ::*;
     use test;
