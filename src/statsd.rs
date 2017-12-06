@@ -40,6 +40,7 @@ pub struct StatsdMetric {
 }
 
 /// Use a safe maximum size for UDP to prevent fragmentation.
+// TODO make configurable?
 const MAX_UDP_PAYLOAD: usize = 576;
 
 /// Wrapped string buffer & socket as one.
@@ -47,6 +48,7 @@ const MAX_UDP_PAYLOAD: usize = 576;
 struct ScopeBuffer {
     buffer: String,
     socket: Arc<UdpSocket>,
+    auto_flush: bool,
 }
 
 /// Any remaining buffered data is flushed on Drop.
@@ -79,6 +81,9 @@ impl ScopeBuffer {
             self.buffer.push_str(&metric.prefix);
             self.buffer.push_str(&value_str);
             self.buffer.push_str(&metric.suffix);
+        }
+        if self.auto_flush {
+            self.flush();
         }
     }
 
@@ -144,9 +149,10 @@ impl Sink<StatsdMetric> for StatsdSink {
         let buf = RwLock::new(ScopeBuffer {
             buffer: String::with_capacity(MAX_UDP_PAYLOAD),
             socket: self.socket.clone(),
+            auto_flush,
         });
         Arc::new(move |cmd| {
-            if let Ok(mut buf) = buf.try_write() {
+            if let Ok(mut buf) = buf.write() {
                 match cmd {
                     Scope::Write(metric, value) => buf.write(metric, value),
                     Scope::Flush => buf.flush(),

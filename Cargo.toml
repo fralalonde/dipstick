@@ -7,6 +7,7 @@ members = [
   "examples/async_print/",
   "examples/custom_publish/",
   "examples/raw_log/",
+  "examples/graphite/",
   "examples/static_metrics/",
 ]
 

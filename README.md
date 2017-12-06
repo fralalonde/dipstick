@@ -7,8 +7,7 @@ Out of the box, Dipstick _can_ aggregate, sample, cache and queue metrics (async
 If aggregated, statistics can be published on demand or on schedule.
 
 Dipstick does not bind application code to a single metrics output implementation.
-Outputs `to_log`, `to_stdout` and `to_statsd` are currently provided,
-and defining new modules is easy.
+Outputs `to_log`, `to_stdout`, `to_graphite` and `to_statsd` are currently provided.
 
 Dipstick builds on stable Rust with minimal dependencies.
 

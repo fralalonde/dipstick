@@ -53,8 +53,9 @@ pub enum Kind {
     Timer,
 }
 
-/// Scope creation functio
 /// Returns a callback function to send commands to the metric scope.
+/// Writes can be performed by passing Some((&Metric, Value))
+/// Flushes can be performed by passing None
 /// Used to write values to the scope or flush the scope buffer (if applicable).
 /// Simple applications may use only one scope.
 /// Complex applications may define a new scope fo each operation or request.
@@ -93,8 +94,10 @@ where
     fn new_metric(&self, kind: Kind, name: &str, sampling: Rate) -> M;
 
     /// Returns a callback function to send scope commands.
-    /// Writes can be performed by passing Some((&Metric, Value))
-    /// Flushes can be performed by passing None
+    ///
+    /// [auto_flush] Helps the downstream scope(s) determine when to flush metrics data.
+    /// Scopes may overlook this hint if it is not applicable.
+    /// For example, [AggregateSink]s are always flushed manually.
     fn new_scope(&self, auto_flush: bool) -> ScopeFn<M>;
 }
 

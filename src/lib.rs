@@ -158,6 +158,9 @@ pub use publish::*;
 mod statsd;
 pub use statsd::*;
 
+mod graphite;
+pub use graphite::*;
+
 mod cache;
 pub use cache::*;
 
