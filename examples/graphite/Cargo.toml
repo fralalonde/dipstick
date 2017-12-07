@@ -5,3 +5,4 @@ workspace = "../../"
 
 [dependencies]
 dipstick = { path = '../../' }
+badlog = "1.0"

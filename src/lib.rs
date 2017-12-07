@@ -161,6 +161,9 @@ pub use statsd::*;
 mod graphite;
 pub use graphite::*;
 
+mod socket;
+pub use socket::*;
+
 mod cache;
 pub use cache::*;
 

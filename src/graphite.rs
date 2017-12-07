@@ -4,24 +4,23 @@ use core::*;
 use error;
 use selfmetrics::*;
 
-use std::net::TcpStream;
+use std::net::ToSocketAddrs;
+
 use std::sync::{Arc, RwLock};
-pub use std::net::ToSocketAddrs;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::io::Write;
 use std::fmt::Debug;
 
+use socket::RetrySocket;
+
 /// Send metrics to a graphite server at the address and port provided.
 pub fn to_graphite<ADDR>(address: ADDR, prefix: &str) -> error::Result<GraphiteSink>
 where
-    ADDR: ToSocketAddrs + Debug,
+    ADDR: ToSocketAddrs + Debug + 'static + Send + Sync,
 {
     debug!("Connecting to graphite {:?}", address);
-    let socket = TcpStream::connect(address)?;
-    socket.set_nonblocking(true)?;
-
     Ok(GraphiteSink {
-        socket: Arc::new(RwLock::new(socket)),
+        socket: Arc::new(RwLock::new(RetrySocket::new(address)?)),
         prefix: String::from(prefix),
     })
 }
@@ -51,7 +50,7 @@ pub struct GraphiteMetric {
 #[derive(Debug)]
 struct ScopeBuffer {
     buffer: Arc<RwLock<String>>,
-    socket: Arc<RwLock<TcpStream>>,
+    socket: Arc<RwLock<RetrySocket>>,
     auto_flush: bool,
 }
 
@@ -102,7 +101,7 @@ impl ScopeBuffer {
         // TODO locking is getting out of hand - use some Cell... or make scopes !Sync
         let mut buf = self.buffer.write().expect("Could not lock graphite buffer.");
         if !buf.is_empty() {
-            let mut sock = self.socket.write().expect("Could not lock graphite socket.");
+            let mut sock = self.socket.write().expect("Could not lock socket.");
             match sock.write(buf.as_bytes()) {
                 Ok(size) => {
                     buf.clear();
@@ -111,6 +110,7 @@ impl ScopeBuffer {
                 }
                 Err(e) => {
                     SEND_ERR.mark();
+                    // still just a best effort, do not warn! for every failure
                     debug!("Failed to send buffer to graphite: {}", e);
                 }
             };
@@ -122,7 +122,7 @@ impl ScopeBuffer {
 /// Allows sending metrics to a graphite server
 #[derive(Debug)]
 pub struct GraphiteSink {
-    socket: Arc<RwLock<TcpStream>>,
+    socket: Arc<RwLock<RetrySocket>>,
     prefix: String,
 }
 
