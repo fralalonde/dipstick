@@ -13,7 +13,7 @@ members = [
 
 [package]
 name = "dipstick"
-version = "0.4.14"
+version = "0.4.15-alpha.0"
 authors = ["Francis Lalonde <fralalonde@gmail.com>"]
 
 description = """A fast and modular metrics library decoupling app instrumentation from reporting backend.
@@ -24,7 +24,7 @@ documentation = "https://docs.rs/dipstick"
 homepage = "https://github.com/fralalonde/dipstick"
 repository = "https://github.com/fralalonde/dipstick"
 readme = "README.md"
-keywords = ["metrics", "statsd", "timer", "counter", "monitoring"]
+keywords = ["metrics", "statsd", "graphite", "timer", "monitoring"]
 license = "MIT/Apache-2.0"
 
 [badges]

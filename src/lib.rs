@@ -1,19 +1,27 @@
 /*!
-A fast and modular metrics toolkit for all Rust applications.
-Similar to popular logging frameworks, but with counters, markers, gauges and timers.
-
-Out of the box, Dipstick _can_ aggregate, sample, cache and queue metrics (async).
-If aggregated, statistics can be published on demand or on schedule.
-
-Dipstick does not bind application code to a single metrics output implementation.
-Outputs `to_log`, `to_stdout` and `to_statsd` are currently provided,
-and defining new modules is easy.
-
+Dipstick is a modular metrics toolkit for Rust applications.
+It is similar to popular logging frameworks, but with counters, markers, gauges and timers.
 Dipstick builds on stable Rust with minimal dependencies.
+Dipstick is available on [crates.io](https://crates.io/crates/dipstick).
 
+# Features
+
+  - Send metrics to stdout, log, statsd or graphite (one or many)
+  - Synchronous, asynchronous or mixed operation
+  - Optional fast random statistical sampling
+  - Immediate propagation or local aggregation of metrics (count, sum, average, min/max)
+  - Periodic or programmatic publication of aggregated metrics
+  - Customizable output statistics and formatting
+  - Global or scoped (e.g. per request) metrics
+  - Per-application and per-output metric namespaces
+  - Predefined or ad-hoc metrics
+
+# Cookbook
+
+Dipstick is easy to add to your code:
 ```rust
 use dipstick::*;
-let app_metrics = metrics(to_log("metrics:"));
+let app_metrics = metrics(to_graphite("host.com:2003"));
 app_metrics.counter("my_counter").count(3);
 ```
 

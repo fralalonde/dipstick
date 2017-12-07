@@ -1,4 +1,6 @@
 # {{crate}}
+[![Cargo](https://img.shields.io/crates/v/dipstick.svg)](https://crates.io/crates/dipstick)
+[![Docs.rs](https://docs.rs/dipstick/badge.svg)](https://docs.rs/dipstick)
 
 {{readme}}
 
