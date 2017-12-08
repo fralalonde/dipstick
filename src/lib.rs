@@ -1,8 +1,9 @@
 /*!
-Dipstick is a modular metrics toolkit for Rust applications.
-It is similar to popular logging frameworks, but with counters, markers, gauges and timers.
-Dipstick builds on stable Rust with minimal dependencies.
-Dipstick is available on [crates.io](https://crates.io/crates/dipstick).
+A quick, modular metrics toolkit for Rust applications; similar to popular logging frameworks,
+but with counters, markers, gauges and timers.
+
+Dipstick builds on stable Rust with minimal dependencies
+and is published as a [crate.](https://crates.io/crates/dipstick)
 
 # Features
 

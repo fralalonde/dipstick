@@ -1,11 +1,8 @@
-# dipstick
-[![Cargo](https://img.shields.io/crates/v/dipstick.svg)](https://crates.io/crates/dipstick)
-[![Docs.rs](https://docs.rs/dipstick/badge.svg)](https://docs.rs/dipstick)
+A quick, modular metrics toolkit for Rust applications; similar to popular logging frameworks,
+but with counters, markers, gauges and timers.
 
-Dipstick is a modular metrics toolkit for Rust applications.
-It is similar to popular logging frameworks, but with counters, markers, gauges and timers.
-Dipstick builds on stable Rust with minimal dependencies.
-Dipstick is available on [crates.io](https://crates.io/crates/dipstick).
+Dipstick builds on stable Rust with minimal dependencies
+and is published as a [crate.](https://crates.io/crates/dipstick)
 
 ## Features
 

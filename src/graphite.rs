@@ -16,11 +16,11 @@ use socket::RetrySocket;
 /// Send metrics to a graphite server at the address and port provided.
 pub fn to_graphite<ADDR>(address: ADDR, prefix: &str) -> error::Result<GraphiteSink>
 where
-    ADDR: ToSocketAddrs + Debug + 'static + Send + Sync,
+    ADDR: ToSocketAddrs + Debug + Clone,
 {
     debug!("Connecting to graphite {:?}", address);
     Ok(GraphiteSink {
-        socket: Arc::new(RwLock::new(RetrySocket::new(address)?)),
+        socket: Arc::new(RwLock::new(RetrySocket::new(address.clone())?)),
         prefix: String::from(prefix),
     })
 }
@@ -36,7 +36,7 @@ lazy_static! {
     static ref SEND_ERR: Marker<Aggregate> = GRAPHITE_METRICS.marker("send_failed");
     static ref SENT_BYTES: Counter<Aggregate> = GRAPHITE_METRICS.counter("sent_bytes");
     static ref TRESHOLD_EXCEEDED: Marker<Aggregate> =
-                                            GRAPHITE_METRICS.marker("threshold_exceeded");
+                                            GRAPHITE_METRICS.marker("bufsize_exceeded");
 }
 
 /// Key of a graphite metric.
@@ -67,39 +67,33 @@ impl ScopeBuffer {
         let value_str = scaled_value.to_string();
 
         let start = SystemTime::now();
-        let flush = match start.duration_since(UNIX_EPOCH) {
+        match start.duration_since(UNIX_EPOCH) {
             Ok(timestamp) => {
                 let mut buf = self.buffer.write().expect("Could not lock graphite buffer.");
+
                 buf.push_str(&metric.prefix);
                 buf.push_str(&value_str);
                 buf.push(' ');
                 buf.push_str(timestamp.as_secs().to_string().as_ref());
                 buf.push('\n');
+
                 if buf.len() > BUFFER_FLUSH_THRESHOLD {
                     TRESHOLD_EXCEEDED.mark();
                     warn!("Flushing metrics scope buffer to graphite because its size exceeds \
                         the threshold of {} bytes. ", BUFFER_FLUSH_THRESHOLD);
-                    true
+                    self.flush_inner(&mut buf);
+
                 } else if self.auto_flush {
-                    true
-                } else {
-                    false
+                    self.flush_inner(&mut buf);
                 }
             },
             Err(e) => {
                 warn!("Could not compute epoch timestamp. {}", e);
-                false
             },
         };
-
-        if flush {
-            self.flush();
-        }
     }
 
-    fn flush(&self) {
-        // TODO locking is getting out of hand - use some Cell... or make scopes !Sync
-        let mut buf = self.buffer.write().expect("Could not lock graphite buffer.");
+    fn flush_inner(&self, buf: &mut String) {
         if !buf.is_empty() {
             let mut sock = self.socket.write().expect("Could not lock socket.");
             match sock.write(buf.as_bytes()) {
@@ -116,6 +110,12 @@ impl ScopeBuffer {
             };
             buf.clear();
         }
+    }
+
+    fn flush(&self) {
+        let mut buf = self.buffer.write().expect("Could not lock graphite buffer.");
+        self.flush_inner(&mut buf);
+
     }
 }
 
