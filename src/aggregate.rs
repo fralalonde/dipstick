@@ -68,7 +68,9 @@ impl MetricScores {
         let (values, now) = self.scores.reset();
 
         // if hit count is zero, then no values were recorded.
-        if values.hit_count() == 0 { return vec![] }
+        if values.hit_count() == 0 {
+            return vec![]
+        }
 
         let mut snapshot = Vec::new();
         let mean_rate = values.hit_count() as f64 /

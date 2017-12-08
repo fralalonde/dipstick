@@ -28,10 +28,10 @@ impl Scoreboard {
     }
 
     pub fn reset(&self) -> (Snapshot, u64) {
-        let snapshot = Snapshot{ scores: [0;5] };
+        let mut snapshot = Snapshot{ scores: [0;5] };
         // SNAPSHOTS OF ATOMICS IN PROGRESS, HANG TIGHT
         for i in 0..5 {
-            self.scores[i].swap(snapshot.scores[i], Release);
+            snapshot.scores[i] = self.scores[i].swap(snapshot.scores[i], Release);
         }
         // END OF ATOMICS SNAPSHOT, YOU CAN RELAX NOW
 
