@@ -78,9 +78,10 @@ pub fn all_stats(kind: Kind, name: &str, score: ScoreType) -> Option<(Kind, Vec<
     match score {
         HitCount(hit) => Some((Counter, vec![name, ".hit"], hit)),
         SumOfValues(sum) => Some((kind, vec![name, ".sum"], sum)),
-        AverageValue(avg) => Some((kind, vec![name, ".avg"], avg)),
+        AverageValue(avg) => Some((kind, vec![name, ".avg"], avg.round() as Value)),
         MaximumValue(max) => Some((Gauge, vec![name, ".max"], max)),
         MinimumValue(min) => Some((Gauge, vec![name, ".min"], min)),
+        MeanRate(rate) => Some((Gauge, vec![name, ".rate"], rate.round() as Value))
     }
 }
 
@@ -99,7 +100,7 @@ pub fn average(kind: Kind, name: &str, score: ScoreType) -> Option<(Kind, Vec<&s
         }
         _ => {
             match score {
-                AverageValue(avg) => Some((Gauge, vec![name], avg)),
+                AverageValue(avg) => Some((Gauge, vec![name], avg.round() as Value)),
                 _ => None,
             }
         }
@@ -129,7 +130,7 @@ pub fn summary(kind: Kind, name: &str, score: ScoreType) -> Option<(Kind, Vec<&s
         }
         Gauge => {
             match score {
-                AverageValue(avg) => Some((Gauge, vec![name], avg)),
+                AverageValue(avg) => Some((Gauge, vec![name], avg.round() as Value)),
                 _ => None,
             }
         }

@@ -158,6 +158,7 @@ pub use scope_metrics::*;
 mod sample;
 pub use sample::*;
 
+mod scores;
 mod aggregate;
 pub use aggregate::*;
 

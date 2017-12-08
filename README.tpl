@@ -18,8 +18,9 @@ Run benchmarks with `cargo +nightly bench --features bench`.
 Although already usable, Dipstick is still under heavy development and makes no guarantees
 of any kind at this point. See the following list for any potential caveats :
 - META turn TODOs into GitHub issues
+- fix rustdocs https://docs.rs/dipstick/0.4.15/dipstick/
 - generic publisher / sources
-- feature flags
+- add feature flags
 - time measurement units in metric kind (us, ms, etc.) for naming & scaling
 - heartbeat metric on publish
 - logger templates

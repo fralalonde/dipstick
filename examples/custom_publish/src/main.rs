@@ -41,7 +41,7 @@ fn main() {
                     ),
 
                     // using the unmodified metric name
-                    ScoreType::AverageValue(avg) => Some((kind, vec![&name], avg)),
+                    ScoreType::AverageValue(avg) => Some((kind, vec![&name], avg.round() as u64)),
                     _ => None, /* do not export min and max */
                 }
             }
