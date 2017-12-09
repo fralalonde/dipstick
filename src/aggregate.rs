@@ -65,7 +65,7 @@ impl MetricScores {
     /// Reset aggregate values, return previous values
     /// To-be-published snapshot of aggregated score values for a metric.
     pub fn read_and_reset(&self) -> Vec<ScoreType> {
-        let (values, now) = self.scores.reset();
+        let values = self.scores.reset();
 
         // if hit count is zero, then no values were recorded.
         if values.hit_count() == 0 {
@@ -73,16 +73,15 @@ impl MetricScores {
         }
 
         let mut snapshot = Vec::new();
-        let mean_rate = values.hit_count() as f64 /
-            ((values.start_time_ns() - now) as f64 / 1_000_000_000.0);
         match self.kind {
             Marker => {
                 snapshot.push(HitCount(values.hit_count()));
-                snapshot.push(MeanRate(mean_rate))
+                snapshot.push(MeanRate(values.mean_rate()))
             },
             Gauge => {
                 snapshot.push(MaximumValue(values.max()));
                 snapshot.push(MinimumValue(values.min()));
+                snapshot.push(AverageValue(values.average()));
             },
             Timer | Counter => {
                 snapshot.push(HitCount(values.hit_count()));
@@ -90,10 +89,8 @@ impl MetricScores {
 
                 snapshot.push(MaximumValue(values.max()));
                 snapshot.push(MinimumValue(values.min()));
-                // NOTE following derived metrics are a computed as a best-effort between atomics
-                // NO GUARANTEES
-                snapshot.push(AverageValue(values.sum() as f64 / values.hit_count() as f64));
-                snapshot.push(MeanRate(mean_rate))
+                snapshot.push(AverageValue(values.average()));
+                snapshot.push(MeanRate(values.mean_rate()))
             },
         }
         snapshot
