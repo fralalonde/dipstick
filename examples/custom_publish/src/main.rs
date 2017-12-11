@@ -25,7 +25,7 @@ fn main() {
             _ => {
                 match score {
                     // prepend and append to metric name
-                    ScoreType::HitCount(hit) => Some((
+                    ScoreType::Count(hit) => Some((
                         Kind::Counter,
                         vec![
                             "name customized_with_prefix:",
@@ -36,12 +36,12 @@ fn main() {
                     )),
 
                     // scaling the score value and appending unit to name
-                    ScoreType::SumOfValues(sum) => Some(
+                    ScoreType::Sum(sum) => Some(
                         (kind, vec![&name, "_millisecond"], sum * 1000),
                     ),
 
                     // using the unmodified metric name
-                    ScoreType::AverageValue(avg) => Some((kind, vec![&name], avg.round() as u64)),
+                    ScoreType::Mean(avg) => Some((kind, vec![&name], avg.round() as u64)),
                     _ => None, /* do not export min and max */
                 }
             }

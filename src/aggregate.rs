@@ -2,9 +2,7 @@
 
 use std::collections::HashMap;
 use core::*;
-use core::Kind::*;
 use std::sync::{Arc, RwLock};
-use self::ScoreType::*;
 use scores::*;
 
 /// Aggregate metrics in memory.
@@ -25,88 +23,16 @@ pub fn aggregate() -> (AggregateSink, AggregateSource) {
     (agg.as_sink(), agg.as_source())
 }
 
-#[derive(Debug, Clone, Copy)]
-/// Possibly aggregated scores.
-pub enum ScoreType {
-    /// Number of times the metric was used.
-    HitCount(u64),
-    /// Sum of metric values reported.
-    SumOfValues(u64),
-    /// Biggest value reported.
-    MaximumValue(u64),
-    /// Smallest value reported.
-    MinimumValue(u64),
-    /// Approximative average value (hit count / sum, non-atomic)
-    AverageValue(f64),
-    /// Approximative mean rate (hit count / period length in seconds, non-atomic)
-    MeanRate(f64),
-}
-
-/// A metric that holds aggregated values.
-/// Some fields are kept public to ease publishing.
-#[derive(Debug)]
-pub struct MetricScores {
-    /// The kind of metric.
-    pub kind: Kind,
-
-    /// The metric's name.
-    pub name: String,
-
-    scores: Scoreboard,
-}
-
-impl MetricScores {
-
-    /// Update aggregated values
-    pub fn write(&self, value: Value) {
-        self.scores.update(value)
-    }
-
-    /// Reset aggregate values, return previous values
-    /// To-be-published snapshot of aggregated score values for a metric.
-    pub fn read_and_reset(&self) -> Vec<ScoreType> {
-        let values = self.scores.reset();
-
-        // if hit count is zero, then no values were recorded.
-        if values.hit_count() == 0 {
-            return vec![]
-        }
-
-        let mut snapshot = Vec::new();
-        match self.kind {
-            Marker => {
-                snapshot.push(HitCount(values.hit_count()));
-                snapshot.push(MeanRate(values.mean_rate()))
-            },
-            Gauge => {
-                snapshot.push(MaximumValue(values.max()));
-                snapshot.push(MinimumValue(values.min()));
-                snapshot.push(AverageValue(values.average()));
-            },
-            Timer | Counter => {
-                snapshot.push(HitCount(values.hit_count()));
-                snapshot.push(SumOfValues(values.sum()));
-
-                snapshot.push(MaximumValue(values.max()));
-                snapshot.push(MinimumValue(values.min()));
-                snapshot.push(AverageValue(values.average()));
-                snapshot.push(MeanRate(values.mean_rate()))
-            },
-        }
-        snapshot
-    }
-}
-
 /// Enumerate the metrics being aggregated and their scores.
 #[derive(Debug, Clone)]
-pub struct AggregateSource(Arc<RwLock<HashMap<String, Arc<MetricScores>>>>);
+pub struct AggregateSource(Arc<RwLock<HashMap<String, Arc<Scoreboard>>>>);
 
 impl AggregateSource {
     /// Iterate over every aggregated metric.
     // TODO impl Iterator
     pub fn for_each<F>(&self, ops: F)
     where
-        F: Fn(&MetricScores),
+        F: Fn(&Scoreboard),
     {
         for metric in self.0.read().unwrap().values() {
             ops(&metric)
@@ -133,7 +59,7 @@ impl AggregateSource {
 /// a shared list of metrics for enumeration when used as source.
 #[derive(Debug, Clone)]
 pub struct Aggregator {
-    metrics: Arc<RwLock<HashMap<String, Arc<MetricScores>>>>,
+    metrics: Arc<RwLock<HashMap<String, Arc<Scoreboard>>>>,
 }
 
 impl Aggregator {
@@ -172,7 +98,7 @@ impl AsSink for Aggregator {
 
 /// The type of metric created by the AggregateSink.
 /// Each Aggregate
-pub type Aggregate = Arc<MetricScores>;
+pub type Aggregate = Arc<Scoreboard>;
 
 /// A sink where to send metrics for aggregation.
 /// The parameters of aggregation may be set upon creation.
@@ -185,17 +111,16 @@ impl Sink<Aggregate> for AggregateSink {
     #[allow(unused_variables)]
     fn new_metric(&self, kind: Kind, name: &str, sampling: Rate) -> Aggregate {
         self.0.write().unwrap().entry(name.to_string()).or_insert_with(||
-            Arc::new(MetricScores {
-                kind,
-                name: name.to_string(),
-                scores: Scoreboard::new()
-            })).clone()
+            Arc::new(
+                Scoreboard::new(kind, name.to_string())
+            )
+        ).clone()
     }
 
     #[allow(unused_variables)]
     fn new_scope(&self, auto_flush: bool) -> ScopeFn<Aggregate> {
         Arc::new(|cmd| match cmd {
-            Scope::Write(metric, value) => metric.write(value),
+            Scope::Write(metric, value) => metric.update(value),
             Scope::Flush => {}
         })
     }
@@ -228,14 +153,14 @@ mod bench {
     fn time_bench_read_event(b: &mut test::Bencher) {
         let (sink, _source) = aggregate();
         let metric = sink.new_metric(Marker, &"marker_a", 1.0);
-        b.iter(|| test::black_box(metric.read_and_reset()));
+        b.iter(|| test::black_box(metric.reset()));
     }
 
     #[bench]
     fn time_bench_read_count(b: &mut test::Bencher) {
         let (sink, _source) = aggregate();
         let metric = sink.new_metric(Counter, &"count_a", 1.0);
-        b.iter(|| test::black_box(metric.read_and_reset()));
+        b.iter(|| test::black_box(metric.reset()));
     }
 
 }

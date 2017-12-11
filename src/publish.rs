@@ -21,8 +21,9 @@
 
 use core::*;
 use core::Kind::*;
-use aggregate::{AggregateSource, ScoreType};
-use aggregate::ScoreType::*;
+use aggregate::AggregateSource;
+use scores::ScoreType;
+use scores::ScoreType::*;
 use std::time::Duration;
 use schedule::{schedule, CancelHandle};
 
@@ -53,7 +54,7 @@ where
 {
     let publish_scope_fn = target.new_scope(false);
     source.for_each(|metric| {
-        let snapshot = metric.read_and_reset();
+        let snapshot = metric.reset();
         if snapshot.is_empty() {
             // no data was collected for this period
             // TODO repeat previous frame min/max ?
@@ -76,12 +77,12 @@ where
 /// Resulting stats are named by appending a short suffix to each metric's name.
 pub fn all_stats(kind: Kind, name: &str, score: ScoreType) -> Option<(Kind, Vec<&str>, Value)> {
     match score {
-        HitCount(hit) => Some((Counter, vec![name, ".hit"], hit)),
-        SumOfValues(sum) => Some((kind, vec![name, ".sum"], sum)),
-        AverageValue(avg) => Some((kind, vec![name, ".avg"], avg.round() as Value)),
-        MaximumValue(max) => Some((Gauge, vec![name, ".max"], max)),
-        MinimumValue(min) => Some((Gauge, vec![name, ".min"], min)),
-        MeanRate(rate) => Some((Gauge, vec![name, ".rate"], rate.round() as Value))
+        Count(hit) => Some((Counter, vec![name, ".count"], hit)),
+        Sum(sum) => Some((kind, vec![name, ".sum"], sum)),
+        Mean(mean) => Some((kind, vec![name, ".mean"], mean.round() as Value)),
+        Max(max) => Some((Gauge, vec![name, ".max"], max)),
+        Min(min) => Some((Gauge, vec![name, ".min"], min)),
+        Rate(rate) => Some((Gauge, vec![name, ".rate"], rate.round() as Value))
     }
 }
 
@@ -94,13 +95,13 @@ pub fn average(kind: Kind, name: &str, score: ScoreType) -> Option<(Kind, Vec<&s
     match kind {
         Marker => {
             match score {
-                HitCount(hit) => Some((Counter, vec![name], hit)),
+                Count(count) => Some((Counter, vec![name], count)),
                 _ => None,
             }
         }
         _ => {
             match score {
-                AverageValue(avg) => Some((Gauge, vec![name], avg.round() as Value)),
+                Mean(avg) => Some((Gauge, vec![name], avg.round() as Value)),
                 _ => None,
             }
         }
@@ -118,19 +119,19 @@ pub fn summary(kind: Kind, name: &str, score: ScoreType) -> Option<(Kind, Vec<&s
     match kind {
         Marker => {
             match score {
-                HitCount(hit) => Some((Counter, vec![name], hit)),
+                Count(count) => Some((Counter, vec![name], count)),
                 _ => None,
             }
         }
         Counter | Timer => {
             match score {
-                SumOfValues(sum) => Some((kind, vec![name], sum)),
+                Sum(sum) => Some((kind, vec![name], sum)),
                 _ => None,
             }
         }
         Gauge => {
             match score {
-                AverageValue(avg) => Some((Gauge, vec![name], avg.round() as Value)),
+                Mean(mean) => Some((Gauge, vec![name], mean.round() as Value)),
                 _ => None,
             }
         }

@@ -159,6 +159,8 @@ mod sample;
 pub use sample::*;
 
 mod scores;
+pub use scores::*;
+
 mod aggregate;
 pub use aggregate::*;
 
