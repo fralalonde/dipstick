@@ -2,38 +2,80 @@
 
 use core::*;
 use error;
-use selfmetrics::*;
+use self_metrics::*;
 
 use std::net::UdpSocket;
 use std::sync::{Arc, RwLock};
+
 pub use std::net::ToSocketAddrs;
 
 /// Send metrics to a statsd server at the address and port provided.
-pub fn to_statsd<ADDR>(address: ADDR, prefix: &str) -> error::Result<StatsdSink>
+pub fn to_statsd<ADDR>(address: ADDR) -> error::Result<Chain<Statsd>>
 where
     ADDR: ToSocketAddrs,
 {
-    let socket = Arc::new(UdpSocket::bind("0.0.0.0:0")?); // NB: CLOEXEC by default
+    let socket = Arc::new(UdpSocket::bind("0.0.0.0:0")?);
     socket.set_nonblocking(true)?;
     socket.connect(address)?;
 
-    Ok(StatsdSink {
-        socket,
-        prefix: String::from(prefix),
-    })
+    Ok(Chain::new(
+        move |kind, name, rate| {
+            let mut prefix = String::with_capacity(32);
+            prefix.push_str(name.as_ref());
+            prefix.push(':');
+
+            let mut suffix = String::with_capacity(16);
+            suffix.push('|');
+            suffix.push_str(match kind {
+                Kind::Marker | Kind::Counter => "c",
+                Kind::Gauge => "g",
+                Kind::Timer => "ms",
+            });
+
+            if rate < FULL_SAMPLING_RATE {
+                suffix.push_str("|@");
+                suffix.push_str(&rate.to_string());
+            }
+
+            let scale = match kind {
+                // timers are in µs, statsd wants ms
+                Kind::Timer => 1000,
+                _ => 1,
+            };
+
+            Statsd {
+                prefix,
+                suffix,
+                scale,
+            }
+        },
+        move |auto_flush| {
+            let buf = RwLock::new(ScopeBuffer {
+                buffer: String::with_capacity(MAX_UDP_PAYLOAD),
+                socket: socket.clone(),
+                auto_flush,
+            });
+            Arc::new(move |cmd| {
+                if let Ok(mut buf) = buf.write() {
+                    match cmd {
+                        ScopeCmd::Write(metric, value) => buf.write(metric, value),
+                        ScopeCmd::Flush => buf.flush(),
+                    }
+                }
+            })
+        },
+    ))
 }
 
 lazy_static! {
-    static ref STATSD_METRICS: AppMetrics<Aggregate, AggregateSink> =
-                                            SELF_METRICS.with_prefix("statsd.");
-
+    static ref STATSD_METRICS: GlobalMetrics<Aggregate> = SELF_METRICS.with_prefix("statsd.");
     static ref SEND_ERR: Marker<Aggregate> = STATSD_METRICS.marker("send_failed");
     static ref SENT_BYTES: Counter<Aggregate> = STATSD_METRICS.counter("sent_bytes");
 }
 
 /// Key of a statsd metric.
 #[derive(Debug, Clone)]
-pub struct StatsdMetric {
+pub struct Statsd {
     prefix: String,
     suffix: String,
     scale: u64,
@@ -59,7 +101,7 @@ impl Drop for ScopeBuffer {
 }
 
 impl ScopeBuffer {
-    fn write (&mut self, metric: &StatsdMetric, value: Value) {
+    fn write (&mut self, metric: &Statsd, value: Value) {
         let scaled_value = value / metric.scale;
         let value_str = scaled_value.to_string();
         let entry_len = metric.prefix.len() + value_str.len() + metric.suffix.len();
@@ -104,64 +146,6 @@ impl ScopeBuffer {
     }
 }
 
-/// Allows sending metrics to a statsd server
-#[derive(Debug)]
-pub struct StatsdSink {
-    socket: Arc<UdpSocket>,
-    prefix: String,
-}
-
-impl Sink<StatsdMetric> for StatsdSink {
-    fn new_metric(&self, kind: Kind, name: &str, sampling: Rate) -> StatsdMetric {
-        let mut prefix = String::with_capacity(32);
-        prefix.push_str(&self.prefix);
-        prefix.push_str(name.as_ref());
-        prefix.push(':');
-
-        let mut suffix = String::with_capacity(16);
-        suffix.push('|');
-        suffix.push_str(match kind {
-            Kind::Marker | Kind::Counter => "c",
-            Kind::Gauge => "g",
-            Kind::Timer => "ms",
-        });
-
-        if sampling < FULL_SAMPLING_RATE {
-            suffix.push_str("|@");
-            suffix.push_str(&sampling.to_string());
-        }
-
-        let scale = match kind {
-            // timers are in µs, statsd wants ms
-            Kind::Timer => 1000,
-            _ => 1,
-        };
-
-        StatsdMetric {
-            prefix,
-            suffix,
-            scale,
-        }
-    }
-
-    #[allow(unused_variables)]
-    fn new_scope(&self, auto_flush: bool) -> ScopeFn<StatsdMetric> {
-        let buf = RwLock::new(ScopeBuffer {
-            buffer: String::with_capacity(MAX_UDP_PAYLOAD),
-            socket: self.socket.clone(),
-            auto_flush,
-        });
-        Arc::new(move |cmd| {
-            if let Ok(mut buf) = buf.write() {
-                match cmd {
-                    Scope::Write(metric, value) => buf.write(metric, value),
-                    Scope::Flush => buf.flush(),
-                }
-            }
-        })
-    }
-}
-
 #[cfg(feature = "bench")]
 mod bench {
 
@@ -170,11 +154,11 @@ mod bench {
 
     #[bench]
     pub fn timer_statsd(b: &mut test::Bencher) {
-        let sd = to_statsd("localhost:8125", "a.").unwrap();
-        let timer = sd.new_metric(Kind::Timer, "timer", 1000000.0);
-        let scope = sd.new_scope(false);
+        let sd = to_statsd("localhost:8125").unwrap();
+        let timer = sd.define_metric(Kind::Timer, "timer", 1000000.0);
+        let scope = sd.open_scope(false);
 
-        b.iter(|| test::black_box(scope.as_ref()(Scope::Write(&timer, 2000))));
+        b.iter(|| test::black_box((scope)(ScopeCmd::Write(&timer, 2000))));
     }
 
 }

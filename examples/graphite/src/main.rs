@@ -9,8 +9,8 @@ use std::time::Duration;
 fn main() {
     badlog::init(Some("info"));
 
-    let metrics = metrics(
-        to_graphite("localhost:2003", "myapp.").expect("Could not connect to graphite")
+    let metrics = global_metrics(
+        to_graphite("localhost:2003").expect("Connect to graphite")
     );
 
     loop {

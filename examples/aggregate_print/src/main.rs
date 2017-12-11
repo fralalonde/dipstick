@@ -1,6 +1,5 @@
 //! A sample application continuously aggregating metrics,
-//! printing the summary stats every three seconds and
-//! printing complete stats every 10 seconds.
+//! printing the summary stats every three seconds
 
 extern crate dipstick;
 
@@ -8,24 +7,11 @@ use std::time::Duration;
 use dipstick::*;
 
 fn main() {
-    let (to_quick_aggregate, from_quick_aggregate) = aggregate();
-    let (to_slow_aggregate, from_slow_aggregate) = aggregate();
+    let to_quick_aggregate = aggregate(16, summary, to_stdout());
 
-    let app_metrics = metrics((to_quick_aggregate, to_slow_aggregate));
+    let app_metrics = global_metrics(to_quick_aggregate);
 
-    publish_every(
-        Duration::from_secs(3),
-        from_quick_aggregate,
-        to_stdout(),
-        summary,
-    );
-
-    publish_every(
-        Duration::from_secs(10),
-        from_slow_aggregate,
-        to_stdout(),
-        all_stats,
-    );
+    app_metrics.flush_every(Duration::from_secs(3));
 
     let counter = app_metrics.counter("counter_a");
     let timer = app_metrics.timer("timer_a");

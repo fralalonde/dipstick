@@ -1,10 +1,9 @@
 //! Queue metrics for write on a separate thread,
 //! Metrics definitions are still synchronous.
 //! If queue size is exceeded, calling code reverts to blocking.
-// TODO option to drop metrics when queue full
-
+//!
 use core::*;
-use selfmetrics::*;
+use self_metrics::*;
 
 use std::sync::Arc;
 use std::sync::mpsc;
@@ -13,97 +12,70 @@ use std::thread;
 /// Cache metrics to prevent them from being re-defined on every use.
 /// Use of this should be transparent, this has no effect on the values.
 /// Stateful sinks (i.e. Aggregate) may naturally cache their definitions.
-pub fn async<M, S>(queue_size: usize, sink: S) -> MetricQueue<M, S>
-where
-    S: Sink<M>,
-    M: 'static + Clone + Send + Sync,
+///
+pub fn async<M, IC>(queue_size: usize, chain: IC) -> Chain<M>
+    where
+        M: Clone + Send + Sync + 'static,
+        IC: Into<Chain<M>>,
 {
-    let (sender, receiver) = mpsc::sync_channel::<QueueCommand<M>>(queue_size);
-    thread::spawn(move || loop {
-        while let Ok(cmd) = receiver.recv() {
-            // apply scope commands received from channel
-            match cmd {
-                QueueCommand {
-                    cmd: Some((metric, value)),
-                    next_scope,
-                    ..
-                } => next_scope(Scope::Write(metric.as_ref(), value)),
-                QueueCommand {
-                    cmd: None,
-                    next_scope,
-                    ..
-                } => next_scope(Scope::Flush),
+    let chain = chain.into();
+    chain.mod_scope(|next| {
+        // setup channel
+        let (sender, receiver) = mpsc::sync_channel::<QueueCommand<M>>(queue_size);
+
+        // start queue processor thread
+        thread::spawn(move || loop {
+            while let Ok(cmd) = receiver.recv() {
+                match cmd {
+                    QueueCommand { cmd: Some((metric, value)), next_scope } =>
+                        next_scope(ScopeCmd::Write(&metric, value)),
+                    QueueCommand { cmd: None, next_scope } =>
+                        next_scope(ScopeCmd::Flush),
+                }
             }
-        }
-    });
-    MetricQueue {
-        next_sink: sink,
-        sender,
-    }
+        });
+
+        Arc::new(move |auto_flush| {
+            // open next scope, make it Arc to move across queue
+            let next_scope: Arc<ControlScopeFn<M>> = Arc::from(next(auto_flush));
+            let sender = sender.clone();
+
+            // forward any scope command through the channel
+            Arc::new(move |cmd| {
+                let send_cmd = match cmd {
+                    ScopeCmd::Write(metric, value) => Some((metric.clone(), value)),
+                    ScopeCmd::Flush => None,
+                };
+                sender
+                    .send(QueueCommand {
+                        cmd: send_cmd,
+                        next_scope: next_scope.clone(),
+                    })
+                    .unwrap_or_else(|e| {
+                        SEND_FAILED.mark();
+                        trace!("Async metrics could not be sent: {}", e);
+                    })
+            })
+        })
+    })
+
 }
 
 lazy_static! {
-    static ref QUEUE_METRICS: AppMetrics<Aggregate, AggregateSink> =
-                                            SELF_METRICS.with_prefix("async.");
-
+    static ref QUEUE_METRICS: GlobalMetrics<Aggregate> = SELF_METRICS.with_prefix("async.");
     static ref SEND_FAILED: Marker<Aggregate> = QUEUE_METRICS.marker("send_failed");
 }
 
-/// Thread safe sender to the queue
-pub type QueueSender<M> = mpsc::SyncSender<QueueCommand<M>>;
-
 /// Carry the scope command over the queue, from the sender, to be executed by the receiver.
+///
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct QueueCommand<M> {
     /// If Some(), the metric and value to write.
     /// If None, flush the scope
-    cmd: Option<(Arc<M>, Value)>,
+    cmd: Option<(M, Value)>,
     /// The scope to write the metric to
     #[derivative(Debug = "ignore")]
-    next_scope: Arc<ScopeFn<M>>,
+    next_scope: Arc<ControlScopeFn<M>>,
 }
 
-/// A metric command-queue using a sync channel.
-/// Each client thread gets it's own scope and sender.
-/// Writes are dispatched by a single receiving thread.
-#[derive(Debug)]
-pub struct MetricQueue<M, S> {
-    next_sink: S,
-    sender: QueueSender<M>,
-}
-
-impl<M, S> Sink<Arc<M>> for MetricQueue<M, S>
-where
-    S: Sink<M>,
-    M: 'static + Clone + Send + Sync,
-{
-    #[allow(unused_variables)]
-    fn new_metric(&self, kind: Kind, name: &str, sampling: Rate) -> Arc<M> {
-        Arc::new(self.next_sink.new_metric(kind, name, sampling))
-    }
-
-    fn new_scope(&self, auto_flush: bool) -> ScopeFn<Arc<M>> {
-        // open next scope, make it Arc to move across queue
-        let next_scope: Arc<ScopeFn<M>> = Arc::from(self.next_sink.new_scope(auto_flush));
-
-        let sender = self.sender.clone();
-
-        // forward any scope command through the channel
-        Arc::new(move |cmd| {
-            let send_cmd = match cmd {
-                Scope::Write(metric, value) => Some(((*metric).clone(), value)),
-                Scope::Flush => None,
-            };
-            sender
-                .send(QueueCommand {
-                    cmd: send_cmd,
-                    next_scope: next_scope.clone(),
-                })
-                .unwrap_or_else(|e| {
-                    SEND_FAILED.mark();
-                    trace!("Async metrics could not be sent: {}", e);
-                })
-        })
-    }
-}

@@ -6,11 +6,11 @@ use dipstick::*;
 use std::time::Duration;
 
 fn main() {
-    let metrics = metrics(
+    let metrics = global_metrics(
         // Metric caching allows re-use of the counter, skipping cost of redefining it on each use.
         cache(12, (
-            sample(0.01, to_statsd("localhost:8125", "myapp.").expect("Could not connect to statsd")),
-            to_stdout(),
+            prefix("myserver.myapp.", to_stdout()),
+            prefix("myapp.", to_stdout()),
         )),
     );
 

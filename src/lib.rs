@@ -81,7 +81,7 @@ possibly in a [lazy_static!](https://crates.io/crates/lazy_static) block:
 #[macro_use] external crate lazy_static;
 
 lazy_static! {
-    pub static ref METRICS: AppMetrics<String, FnSink<String>> = metrics(to_stdout());
+    pub static ref METRICS: GlobalMetrics<String> = metrics(to_stdout());
     pub static ref COUNTER_A: Counter<Aggregate> = METRICS.counter("counter_a");
 }
 COUNTER_A.count(11);
@@ -149,8 +149,8 @@ pub mod macros;
 mod output;
 pub use output::*;
 
-mod app_metrics;
-pub use app_metrics::*;
+mod global_metrics;
+pub use global_metrics::*;
 
 mod scope_metrics;
 pub use scope_metrics::*;
@@ -170,6 +170,9 @@ pub use publish::*;
 mod statsd;
 pub use statsd::*;
 
+mod namespace;
+pub use namespace::*;
+
 mod graphite;
 pub use graphite::*;
 
@@ -185,11 +188,8 @@ pub use multi::*;
 mod async;
 pub use async::*;
 
-mod fnsink;
-pub use fnsink::*;
-
 mod schedule;
 pub use schedule::*;
 
-mod selfmetrics;
-pub use selfmetrics::METRICS_SOURCE;
+mod self_metrics;
+pub use self_metrics::snapshot;

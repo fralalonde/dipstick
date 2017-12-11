@@ -14,7 +14,7 @@ pub mod metric {
     // This makes it uglier than it should be when working with generics...
     // and is even more work because IDE's such as IntelliJ can not yet see through macro blocks :(
     lazy_static! {
-        pub static ref METRICS: AppMetrics<String, FnSink<String>> = metrics(to_stdout());
+        pub static ref METRICS: GlobalMetrics<String> = global_metrics(to_stdout());
 
         pub static ref COUNTER_A: Counter<String> = METRICS.counter("counter_a");
         pub static ref TIMER_B: Timer<String> = METRICS.timer("timer_b");

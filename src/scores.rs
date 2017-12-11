@@ -27,15 +27,19 @@ pub enum ScoreType {
     Rate(f64),
 }
 
+/// A snapshot of multiple scores for a single metric.
+///
+pub type ScoreSnapshot = (Kind, String, Vec<ScoreType>);
+
 /// A metric that holds aggregated values.
 /// Some fields are kept public to ease publishing.
 #[derive(Debug)]
 pub struct Scoreboard {
     /// The kind of metric.
-    pub kind: Kind,
+    kind: Kind,
 
     /// The metric's name.
-    pub name: String,
+    name: String,
 
     scores: [AtomicUsize; 5]
 }
@@ -43,67 +47,84 @@ pub struct Scoreboard {
 impl Scoreboard {
     /// Create a new Scoreboard to track summary values of a metric
     pub fn new(kind: Kind, name: String) -> Self {
+        let now = time::precise_time_ns() as usize;
         Scoreboard {
             kind,
             name,
-            scores: unsafe { mem::transmute(Scoreboard::blank()) }
+            scores: unsafe { mem::transmute(Scoreboard::blank(now)) }
         }
     }
 
     #[inline]
-    fn blank() -> [usize; 5] {
-        [time::precise_time_ns() as usize, 0, 0, usize::MIN, usize::MAX]
+    fn blank(now: usize) -> [usize; 5] {
+        [now, 0, 0, usize::MIN, usize::MAX]
     }
 
     /// Update scores with new value
+    ///
     pub fn update(&self, value: Value) -> () {
         // TODO report any concurrent updates / resets for measurement of contention
         let value = value as usize;
         self.scores[1].fetch_add(1, Acquire);
-        self.scores[2].fetch_add(value, Acquire);
-        swap_if_more(&self.scores[3], value);
-        swap_if_less(&self.scores[4], value);
+        match self.kind {
+            Marker => {},
+            _ => {
+                // optimization - these fields are unused for Marker stats
+                self.scores[2].fetch_add(value, Acquire);
+                swap_if_more(&self.scores[3], value);
+                swap_if_less(&self.scores[4], value);
+            }
+        }
     }
 
-    /// Reset aggregate values, return previous values
-    /// To-be-published snapshot of aggregated score values for a metric.
-    pub fn reset(&self) -> Vec<ScoreType> {
-        let mut scores = Scoreboard::blank();
-        let now = scores[0];
-
-        for i in 0..5 {
-            scores[i] = self.scores[i].swap(scores[i], Release);
-        }
-
-        let duration_seconds = (now - scores[0]) as f64  / 1_000_000_000.0;
+    /// Reset scores to zero, return previous values
+    ///
+    fn snapshot(&self, now: usize, scores: &mut [usize; 5]) -> bool {
+        // SNAPSHOT OF ATOMICS IN PROGRESS, HANG TIGHT
+        scores[0] = self.scores[0].swap(now, Release);
+        scores[1] = self.scores[1].swap(0, Release);
+        scores[2] = self.scores[2].swap(0, Release);
+        scores[3] = self.scores[3].swap(usize::MIN, Release);
+        scores[4] = self.scores[4].swap(usize::MAX, Release);
+        // SNAPSHOT COMPLETE, YOU CAN RELAX NOW
 
         // if hit count is zero, then no values were recorded.
-        if scores[1] == 0 {
-            return vec![]
-        }
+        scores[1] != 0
+    }
 
-        let mut snapshot = Vec::new();
-        match self.kind {
-            Marker => {
-                snapshot.push(Count(scores[1] as u64));
-                snapshot.push(Rate(scores[2] as f64 / duration_seconds))
-            },
-            Gauge => {
-                snapshot.push(Max(scores[3] as u64));
-                snapshot.push(Min(scores[4] as u64));
-                snapshot.push(Mean(scores[2] as f64 / scores[1] as f64));
-            },
-            Timer | Counter => {
-                snapshot.push(Count(scores[1] as u64));
-                snapshot.push(Sum(scores[2] as u64));
+    /// Map raw scores (if any) to applicable statistics
+    ///
+    pub fn reset(&self) -> Option<ScoreSnapshot> {
+        let now = time::precise_time_ns() as usize;
+        let mut scores = Scoreboard::blank(now);
+        if self.snapshot(now, &mut scores) {
+            let duration_seconds = (now - scores[0]) as f64 / 1_000_000_000.0;
 
-                snapshot.push(Max(scores[3] as u64));
-                snapshot.push(Min(scores[4] as u64));
-                snapshot.push(Mean(scores[2] as f64 / scores[1] as f64));
-                snapshot.push(Rate(scores[2] as f64 / duration_seconds))
-            },
+            let mut snapshot = Vec::new();
+            match self.kind {
+                Marker => {
+                    snapshot.push(Count(scores[1] as u64));
+                    snapshot.push(Rate(scores[2] as f64 / duration_seconds))
+                },
+                Gauge => {
+                    snapshot.push(Max(scores[3] as u64));
+                    snapshot.push(Min(scores[4] as u64));
+                    snapshot.push(Mean(scores[2] as f64 / scores[1] as f64));
+                },
+                Timer | Counter => {
+                    snapshot.push(Count(scores[1] as u64));
+                    snapshot.push(Sum(scores[2] as u64));
+
+                    snapshot.push(Max(scores[3] as u64));
+                    snapshot.push(Min(scores[4] as u64));
+                    snapshot.push(Mean(scores[2] as f64 / scores[1] as f64));
+                    snapshot.push(Rate(scores[2] as f64 / duration_seconds))
+                },
+            }
+            Some((self.kind, self.name.clone(), snapshot))
+        } else {
+            None
         }
-        snapshot
     }
 
 
@@ -127,4 +148,35 @@ fn swap_if_less(counter: &AtomicUsize, new_value: usize) {
         if counter.compare_and_swap(current, new_value, Release) == new_value { break }
         current = counter.load(Acquire);
     }
+}
+
+
+#[cfg(feature = "bench")]
+mod bench {
+
+    use super::*;
+    use test;
+
+    #[bench]
+    fn bench_score_update_marker(b: &mut test::Bencher) {
+        let metric = Scoreboard::new(Marker, "event_a".to_string());
+        b.iter(|| test::black_box(metric.update(1)));
+    }
+
+
+    #[bench]
+    fn bench_score_update_count(b: &mut test::Bencher) {
+        let metric = Scoreboard::new(Counter, "event_a".to_string());
+        b.iter(|| test::black_box(metric.update(4)));
+    }
+
+    #[bench]
+    fn bench_score_snapshot(b: &mut test::Bencher) {
+        let metric = Scoreboard::new(Counter, "event_a".to_string());
+        let now = time::precise_time_ns() as usize;
+        let mut scores = Scoreboard::blank(now);
+        b.iter(|| test::black_box(metric.snapshot(now, &mut scores)));
+    }
+
+
 }

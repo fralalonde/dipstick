@@ -20,7 +20,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-//!
 //! A fixed-size cache with LRU expiration criteria.
 //! Adapted from https://github.com/cwbriones/lrucache
 //!
@@ -34,7 +33,6 @@ struct CacheEntry<K, V> {
     prev: Option<usize>,
 }
 
-///
 /// A fixed-size cache.
 ///
 pub struct LRUCache<K, V> {
@@ -47,6 +45,7 @@ pub struct LRUCache<K, V> {
 
 impl<K: Clone + Hash + Eq, V> LRUCache<K, V> {
     /// Creates a new cache that can hold the specified number of elements.
+    ///
     pub fn with_capacity(cap: usize) -> Self {
         LRUCache {
             table: HashMap::with_capacity(cap),
@@ -59,6 +58,7 @@ impl<K: Clone + Hash + Eq, V> LRUCache<K, V> {
 
     /// Inserts a key-value pair into the cache and returns the previous value, if any.
     /// If there is no room in the cache the oldest item will be removed.
+    ///
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
         if self.table.contains_key(&key) {
             self.access(&key);
@@ -90,6 +90,7 @@ impl<K: Clone + Hash + Eq, V> LRUCache<K, V> {
 
     /// Retrieves a reference to the item associated with `key` from the cache
     /// without promoting it.
+    ///
     pub fn peek(&mut self, key: &K) -> Option<&V> {
         let entries = &self.entries;
         self.table.get(key).and_then(move |i| {
@@ -98,6 +99,7 @@ impl<K: Clone + Hash + Eq, V> LRUCache<K, V> {
     }
 
     /// Retrieves a reference to the item associated with `key` from the cache.
+    ///
     pub fn get(&mut self, key: &K) -> Option<&V> {
         if self.contains_key(key) {
             self.access(key);
@@ -185,7 +187,6 @@ mod tests {
         assert!(!cache.contains_key(&"bar"));
 
         cache.get(&"foo").unwrap();
-//        cache.get_mut(&"foo").unwrap();
         cache.insert("qux", 4);
 
         assert!(cache.contains_key(&"foo"));

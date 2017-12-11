@@ -9,11 +9,12 @@ members = [
   "examples/raw_log/",
   "examples/graphite/",
   "examples/static_metrics/",
+  "examples/scoped_print/",
 ]
 
 [package]
 name = "dipstick"
-version = "0.4.19-alpha.0"
+version = "0.5.0-alpha.0"
 authors = ["Francis Lalonde <fralalonde@gmail.com>"]
 
 description = """A fast and modular metrics library decoupling app instrumentation from reporting backend.

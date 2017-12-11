@@ -80,7 +80,7 @@ possibly in a [lazy_static!](https://crates.io/crates/lazy_static) block:
 #[macro_use] external crate lazy_static;
 
 lazy_static! {
-    pub static ref METRICS: AppMetrics<String, FnSink<String>> = metrics(to_stdout());
+    pub static ref METRICS: GlobalMetrics<String> = metrics(to_stdout());
     pub static ref COUNTER_A: Counter<Aggregate> = METRICS.counter("counter_a");
 }
 COUNTER_A.count(11);

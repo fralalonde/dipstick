@@ -3,40 +3,38 @@
 use core::*;
 use std::sync::Arc;
 
-/// Hold each sink's metric key.
-pub type DoubleKey<M1, M2> = (M1, M2);
-
-/// Hold the two target sinks.
-/// Multiple `DoubleSink`s can be combined if more than two sinks are needed.
-pub type DoubleSink<S1, S2> = (S1, S2);
-
-impl<M1, S1, M2, S2> Sink<DoubleKey<M1, M2>> for DoubleSink<S1, S2>
-where
-    S1: Sink<M1>,
-    S2: Sink<M2>,
-    M1: 'static + Clone + Send + Sync,
-    M2: 'static + Clone + Send + Sync,
+/// Multiple chain can be combined
+impl<M1, M2> From<(Chain<M1>, Chain<M2>)> for Chain<(M1, M2)>
+    where
+        M1: 'static + Clone + Send + Sync,
+        M2: 'static + Clone + Send + Sync,
 {
-    #[allow(unused_variables)]
-    fn new_metric(&self, kind: Kind, name: &str, sampling: Rate) -> DoubleKey<M1, M2> {
-        (
-            self.0.new_metric(kind, name, sampling),
-            self.1.new_metric(kind, &name, sampling),
-        )
-    }
+    fn from(combo: (Chain<M1>, Chain<M2>)) -> Chain<(M1, M2)> {
 
-    fn new_scope(&self, auto_flush: bool) -> ScopeFn<DoubleKey<M1, M2>> {
-        let scope0 = self.0.new_scope(auto_flush);
-        let scope1 = self.1.new_scope(auto_flush);
-        Arc::new(move |cmd| match cmd {
-            Scope::Write(metric, value) => {
-                scope0(Scope::Write(&metric.0, value));
-                scope1(Scope::Write(&metric.1, value));
-            }
-            Scope::Flush => {
-                scope0(Scope::Flush);
-                scope1(Scope::Flush);
-            }
-        })
+        let combo0 = combo.0.clone();
+        let combo1 = combo.1.clone();
+
+        Chain::new(
+            move |kind, name, sampling| (
+                combo.0.define_metric(kind, name, sampling),
+                combo.1.define_metric(kind, &name, sampling),
+            ),
+
+            move |auto_flush| {
+                let scope0 = combo0.open_scope(auto_flush);
+                let scope1 = combo1.open_scope(auto_flush);
+
+                Arc::new(move |cmd| match cmd {
+                    ScopeCmd::Write(metric, value) => {
+                        scope0(ScopeCmd::Write(&metric.0, value));
+                        scope1(ScopeCmd::Write(&metric.1, value));
+                    }
+                    ScopeCmd::Flush => {
+                        scope0(ScopeCmd::Flush);
+                        scope1(ScopeCmd::Flush);
+                    }
+                })
+            },
+        )
     }
 }

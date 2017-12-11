@@ -1,9 +1,12 @@
 //! Maintain aggregated metrics for deferred reporting,
-
-use std::collections::HashMap;
+//!
 use core::*;
-use std::sync::{Arc, RwLock};
 use scores::*;
+use publish::*;
+
+use std::fmt::Debug;
+use std::collections::HashMap;
+use std::sync::{Arc, RwLock};
 
 /// Aggregate metrics in memory.
 /// Depending on the type of metric, count, sum, minimum and maximum of values will be tracked.
@@ -12,154 +15,124 @@ use scores::*;
 /// ```
 /// use dipstick::*;
 ///
-/// let (sink, source) = aggregate();
-/// let metrics = metrics(sink);
+/// let sink = aggregate(4, summary, to_stdout());
+/// let metrics = global_metrics(sink);
 ///
 /// metrics.marker("my_event").mark();
 /// metrics.marker("my_event").mark();
 /// ```
-pub fn aggregate() -> (AggregateSink, AggregateSource) {
-    let agg = Aggregator::new();
-    (agg.as_sink(), agg.as_source())
+///
+pub fn aggregate<E, M>(capacity: usize, stat_fn: E, to_chain: Chain<M>) -> Chain<Aggregate>
+    where
+        E: Fn(Kind, &str, ScoreType) -> Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static,
+        M: Clone + Send + Sync + Debug + 'static,
+{
+    let metrics = Arc::new(RwLock::new(HashMap::with_capacity(capacity)));
+    let metrics0 = metrics.clone();
+
+    let publish = Arc::new(Publisher::new(stat_fn, to_chain));
+
+    Chain::new(
+        move |kind, name, _rate| {
+            metrics.write().unwrap()
+                .entry(name.to_string())
+                .or_insert_with(|| Arc::new(Scoreboard::new(kind, name.to_string()))
+            ).clone()
+        },
+        move |_auto_flush| {
+            let metrics = metrics0.clone();
+            let publish = publish.clone();
+            Arc::new(move |cmd| match cmd {
+                ScopeCmd::Write(metric, value) => metric.update(value),
+                ScopeCmd::Flush => {
+                    let metrics = metrics.read().expect("Lock scoreboards for a snapshot.");
+                    let snapshot = metrics.values().flat_map(|score| score.reset()).collect();
+                    publish.publish(snapshot);
+                }
+            })
+        },
+    )
 }
 
-/// Enumerate the metrics being aggregated and their scores.
+/// Central aggregation structure.
+/// Since `AggregateKey`s themselves contain scores, the aggregator simply maintains
+/// a shared list of metrics for enumeration when used as source.
+///
 #[derive(Debug, Clone)]
-pub struct AggregateSource(Arc<RwLock<HashMap<String, Arc<Scoreboard>>>>);
+pub struct Aggregator {
+    metrics: Arc<RwLock<HashMap<String, Arc<Scoreboard>>>>,
+    publish: Arc<Publish>,
+}
 
-impl AggregateSource {
-    /// Iterate over every aggregated metric.
-    // TODO impl Iterator
-    pub fn for_each<F>(&self, ops: F)
-    where
-        F: Fn(&Scoreboard),
-    {
-        for metric in self.0.read().unwrap().values() {
-            ops(&metric)
+impl Aggregator {
+
+    /// Build a new metric aggregation point with specified initial capacity of metrics to aggregate.
+    ///
+    pub fn with_capacity(size: usize, publish: Arc<Publish>) -> Aggregator {
+        Aggregator {
+            metrics: Arc::new(RwLock::new(HashMap::with_capacity(size))),
+            publish: publish.clone(),
         }
     }
 
     /// Discard scores for ad-hoc metrics.
+    ///
     pub fn cleanup(&self) {
-        let orphans: Vec<String> = self.0.read().unwrap().iter()
+        let orphans: Vec<String> = self.metrics.read().unwrap().iter()
             // is aggregator now the sole owner?
             .filter(|&(_k, v)| Arc::strong_count(v) == 1)
             .map(|(k, _v)| k.to_string())
             .collect();
         if !orphans.is_empty() {
-            let mut remover = self.0.write().unwrap();
+            let mut remover = self.metrics.write().unwrap();
             orphans.iter().for_each(|k| {remover.remove(k);});
         }
     }
 
 }
 
-/// Central aggregation structure.
-/// Since `AggregateKey`s themselves contain scores, the aggregator simply maintains
-/// a shared list of metrics for enumeration when used as source.
-#[derive(Debug, Clone)]
-pub struct Aggregator {
-    metrics: Arc<RwLock<HashMap<String, Arc<Scoreboard>>>>,
-}
 
-impl Aggregator {
-    /// Build a new metric aggregation point.
-    pub fn new() -> Aggregator {
-        Aggregator::with_capacity(0)
-    }
-
-    /// Build a new metric aggregation point with specified initial capacity of metrics to aggregate.
-    pub fn with_capacity(size: usize) -> Aggregator {
-        Aggregator { metrics: Arc::new(RwLock::new(HashMap::with_capacity(size))) }
-    }
-}
-
-/// Something that can be seen as a metric source.
-pub trait AsSource {
-    /// Get the metric source.
-    fn as_source(&self) -> AggregateSource;
-}
-
-impl AsSource for Aggregator {
-    fn as_source(&self) -> AggregateSource {
-        AggregateSource(self.metrics.clone())
-    }
-}
-
-impl AsSink for Aggregator {
-    type Metric = Aggregate;
-    type Sink = AggregateSink;
-
-    /// Get the metric sink.
-    fn as_sink(&self) -> Self::Sink {
-        AggregateSink(self.metrics.clone())
-    }
-}
-
-/// The type of metric created by the AggregateSink.
-/// Each Aggregate
+/// The type of metric created by the Aggregator.
+///
 pub type Aggregate = Arc<Scoreboard>;
-
-/// A sink where to send metrics for aggregation.
-/// The parameters of aggregation may be set upon creation.
-/// Just `clone()` to use as a shared aggregator.
-#[derive(Debug, Clone)]
-pub struct AggregateSink(Arc<RwLock<HashMap<String, Aggregate>>>);
-
-
-impl Sink<Aggregate> for AggregateSink {
-    #[allow(unused_variables)]
-    fn new_metric(&self, kind: Kind, name: &str, sampling: Rate) -> Aggregate {
-        self.0.write().unwrap().entry(name.to_string()).or_insert_with(||
-            Arc::new(
-                Scoreboard::new(kind, name.to_string())
-            )
-        ).clone()
-    }
-
-    #[allow(unused_variables)]
-    fn new_scope(&self, auto_flush: bool) -> ScopeFn<Aggregate> {
-        Arc::new(|cmd| match cmd {
-            Scope::Write(metric, value) => metric.update(value),
-            Scope::Flush => {}
-        })
-    }
-}
 
 #[cfg(feature = "bench")]
 mod bench {
 
     use super::*;
     use test;
+    use core::Kind::*;
+    use output::*;
+
 
     #[bench]
     fn time_bench_write_event(b: &mut test::Bencher) {
-        let (sink, _source) = aggregate();
-        let metric = sink.new_metric(Marker, &"event_a", 1.0);
-        let scope = sink.new_scope(false);
-        b.iter(|| test::black_box(scope(Scope::Write(&metric, 1))));
+        let sink = aggregate(4, summary, to_void());
+        let metric = sink.define_metric(Marker, "event_a", 1.0);
+        let scope = sink.open_scope(false);
+        b.iter(|| test::black_box(scope(ScopeCmd::Write(&metric, 1))));
     }
 
 
     #[bench]
     fn time_bench_write_count(b: &mut test::Bencher) {
-        let (sink, _source) = aggregate();
-        let metric = sink.new_metric(Counter, &"count_a", 1.0);
-        let scope = sink.new_scope(false);
-        b.iter(|| test::black_box(scope(Scope::Write(&metric, 1))));
+        let sink = aggregate(4, summary, to_void());
+        let metric = sink.define_metric(Counter, "count_a", 1.0);
+        let scope = sink.open_scope(false);
+        b.iter(|| test::black_box(scope(ScopeCmd::Write(&metric, 1))));
     }
 
     #[bench]
     fn time_bench_read_event(b: &mut test::Bencher) {
-        let (sink, _source) = aggregate();
-        let metric = sink.new_metric(Marker, &"marker_a", 1.0);
+        let sink = aggregate(4, summary, to_void());
+        let metric = sink.define_metric(Marker, "marker_a", 1.0);
         b.iter(|| test::black_box(metric.reset()));
     }
 
     #[bench]
     fn time_bench_read_count(b: &mut test::Bencher) {
-        let (sink, _source) = aggregate();
-        let metric = sink.new_metric(Counter, &"count_a", 1.0);
+        let sink = aggregate(4, summary, to_void());
+        let metric = sink.define_metric(Counter, "count_a", 1.0);
         b.iter(|| test::black_box(metric.reset()));
     }
 

@@ -21,56 +21,72 @@
 
 use core::*;
 use core::Kind::*;
-use aggregate::AggregateSource;
-use scores::ScoreType;
+use scores::{ScoreType, ScoreSnapshot};
 use scores::ScoreType::*;
-use std::time::Duration;
-use schedule::{schedule, CancelHandle};
+use std::fmt::Debug;
 
-/// Schedules the publisher to run at recurrent intervals
-pub fn publish_every<E, M, S>(
-    duration: Duration,
-    source: AggregateSource,
-    target: S,
-    export: E,
-) -> CancelHandle
-where
-    S: Sink<M> + 'static + Send + Sync,
-    M: Clone + Send + Sync,
-    E: Fn(Kind, &str, ScoreType) -> Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static,
-{
-    schedule(duration, move || publish(&source, &target, &export))
+/// A trait to publish metrics.
+///
+pub trait Publish: Send + Sync + Debug {
+
+    /// Publish the provided metrics data downstream.
+    ///
+    fn publish(&self, scores: Vec<ScoreSnapshot>);
 }
 
 /// Define and write metrics from aggregated scores to the target channel
 /// If this is called repeatedly it can be a good idea to use the metric cache
 /// to prevent new metrics from being created every time.
-// TODO require ScopeMetrics instead of Sink
-pub fn publish<E, M, S>(source: &AggregateSource, target: &S, export: &E)
+#[derive(Derivative, Clone)]
+#[derivative(Debug)]
+pub struct Publisher<E, M> {
+    #[derivative(Debug = "ignore")]
+    statistics: Box<E>,
+    target_chain: Chain<M>,
+}
+
+impl<E, M> Publisher<E, M>
+    where
+        E: Fn(Kind, &str, ScoreType) -> Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static,
+        M: Clone + Send + Sync + 'static,
+{
+    /// Define a new metrics publishing strategy, from a transformation
+    /// function and a target metric chain.
+    ///
+    pub fn new(stat_fn: E, target_chain: Chain<M>) -> Self {
+        Publisher {
+            statistics: Box::new(stat_fn),
+            target_chain,
+        }
+    }
+}
+
+impl<E, M> Publish for Publisher<E, M>
 where
-    S: Sink<M>,
-    M: Clone + Send + Sync,
+    M: Clone + Send + Sync + Debug,
     E: Fn(Kind, &str, ScoreType) -> Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static,
 {
-    let publish_scope_fn = target.new_scope(false);
-    source.for_each(|metric| {
-        let snapshot = metric.reset();
+    fn publish(&self, snapshot: Vec<ScoreSnapshot>) {
+        let publish_scope_fn = self.target_chain.open_scope(false);
         if snapshot.is_empty() {
             // no data was collected for this period
             // TODO repeat previous frame min/max ?
             // TODO update some canary metric ?
         } else {
-            for score in snapshot {
-                if let Some(ex) = export(metric.kind, &metric.name, score) {
-                    let temp_metric = target.new_metric(ex.0, &ex.1.concat(), 1.0);
-                    publish_scope_fn(Scope::Write(&temp_metric, ex.2));
+            for metric in snapshot {
+                for score in metric.2 {
+                    if let Some(ex) = self.statistics.as_ref()(metric.0, metric.1.as_ref(), score) {
+                        let temp_metric = self.target_chain.define_metric(ex.0, &ex.1.concat(), 1.0);
+                        publish_scope_fn(ScopeCmd::Write(&temp_metric, ex.2));
+                    }
                 }
             }
         }
-    });
-    // TODO parameterize whether to keep ad-hoc metrics after publish
-    source.cleanup();
-    publish_scope_fn(Scope::Flush)
+
+        // TODO parameterize whether to keep ad-hoc metrics after publish
+        // source.cleanup();
+        publish_scope_fn(ScopeCmd::Flush)
+    }
 }
 
 /// A predefined export strategy reporting all aggregated stats for all metric types.

@@ -53,6 +53,18 @@ pub enum Kind {
     Timer,
 }
 
+
+/// Dynamic metric definition function.
+/// Metrics can be defined from any thread, concurrently (Fn is Sync).
+/// The resulting metrics themselves can be also be safely shared across threads (<M> is Send + Sync).
+/// Concurrent usage of a metric is done using threaded scopes.
+/// Shared concurrent scopes may be provided by some backends (aggregate).
+pub type DefineMetricFn<M> = Arc<Fn(Kind, &str, Rate) -> M + Send + Sync>;
+
+/// A function trait that opens a new metric capture scope.
+///
+pub type OpenScopeFn<M> = Arc<Fn(bool) -> ControlScopeFn<M> + Send + Sync>;
+
 /// Returns a callback function to send commands to the metric scope.
 /// Writes can be performed by passing Some((&Metric, Value))
 /// Flushes can be performed by passing None
@@ -61,12 +73,14 @@ pub enum Kind {
 /// Complex applications may define a new scope fo each operation or request.
 /// Scopes can be moved acrossed threads (Send) but are not required to be thread-safe (Sync).
 /// Some implementations _may_ be 'Sync', otherwise queue()ing or threadlocal() can be used.
-pub type ScopeFn<M> = Arc<Fn(Scope<M>) + Send + Sync>;
+///
+pub type ControlScopeFn<M> = Arc<Fn(ScopeCmd<M>) + Send + Sync>;
 
 /// An method dispatching command enum to manipulate metric scopes.
 /// Replaces a potential `Writer` trait that would have methods `write` and `flush`.
 /// Using a command pattern allows buffering, async queuing and inline definition of writers.
-pub enum Scope<'a, M: 'a> {
+///
+pub enum ScopeCmd<'a, M: 'a> {
     /// Write the value for the metric.
     /// Takes a reference to minimize overhead in single-threaded scenarios.
     Write(&'a M, Value),
@@ -75,40 +89,87 @@ pub enum Scope<'a, M: 'a> {
     Flush,
 }
 
-/// Main trait of the metrics backend API.
-/// Defines a component that can be used when setting up a metrics backend stack.
-/// Intermediate sinks transform how metrics are defined and written:
-/// - Sampling
-/// - Dual
-/// - Cache
-/// Terminal sinks store or propagate metric values to other systems.
-/// - Statsd
-/// - Log
-/// - Aggregate
-/// Print metrics to Generic.
-pub trait Sink<M>
-where
-    M: Clone + Send + Sync,
-{
-    /// Define a new metric instrument of the requested kind, with the specified name and sample rate.
-    fn new_metric(&self, kind: Kind, name: &str, sampling: Rate) -> M;
+/// A pair of functions composing a twin "chain of command".
+/// This is the building block for the metrics backend.
+///
+#[derive(Derivative, Clone)]
+#[derivative(Debug)]
+pub struct Chain<M> {
+    #[derivative(Debug = "ignore")]
+    define_metric_fn: DefineMetricFn<M>,
 
-    /// Returns a callback function to send scope commands.
+    #[derivative(Debug = "ignore")]
+    scope_metric_fn: OpenScopeFn<M>,
+}
+
+impl<M: Send + Sync> Chain<M> {
+
+    /// Define a new metric.
     ///
-    /// [auto_flush] Helps the downstream scope(s) determine when to flush metrics data.
-    /// Scopes may overlook this hint if it is not applicable.
-    /// For example, [AggregateSink]s are always flushed manually.
-    fn new_scope(&self, auto_flush: bool) -> ScopeFn<M>;
+    #[allow(unused_variables)]
+    pub fn define_metric(&self, kind: Kind, name: &str, sampling: Rate) -> M {
+        (self.define_metric_fn)(kind, name, sampling)
+    }
+
+    /// Open a new metric scope.
+    ///
+    #[allow(unused_variables)]
+    pub fn open_scope(&self, auto_flush: bool) -> ControlScopeFn<M> {
+        (self.scope_metric_fn)(auto_flush)
+    }
+
+    /// Create a new metric chain with the provided metric definition and scope creation functions.
+    ///
+    pub fn new<MF, WF>(make_metric: MF, make_scope: WF) -> Self
+        where
+            MF: Fn(Kind, &str, Rate) -> M + Send + Sync + 'static,
+            WF: Fn(bool) -> ControlScopeFn<M> + Send + Sync + 'static,
+    {
+        Chain {
+            // capture the provided closures in Arc to provide cheap clones
+            define_metric_fn: Arc::new(make_metric),
+            scope_metric_fn: Arc::new(make_scope),
+        }
+    }
+
+    /// Intercept metric definition without changing the metric type.
+    ///
+    pub fn mod_metric<MF>(&self, mod_fn: MF) -> Chain<M>
+    where
+        MF: Fn(DefineMetricFn<M>) -> DefineMetricFn<M>,
+    {
+        Chain {
+            define_metric_fn: mod_fn(self.define_metric_fn.clone()),
+            scope_metric_fn: self.scope_metric_fn.clone()
+        }
+    }
+
+    /// Intercept both metric definition and scope creation, possibly changing the metric type.
+    ///
+    pub fn mod_both<MF, N>(&self, mod_fn: MF) -> Chain<N>
+    where
+        MF: Fn(DefineMetricFn<M>, OpenScopeFn<M>) -> (DefineMetricFn<N>, OpenScopeFn<N>),
+        N: Clone + Send + Sync,
+    {
+        let (metric_fn, scope_fn) = mod_fn(self.define_metric_fn.clone(), self.scope_metric_fn.clone());
+        Chain {
+            define_metric_fn: metric_fn,
+            scope_metric_fn: scope_fn
+        }
+    }
+
+    /// Intercept scope creation.
+    ///
+    pub fn mod_scope<MF>(&self, mod_fn: MF) -> Self
+    where
+        MF: Fn(OpenScopeFn<M>) -> OpenScopeFn<M>,
+    {
+        Chain {
+            define_metric_fn: self.define_metric_fn.clone(),
+            scope_metric_fn: mod_fn(self.scope_metric_fn.clone())
+        }
+    }
 }
 
-/// Expose the `Sink` nature of a multi-faceted struct.
-pub trait AsSink {
-    /// The metric type of this sink
-    type Metric: Clone + Send + Sync;
 
-    /// The sink type
-    type Sink: Sink<Self::Metric>;
 
-    /// Get the metric sink.
-    fn as_sink(&self) -> Self::Sink;
-}

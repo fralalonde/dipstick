@@ -7,47 +7,34 @@ use std::time::Duration;
 use dipstick::*;
 
 fn main() {
-    // send application metrics to both aggregator and to sampling log
-    let (to_aggregate, from_aggregate) = aggregate();
 
-    let app_metrics = metrics(to_aggregate);
+    fn custom_statistics(kind: Kind, name: &str, score:ScoreType) -> Option<(Kind, Vec<&str>, Value)> {
+        match (kind, score) {
+            // do not export gauge scores
+            (Kind::Gauge, _) => None,
+
+            // prepend and append to metric name
+            (_, ScoreType::Count(count)) => Some((Kind::Counter,
+                                                  vec!["name customized_with_prefix:", &name, " and a suffix: "], count)),
+
+            // scaling the score value and appending unit to name
+            (kind, ScoreType::Sum(sum)) => Some((kind, vec![&name, "_millisecond"], sum * 1000)),
+
+            // using the unmodified metric name
+            (kind, ScoreType::Mean(avg)) => Some((kind, vec![&name], avg.round() as u64)),
+
+            // do not export min and max
+            _ => None,
+        }
+    }
+
+    // send application metrics to aggregator
+    let to_aggregate = aggregate(16, custom_statistics, to_stdout());
+
+    let app_metrics = global_metrics(to_aggregate);
 
     // schedule aggregated metrics to be printed every 3 seconds
-    let to_console = to_stdout();
-
-    publish_every(Duration::from_secs(3), from_aggregate, to_console, |kind,
-     name,
-     score| {
-        match kind {
-            // do not export gauge scores
-            Kind::Gauge => None,
-
-            _ => {
-                match score {
-                    // prepend and append to metric name
-                    ScoreType::Count(hit) => Some((
-                        Kind::Counter,
-                        vec![
-                            "name customized_with_prefix:",
-                            &name,
-                            " and a suffix: ",
-                        ],
-                        hit,
-                    )),
-
-                    // scaling the score value and appending unit to name
-                    ScoreType::Sum(sum) => Some(
-                        (kind, vec![&name, "_millisecond"], sum * 1000),
-                    ),
-
-                    // using the unmodified metric name
-                    ScoreType::Mean(avg) => Some((kind, vec![&name], avg.round() as u64)),
-                    _ => None, /* do not export min and max */
-                }
-            }
-
-        }
-    });
+    app_metrics.flush_every(Duration::from_secs(3));
 
     let counter = app_metrics.counter("counter_a");
     let timer = app_metrics.timer("timer_b");

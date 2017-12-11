@@ -9,7 +9,7 @@ use dipstick::*;
 
 fn main() {
 
-    let metrics = metrics(async(0, to_stdout()));
+    let metrics = global_metrics(async(0, to_stdout()));
 
     let counter = metrics.counter("counter_a");
     let timer = metrics.timer("timer_b");

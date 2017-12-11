@@ -5,81 +5,93 @@
 //! Compared to [ScopeMetrics], static metrics are easier to use and provide satisfactory metrics
 //! in many applications.
 //!
-//! If multiple [AppMetrics] are defined, they'll each have their scope.
-
+//! If multiple [GlobalMetrics] are defined, they'll each have their scope.
+//!
 use core::*;
+use core::ScopeCmd::*;
+
 use std::sync::Arc;
+use std::time::Duration;
+use schedule::*;
 
 // TODO define an 'AsValue' trait + impl for supported number types, then drop 'num' crate
 pub use num::ToPrimitive;
 
 /// Wrap the metrics backend to provide an application-friendly interface.
-pub fn metrics<M, S>(sink: S) -> AppMetrics<M, S>
+///
+pub fn global_metrics<M, IC>(chain: IC) -> GlobalMetrics<M>
 where
-    S: Sink<M> + 'static,
-    M: 'static + Clone + Send + Sync,
+    M: Clone + Send + Sync + 'static,
+    IC: Into<Chain<M>>,
 {
-    let static_scope = sink.new_scope(true);
-    AppMetrics {
+    let chain = chain.into();
+    let static_scope = chain.open_scope(true);
+    GlobalMetrics {
         prefix: "".to_string(),
         scope: static_scope,
-        sink: Arc::new(sink),
+        chain: Arc::new(chain),
     }
 }
 
 /// A monotonic counter metric.
 /// Since value is only ever increased by one, no value parameter is provided,
 /// preventing programming errors.
+///
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct Marker<M> {
     metric: M,
     #[derivative(Debug = "ignore")]
-    scope: ScopeFn<M>,
+    scope: ControlScopeFn<M>,
 }
 
 impl<M> Marker<M> {
     /// Record a single event occurence.
+    ///
     pub fn mark(&self) {
-        self.scope.as_ref()(Scope::Write(&self.metric, 1));
+        self.scope.as_ref()(Write(&self.metric, 1));
     }
 }
 
 /// A counter that sends values to the metrics backend
+///
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct Counter<M> {
     metric: M,
     #[derivative(Debug = "ignore")]
-    scope: ScopeFn<M>,
+    scope: ControlScopeFn<M>,
 }
 
 impl<M> Counter<M> {
     /// Record a value count.
+    ///
     pub fn count<V>(&self, count: V)
     where
         V: ToPrimitive,
     {
-        self.scope.as_ref()(Scope::Write(&self.metric, count.to_u64().unwrap()));
+        self.scope.as_ref()(Write(&self.metric, count.to_u64().unwrap()));
     }
 }
 
 /// A gauge that sends values to the metrics backend
+///
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct Gauge<M> {
     metric: M,
     #[derivative(Debug = "ignore")]
-    scope: ScopeFn<M>,
+    scope: ControlScopeFn<M>,
 }
 
 impl<M> Gauge<M> {
     /// Record a value point for this gauge.
+    ///
     pub fn value<V>(&self, value: V)
     where
         V: ToPrimitive,
     {
-        self.scope.as_ref()(Scope::Write(&self.metric, value.to_u64().unwrap()));
+        self.scope.as_ref()(Write(&self.metric, value.to_u64().unwrap()));
     }
 }
 
@@ -89,22 +101,24 @@ impl<M> Gauge<M> {
 /// - with the time(Fn) methodhich wraps a closure with start() and stop() calls.
 /// - with start() and stop() methodsrapping around the operation to time
 /// - with the interval_us() method, providing an externally determined microsecond interval
+///
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct Timer<M> {
     metric: M,
     #[derivative(Debug = "ignore")]
-    scope: ScopeFn<M>,
+    scope: ControlScopeFn<M>,
 }
 
 impl<M> Timer<M> {
     /// Record a microsecond interval for this timer
     /// Can be used in place of start()/stop() if an external time interval source is used
+    ///
     pub fn interval_us<V>(&self, interval_us: V) -> V
     where
         V: ToPrimitive,
     {
-        self.scope.as_ref()(Scope::Write(&self.metric, interval_us.to_u64().unwrap()));
+        self.scope.as_ref()(Write(&self.metric, interval_us.to_u64().unwrap()));
         interval_us
     }
 
@@ -114,6 +128,7 @@ impl<M> Timer<M> {
     /// Beware, handles obtained here are not bound to this specific timer instance
     /// _for now_ but might be in the future for safety.
     /// If you require safe multi-timer handles, get them through TimeType::now()
+    ///
     pub fn start(&self) -> TimeHandle {
         TimeHandle::now()
     }
@@ -122,12 +137,14 @@ impl<M> Timer<M> {
     /// This call can be performed multiple times using the same handle,
     /// reporting distinct time intervals each time.
     /// Returns the microsecond interval value that was recorded.
+    ///
     pub fn stop(&self, start_time: TimeHandle) -> u64 {
         let elapsed_us = start_time.elapsed_us();
         self.interval_us(elapsed_us)
     }
 
     /// Record the time taken to execute the provided closure
+    ///
     pub fn time<F, R>(&self, operations: F) -> R
     where
         F: FnOnce() -> R,
@@ -140,19 +157,19 @@ impl<M> Timer<M> {
 }
 
 /// Variations of this should also provide control of the metric recording scope.
-#[derive(Derivative)]
+///
+#[derive(Derivative, Clone)]
 #[derivative(Debug)]
-pub struct AppMetrics<M, S> {
+pub struct GlobalMetrics<M> {
     prefix: String,
-    sink: Arc<S>,
+    chain: Arc<Chain<M>>,
     #[derivative(Debug = "ignore")]
-    scope: ScopeFn<M>,
+    scope: ControlScopeFn<M>,
 }
 
-impl<M, S> AppMetrics<M, S>
+impl<M> GlobalMetrics<M>
 where
-    S: Sink<M>,
-    M: Clone + Send + Sync,
+    M: Clone + Send + Sync + 'static,
 {
     fn qualified_name<AS>(&self, name: AS) -> String
     where
@@ -168,12 +185,12 @@ where
     }
 
     /// Get an event counter of the provided name.
+    ///
     pub fn marker<AS>(&self, name: AS) -> Marker<M>
     where
         AS: Into<String> + AsRef<str>,
-        M: Send + Sync,
     {
-        let metric = self.sink.new_metric(
+        let metric = self.chain.define_metric(
             Kind::Marker,
             &self.qualified_name(name),
             1.0,
@@ -185,12 +202,12 @@ where
     }
 
     /// Get a counter of the provided name.
+    ///
     pub fn counter<AS>(&self, name: AS) -> Counter<M>
     where
         AS: Into<String> + AsRef<str>,
-        M: Send + Sync,
     {
-        let metric = self.sink.new_metric(
+        let metric = self.chain.define_metric(
             Kind::Counter,
             &self.qualified_name(name),
             1.0,
@@ -202,12 +219,12 @@ where
     }
 
     /// Get a timer of the provided name.
+    ///
     pub fn timer<AS>(&self, name: AS) -> Timer<M>
     where
         AS: Into<String> + AsRef<str>,
-        M: Send + Sync,
     {
-        let metric = self.sink.new_metric(
+        let metric = self.chain.define_metric(
             Kind::Timer,
             &self.qualified_name(name),
             1.0,
@@ -219,12 +236,12 @@ where
     }
 
     /// Get a gauge of the provided name.
+    ///
     pub fn gauge<AS>(&self, name: AS) -> Gauge<M>
     where
         AS: Into<String> + AsRef<str>,
-        M: Send + Sync,
     {
-        let metric = self.sink.new_metric(
+        let metric = self.chain.define_metric(
             Kind::Gauge,
             &self.qualified_name(name),
             1.0,
@@ -237,13 +254,14 @@ where
 
     /// Prepend the metrics name with a prefix.
     /// Does not affect metrics that were already obtained.
+    ///
     pub fn with_prefix<IS>(&self, prefix: IS) -> Self
     where
         IS: Into<String>,
     {
-        AppMetrics {
+        GlobalMetrics {
             prefix: prefix.into(),
-            sink: self.sink.clone(),
+            chain: self.chain.clone(),
             scope: self.scope.clone(),
         }
     }
@@ -251,11 +269,19 @@ where
     /// Forcefully flush the backing metrics scope.
     /// This is usually not required since static metrics use auto flushing scopes.
     /// The effect, if any, of this method depends on the selected metrics backend.
-    pub fn flush_scope(&mut self) {
-        self.scope.as_ref()(Scope::Flush);
+    ///
+    pub fn flush(&self) {
+        self.scope.as_ref()(Flush);
+    }
+
+    /// Schedule for the metrics aggregated of buffered by downstream metrics sinks to be
+    /// sent out at regular intervals.
+    ///
+    pub fn flush_every(&self, period: Duration) -> CancelHandle {
+        let scope = self.scope.clone();
+        schedule(period, move || (scope)(Flush))
     }
 }
-
 
 #[cfg(feature = "bench")]
 mod bench {
@@ -265,8 +291,8 @@ mod bench {
 
     #[bench]
     fn time_bench_direct_dispatch_event(b: &mut test::Bencher) {
-        let (sink, _source) = aggregate();
-        let metrics = metrics(sink);
+        let sink = aggregate(5, summary, to_void());
+        let metrics = global_metrics(sink);
         let marker = metrics.marker("aaa");
         b.iter(|| test::black_box(marker.mark()));
     }
