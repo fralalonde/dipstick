@@ -28,7 +28,6 @@ pub enum ScoreType {
 }
 
 /// A snapshot of multiple scores for a single metric.
-///
 pub type ScoreSnapshot = (Kind, String, Vec<ScoreType>);
 
 /// A metric that holds aggregated values.
@@ -61,7 +60,6 @@ impl Scoreboard {
     }
 
     /// Update scores with new value
-    ///
     pub fn update(&self, value: Value) -> () {
         // TODO report any concurrent updates / resets for measurement of contention
         let value = value as usize;
@@ -78,7 +76,6 @@ impl Scoreboard {
     }
 
     /// Reset scores to zero, return previous values
-    ///
     fn snapshot(&self, now: usize, scores: &mut [usize; 5]) -> bool {
         // SNAPSHOT OF ATOMICS IN PROGRESS, HANG TIGHT
         scores[0] = self.scores[0].swap(now, Release);
@@ -93,7 +90,6 @@ impl Scoreboard {
     }
 
     /// Map raw scores (if any) to applicable statistics
-    ///
     pub fn reset(&self) -> Option<ScoreSnapshot> {
         let now = time::precise_time_ns() as usize;
         let mut scores = Scoreboard::blank(now);

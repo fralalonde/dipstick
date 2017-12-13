@@ -6,17 +6,27 @@ use dipstick::*;
 use std::time::Duration;
 
 fn main() {
-    let metrics = global_metrics(
-        // Metric caching allows re-use of the counter, skipping cost of redefining it on each use.
-        cache(12, (
-            prefix("myserver.myapp.", to_stdout()),
-            prefix("myapp.", to_stdout()),
-        )),
+
+    let metrics1 = global_metrics(
+        (
+            // use tuples to combine metrics of different types
+            to_statsd("localhost:8125").expect("connect"),
+            to_stdout()
+        )
+    );
+
+    let metrics2 = global_metrics(
+         &[
+            // use slices to combine multiple metrics of the same type
+            prefix("yeah.", to_stdout()),
+            prefix("ouch.", to_stdout()),
+            prefix("nooo.", to_stdout()),
+        ][..]
     );
 
     loop {
-        metrics.counter("counter_a").count(123);
-        metrics.timer("timer_a").interval_us(2000000);
+        metrics1.counter("counter_a").count(123);
+        metrics2.timer("timer_a").interval_us(2000000);
         std::thread::sleep(Duration::from_millis(40));
     }
 }

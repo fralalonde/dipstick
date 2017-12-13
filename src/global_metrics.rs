@@ -18,7 +18,6 @@ use schedule::*;
 pub use num::ToPrimitive;
 
 /// Wrap the metrics backend to provide an application-friendly interface.
-///
 pub fn global_metrics<M, IC>(chain: IC) -> GlobalMetrics<M>
 where
     M: Clone + Send + Sync + 'static,
@@ -36,7 +35,6 @@ where
 /// A monotonic counter metric.
 /// Since value is only ever increased by one, no value parameter is provided,
 /// preventing programming errors.
-///
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct Marker<M> {
@@ -47,14 +45,12 @@ pub struct Marker<M> {
 
 impl<M> Marker<M> {
     /// Record a single event occurence.
-    ///
     pub fn mark(&self) {
         self.scope.as_ref()(Write(&self.metric, 1));
     }
 }
 
 /// A counter that sends values to the metrics backend
-///
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct Counter<M> {
@@ -65,7 +61,6 @@ pub struct Counter<M> {
 
 impl<M> Counter<M> {
     /// Record a value count.
-    ///
     pub fn count<V>(&self, count: V)
     where
         V: ToPrimitive,
@@ -75,7 +70,6 @@ impl<M> Counter<M> {
 }
 
 /// A gauge that sends values to the metrics backend
-///
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct Gauge<M> {
@@ -86,7 +80,6 @@ pub struct Gauge<M> {
 
 impl<M> Gauge<M> {
     /// Record a value point for this gauge.
-    ///
     pub fn value<V>(&self, value: V)
     where
         V: ToPrimitive,
@@ -101,7 +94,6 @@ impl<M> Gauge<M> {
 /// - with the time(Fn) methodhich wraps a closure with start() and stop() calls.
 /// - with start() and stop() methodsrapping around the operation to time
 /// - with the interval_us() method, providing an externally determined microsecond interval
-///
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct Timer<M> {
@@ -113,7 +105,6 @@ pub struct Timer<M> {
 impl<M> Timer<M> {
     /// Record a microsecond interval for this timer
     /// Can be used in place of start()/stop() if an external time interval source is used
-    ///
     pub fn interval_us<V>(&self, interval_us: V) -> V
     where
         V: ToPrimitive,
@@ -128,7 +119,6 @@ impl<M> Timer<M> {
     /// Beware, handles obtained here are not bound to this specific timer instance
     /// _for now_ but might be in the future for safety.
     /// If you require safe multi-timer handles, get them through TimeType::now()
-    ///
     pub fn start(&self) -> TimeHandle {
         TimeHandle::now()
     }
@@ -137,14 +127,12 @@ impl<M> Timer<M> {
     /// This call can be performed multiple times using the same handle,
     /// reporting distinct time intervals each time.
     /// Returns the microsecond interval value that was recorded.
-    ///
     pub fn stop(&self, start_time: TimeHandle) -> u64 {
         let elapsed_us = start_time.elapsed_us();
         self.interval_us(elapsed_us)
     }
 
     /// Record the time taken to execute the provided closure
-    ///
     pub fn time<F, R>(&self, operations: F) -> R
     where
         F: FnOnce() -> R,
@@ -157,7 +145,6 @@ impl<M> Timer<M> {
 }
 
 /// Variations of this should also provide control of the metric recording scope.
-///
 #[derive(Derivative, Clone)]
 #[derivative(Debug)]
 pub struct GlobalMetrics<M> {
@@ -185,7 +172,6 @@ where
     }
 
     /// Get an event counter of the provided name.
-    ///
     pub fn marker<AS>(&self, name: AS) -> Marker<M>
     where
         AS: Into<String> + AsRef<str>,
@@ -202,7 +188,6 @@ where
     }
 
     /// Get a counter of the provided name.
-    ///
     pub fn counter<AS>(&self, name: AS) -> Counter<M>
     where
         AS: Into<String> + AsRef<str>,
@@ -219,7 +204,6 @@ where
     }
 
     /// Get a timer of the provided name.
-    ///
     pub fn timer<AS>(&self, name: AS) -> Timer<M>
     where
         AS: Into<String> + AsRef<str>,
@@ -236,7 +220,6 @@ where
     }
 
     /// Get a gauge of the provided name.
-    ///
     pub fn gauge<AS>(&self, name: AS) -> Gauge<M>
     where
         AS: Into<String> + AsRef<str>,
@@ -254,7 +237,6 @@ where
 
     /// Prepend the metrics name with a prefix.
     /// Does not affect metrics that were already obtained.
-    ///
     pub fn with_prefix<IS>(&self, prefix: IS) -> Self
     where
         IS: Into<String>,
@@ -269,14 +251,12 @@ where
     /// Forcefully flush the backing metrics scope.
     /// This is usually not required since static metrics use auto flushing scopes.
     /// The effect, if any, of this method depends on the selected metrics backend.
-    ///
     pub fn flush(&self) {
         self.scope.as_ref()(Flush);
     }
 
     /// Schedule for the metrics aggregated of buffered by downstream metrics sinks to be
     /// sent out at regular intervals.
-    ///
     pub fn flush_every(&self, period: Duration) -> CancelHandle {
         let scope = self.scope.clone();
         schedule(period, move || (scope)(Flush))

@@ -14,7 +14,6 @@ fn build_aggregator() -> Chain<Aggregate> {
 }
 
 /// Capture a snapshot of Dipstick's internal metrics since the last snapshot.
-///
 pub fn snapshot() -> Vec<ScoreSnapshot> {
     vec![]
 }

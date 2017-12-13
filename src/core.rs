@@ -37,9 +37,6 @@ pub type Rate = f64;
 /// Do not sample, use all data.
 pub const FULL_SAMPLING_RATE: Rate = 1.0;
 
-//////////////
-//// BACKEND
-
 /// Used to differentiate between metric kinds in the backend.
 #[derive(Debug, Copy, Clone)]
 pub enum Kind {
@@ -62,7 +59,6 @@ pub enum Kind {
 pub type DefineMetricFn<M> = Arc<Fn(Kind, &str, Rate) -> M + Send + Sync>;
 
 /// A function trait that opens a new metric capture scope.
-///
 pub type OpenScopeFn<M> = Arc<Fn(bool) -> ControlScopeFn<M> + Send + Sync>;
 
 /// Returns a callback function to send commands to the metric scope.
@@ -73,13 +69,11 @@ pub type OpenScopeFn<M> = Arc<Fn(bool) -> ControlScopeFn<M> + Send + Sync>;
 /// Complex applications may define a new scope fo each operation or request.
 /// Scopes can be moved acrossed threads (Send) but are not required to be thread-safe (Sync).
 /// Some implementations _may_ be 'Sync', otherwise queue()ing or threadlocal() can be used.
-///
 pub type ControlScopeFn<M> = Arc<Fn(ScopeCmd<M>) + Send + Sync>;
 
 /// An method dispatching command enum to manipulate metric scopes.
 /// Replaces a potential `Writer` trait that would have methods `write` and `flush`.
 /// Using a command pattern allows buffering, async queuing and inline definition of writers.
-///
 pub enum ScopeCmd<'a, M: 'a> {
     /// Write the value for the metric.
     /// Takes a reference to minimize overhead in single-threaded scenarios.
@@ -91,7 +85,6 @@ pub enum ScopeCmd<'a, M: 'a> {
 
 /// A pair of functions composing a twin "chain of command".
 /// This is the building block for the metrics backend.
-///
 #[derive(Derivative, Clone)]
 #[derivative(Debug)]
 pub struct Chain<M> {
@@ -105,21 +98,18 @@ pub struct Chain<M> {
 impl<M: Send + Sync> Chain<M> {
 
     /// Define a new metric.
-    ///
     #[allow(unused_variables)]
     pub fn define_metric(&self, kind: Kind, name: &str, sampling: Rate) -> M {
         (self.define_metric_fn)(kind, name, sampling)
     }
 
     /// Open a new metric scope.
-    ///
     #[allow(unused_variables)]
     pub fn open_scope(&self, auto_flush: bool) -> ControlScopeFn<M> {
         (self.scope_metric_fn)(auto_flush)
     }
 
     /// Create a new metric chain with the provided metric definition and scope creation functions.
-    ///
     pub fn new<MF, WF>(make_metric: MF, make_scope: WF) -> Self
         where
             MF: Fn(Kind, &str, Rate) -> M + Send + Sync + 'static,
@@ -133,7 +123,6 @@ impl<M: Send + Sync> Chain<M> {
     }
 
     /// Intercept metric definition without changing the metric type.
-    ///
     pub fn mod_metric<MF>(&self, mod_fn: MF) -> Chain<M>
     where
         MF: Fn(DefineMetricFn<M>) -> DefineMetricFn<M>,
@@ -145,7 +134,6 @@ impl<M: Send + Sync> Chain<M> {
     }
 
     /// Intercept both metric definition and scope creation, possibly changing the metric type.
-    ///
     pub fn mod_both<MF, N>(&self, mod_fn: MF) -> Chain<N>
     where
         MF: Fn(DefineMetricFn<M>, OpenScopeFn<M>) -> (DefineMetricFn<N>, OpenScopeFn<N>),
@@ -159,7 +147,6 @@ impl<M: Send + Sync> Chain<M> {
     }
 
     /// Intercept scope creation.
-    ///
     pub fn mod_scope<MF>(&self, mod_fn: MF) -> Self
     where
         MF: Fn(OpenScopeFn<M>) -> OpenScopeFn<M>,
@@ -170,6 +157,3 @@ impl<M: Send + Sync> Chain<M> {
         }
     }
 }
-
-
-

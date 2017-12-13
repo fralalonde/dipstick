@@ -24,7 +24,6 @@ pub use num::ToPrimitive;
 
 /// Wrap the metrics backend to provide an application-friendly interface.
 /// When reporting a value, scoped metrics also need to be passed a [Scope].
-///
 pub fn scoped_metrics<M>(chain: Chain<M>) -> ScopedMetrics<M>
 where
     M: 'static + Clone + Send + Sync,
@@ -38,7 +37,6 @@ where
 /// A monotonic counter metric.
 /// Since value is only ever increased by one, no value parameter is provided,
 /// preventing programming errors.
-///
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct ScopeMarker<M> {
@@ -47,14 +45,12 @@ pub struct ScopeMarker<M> {
 
 impl<M> ScopeMarker<M> {
     /// Record a single event occurence.
-    ///
     pub fn mark(&self, scope: &mut ControlScopeFn<M>) {
         (scope)(Write(&self.metric, 1));
     }
 }
 
 /// A counter that sends values to the metrics backend
-///
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct ScopeCounter<M> {
@@ -72,7 +68,6 @@ impl<M> ScopeCounter<M> {
 }
 
 /// A gauge that sends values to the metrics backend
-///
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct ScopeGauge<M> {
@@ -81,7 +76,6 @@ pub struct ScopeGauge<M> {
 
 impl<M: Clone> ScopeGauge<M> {
     /// Record a value point for this gauge.
-    ///
     pub fn value<V>(&self, scope: &mut ControlScopeFn<M>, value: V)
     where
         V: ToPrimitive,
@@ -96,7 +90,6 @@ impl<M: Clone> ScopeGauge<M> {
 /// - with the time(Fn) methodhich wraps a closure with start() and stop() calls.
 /// - with start() and stop() methodsrapping around the operation to time
 /// - with the interval_us() method, providing an externally determined microsecond interval
-///
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct ScopeTimer<M> {
@@ -106,7 +99,6 @@ pub struct ScopeTimer<M> {
 impl<M: Clone> ScopeTimer<M> {
     /// Record a microsecond interval for this timer
     /// Can be used in place of start()/stop() if an external time interval source is used
-    ///
     pub fn interval_us<V>(&self, scope: &mut ControlScopeFn<M>, interval_us: V) -> V
     where
         V: ToPrimitive,
@@ -121,7 +113,6 @@ impl<M: Clone> ScopeTimer<M> {
     /// Beware, handles obtained here are not bound to this specific timer instance
     /// _for now_ but might be in the future for safety.
     /// If you require safe multi-timer handles, get them through TimeType::now()
-    ///
     pub fn start(&self) -> TimeHandle {
         TimeHandle::now()
     }
@@ -130,14 +121,12 @@ impl<M: Clone> ScopeTimer<M> {
     /// This call can be performed multiple times using the same handle,
     /// reporting distinct time intervals each time.
     /// Returns the microsecond interval value that was recorded.
-    ///
     pub fn stop(&self, scope: &mut ControlScopeFn<M>, start_time: TimeHandle) -> u64 {
         let elapsed_us = start_time.elapsed_us();
         self.interval_us(scope, elapsed_us)
     }
 
     /// Record the time taken to execute the provided closure
-    ///
     pub fn time<F, R>(&self, scope: &mut ControlScopeFn<M>, operations: F) -> R
     where
         F: FnOnce() -> R,
@@ -150,7 +139,6 @@ impl<M: Clone> ScopeTimer<M> {
 }
 
 /// Variations of this should also provide control of the metric recording scope.
-///
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct ScopedMetrics<M> {
@@ -176,7 +164,6 @@ where
     }
 
     /// Get an event counter of the provided name.
-    ///
     pub fn marker<AS>(&self, name: AS) -> ScopeMarker<M>
     where
         AS: Into<String> + AsRef<str>,
@@ -190,7 +177,6 @@ where
     }
 
     /// Get a counter of the provided name.
-    ///
     pub fn counter<AS>(&self, name: AS) -> ScopeCounter<M>
     where
         AS: Into<String> + AsRef<str>,
@@ -204,7 +190,6 @@ where
     }
 
     /// Get a timer of the provided name.
-    ///
     pub fn timer<AS>(&self, name: AS) -> ScopeTimer<M>
     where
         AS: Into<String> + AsRef<str>,
@@ -218,7 +203,6 @@ where
     }
 
     /// Get a gauge of the provided name.
-    ///
     pub fn gauge<AS>(&self, name: AS) -> ScopeGauge<M>
     where
         AS: Into<String> + AsRef<str>,
@@ -233,7 +217,6 @@ where
 
     /// Prepend the metrics name with a prefix.
     /// Does not affect metrics that were already obtained.
-    ///
     pub fn with_prefix<IS>(&self, prefix: IS) -> Self
     where
         IS: Into<String>,
@@ -245,7 +228,6 @@ where
     }
 
     /// Create a new scope to report metric values.
-    ///
     pub fn open_scope(&self) -> ControlScopeFn<M> {
         let scope_buffer = RwLock::new(ScopeBuffer {
             buffer: Vec::new(),
@@ -267,7 +249,6 @@ where
 }
 
 /// Save the metrics for delivery upon scope close.
-///
 struct ScopeCommand<M> {
     metric: M,
     value: Value,

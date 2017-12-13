@@ -26,11 +26,9 @@ use scores::ScoreType::*;
 use std::fmt::Debug;
 
 /// A trait to publish metrics.
-///
 pub trait Publish: Send + Sync + Debug {
 
     /// Publish the provided metrics data downstream.
-    ///
     fn publish(&self, scores: Vec<ScoreSnapshot>);
 }
 
@@ -52,7 +50,6 @@ impl<E, M> Publisher<E, M>
 {
     /// Define a new metrics publishing strategy, from a transformation
     /// function and a target metric chain.
-    ///
     pub fn new(stat_fn: E, target_chain: Chain<M>) -> Self {
         Publisher {
             statistics: Box::new(stat_fn),
@@ -104,7 +101,6 @@ pub fn all_stats(kind: Kind, name: &str, score: ScoreType) -> Option<(Kind, Vec<
 
 /// A predefined export strategy reporting the average value for every non-marker metric.
 /// Marker metrics export their hit count instead.
-///
 /// Since there is only one stat per metric, there is no risk of collision
 /// and so exported stats copy their metric's name.
 pub fn average(kind: Kind, name: &str, score: ScoreType) -> Option<(Kind, Vec<&str>, Value)> {
@@ -128,7 +124,6 @@ pub fn average(kind: Kind, name: &str, score: ScoreType) -> Option<(Kind, Vec<&s
 /// - Timers and Counters each export their sums
 /// - Markers each export their hit count
 /// - Gauges each export their average
-///
 /// Since there is only one stat per metric, there is no risk of collision
 /// and so exported stats copy their metric's name.
 pub fn summary(kind: Kind, name: &str, score: ScoreType) -> Option<(Kind, Vec<&str>, Value)> {

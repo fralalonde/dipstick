@@ -11,17 +11,13 @@ use std::sync::{Arc, RwLock};
 /// Aggregate metrics in memory.
 /// Depending on the type of metric, count, sum, minimum and maximum of values will be tracked.
 /// Needs to be connected to a publish to be useful.
-///
 /// ```
 /// use dipstick::*;
-///
 /// let sink = aggregate(4, summary, to_stdout());
 /// let metrics = global_metrics(sink);
-///
 /// metrics.marker("my_event").mark();
 /// metrics.marker("my_event").mark();
 /// ```
-///
 pub fn aggregate<E, M>(capacity: usize, stat_fn: E, to_chain: Chain<M>) -> Chain<Aggregate>
     where
         E: Fn(Kind, &str, ScoreType) -> Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static,
@@ -57,7 +53,6 @@ pub fn aggregate<E, M>(capacity: usize, stat_fn: E, to_chain: Chain<M>) -> Chain
 /// Central aggregation structure.
 /// Since `AggregateKey`s themselves contain scores, the aggregator simply maintains
 /// a shared list of metrics for enumeration when used as source.
-///
 #[derive(Debug, Clone)]
 pub struct Aggregator {
     metrics: Arc<RwLock<HashMap<String, Arc<Scoreboard>>>>,
@@ -67,7 +62,6 @@ pub struct Aggregator {
 impl Aggregator {
 
     /// Build a new metric aggregation point with specified initial capacity of metrics to aggregate.
-    ///
     pub fn with_capacity(size: usize, publish: Arc<Publish>) -> Aggregator {
         Aggregator {
             metrics: Arc::new(RwLock::new(HashMap::with_capacity(size))),
@@ -76,7 +70,6 @@ impl Aggregator {
     }
 
     /// Discard scores for ad-hoc metrics.
-    ///
     pub fn cleanup(&self) {
         let orphans: Vec<String> = self.metrics.read().unwrap().iter()
             // is aggregator now the sole owner?
@@ -93,7 +86,6 @@ impl Aggregator {
 
 
 /// The type of metric created by the Aggregator.
-///
 pub type Aggregate = Arc<Scoreboard>;
 
 #[cfg(feature = "bench")]

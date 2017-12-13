@@ -1,10 +1,8 @@
 //! Metrics name manipulation functions.
-//!
 use core::*;
 use std::sync::Arc;
 
 /// Insert prefix in newly defined metrics.
-///
 pub fn prefix<M, IC>(prefix: &str, chain: IC) -> Chain<M>
 where
     M: Clone + Send + Sync + 'static,
@@ -18,5 +16,16 @@ where
             (next)(kind, name.as_ref(), rate)
         })
     })
+}
+
+/// Join namespace and prepend  in newly defined metrics.
+pub fn namespace<M, IC>(names: &[&str], chain: IC) -> Chain<M>
+    where
+        M: Clone + Send + Sync + 'static,
+        IC: Into<Chain<M>>,
+{
+    let chain = chain.into();
+    let nspace = names.join(".");
+    prefix(nspace.as_ref(), chain)
 }
 

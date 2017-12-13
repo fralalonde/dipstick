@@ -12,7 +12,6 @@ use std::thread;
 /// Cache metrics to prevent them from being re-defined on every use.
 /// Use of this should be transparent, this has no effect on the values.
 /// Stateful sinks (i.e. Aggregate) may naturally cache their definitions.
-///
 pub fn async<M, IC>(queue_size: usize, chain: IC) -> Chain<M>
     where
         M: Clone + Send + Sync + 'static,
@@ -67,7 +66,6 @@ lazy_static! {
 }
 
 /// Carry the scope command over the queue, from the sender, to be executed by the receiver.
-///
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct QueueCommand<M> {
