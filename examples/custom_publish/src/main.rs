@@ -7,15 +7,21 @@ use std::time::Duration;
 use dipstick::*;
 
 fn main() {
-
-    fn custom_statistics(kind: Kind, name: &str, score:ScoreType) -> Option<(Kind, Vec<&str>, Value)> {
+    fn custom_statistics(
+        kind: Kind,
+        name: &str,
+        score: ScoreType,
+    ) -> Option<(Kind, Vec<&str>, Value)> {
         match (kind, score) {
             // do not export gauge scores
             (Kind::Gauge, _) => None,
 
             // prepend and append to metric name
-            (_, ScoreType::Count(count)) => Some((Kind::Counter,
-                                                  vec!["name customized_with_prefix:", &name, " and a suffix: "], count)),
+            (_, ScoreType::Count(count)) => Some((
+                Kind::Counter,
+                vec!["name customized_with_prefix:", &name, " and a suffix: "],
+                count,
+            )),
 
             // scaling the score value and appending unit to name
             (kind, ScoreType::Sum(sum)) => Some((kind, vec![&name, "_millisecond"], sum * 1000)),
@@ -29,9 +35,9 @@ fn main() {
     }
 
     // send application metrics to aggregator
-    let to_aggregate = aggregate(16, custom_statistics, to_stdout());
+    let to_aggregate = aggregate(custom_statistics, to_stdout());
 
-    let app_metrics = global_metrics(to_aggregate);
+    let app_metrics = app_metrics(to_aggregate);
 
     // schedule aggregated metrics to be printed every 3 seconds
     app_metrics.flush_every(Duration::from_secs(3));
@@ -44,5 +50,4 @@ fn main() {
         timer.interval_us(654654);
         gauge.value(3534);
     }
-
 }

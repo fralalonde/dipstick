@@ -21,13 +21,12 @@
 
 use core::*;
 use core::Kind::*;
-use scores::{ScoreType, ScoreSnapshot};
+use scores::{ScoreSnapshot, ScoreType};
 use scores::ScoreType::*;
 use std::fmt::Debug;
 
 /// A trait to publish metrics.
 pub trait Publish: Send + Sync + Debug {
-
     /// Publish the provided metrics data downstream.
     fn publish(&self, scores: Vec<ScoreSnapshot>);
 }
@@ -38,15 +37,14 @@ pub trait Publish: Send + Sync + Debug {
 #[derive(Derivative, Clone)]
 #[derivative(Debug)]
 pub struct Publisher<E, M> {
-    #[derivative(Debug = "ignore")]
-    statistics: Box<E>,
+    #[derivative(Debug = "ignore")] statistics: Box<E>,
     target_chain: Chain<M>,
 }
 
 impl<E, M> Publisher<E, M>
-    where
-        E: Fn(Kind, &str, ScoreType) -> Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static,
-        M: Clone + Send + Sync + 'static,
+where
+    E: Fn(Kind, &str, ScoreType) -> Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static,
+    M: Clone + Send + Sync + 'static,
 {
     /// Define a new metrics publishing strategy, from a transformation
     /// function and a target metric chain.
@@ -60,7 +58,7 @@ impl<E, M> Publisher<E, M>
 
 impl<E, M> Publish for Publisher<E, M>
 where
-    M: Clone + Send + Sync + Debug,
+    M: Clone + Send + Sync + Debug + 'static,
     E: Fn(Kind, &str, ScoreType) -> Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static,
 {
     fn publish(&self, snapshot: Vec<ScoreSnapshot>) {
@@ -72,9 +70,10 @@ where
         } else {
             for metric in snapshot {
                 for score in metric.2 {
-                    if let Some(ex) = self.statistics.as_ref()(metric.0, metric.1.as_ref(), score) {
-                        let temp_metric = self.target_chain.define_metric(ex.0, &ex.1.concat(), 1.0);
-                        publish_scope_fn(ScopeCmd::Write(&temp_metric, ex.2));
+                    if let Some(ex) = (self.statistics)(metric.0, metric.1.as_ref(), score) {
+                        let temp_metric =
+                            self.target_chain.define_metric(ex.0, &ex.1.concat(), 1.0);
+                        publish_scope_fn.write(&temp_metric, ex.2);
                     }
                 }
             }
@@ -82,7 +81,7 @@ where
 
         // TODO parameterize whether to keep ad-hoc metrics after publish
         // source.cleanup();
-        publish_scope_fn(ScopeCmd::Flush)
+        publish_scope_fn.flush()
     }
 }
 
@@ -95,7 +94,7 @@ pub fn all_stats(kind: Kind, name: &str, score: ScoreType) -> Option<(Kind, Vec<
         Mean(mean) => Some((kind, vec![name, ".mean"], mean.round() as Value)),
         Max(max) => Some((Gauge, vec![name, ".max"], max)),
         Min(min) => Some((Gauge, vec![name, ".min"], min)),
-        Rate(rate) => Some((Gauge, vec![name, ".rate"], rate.round() as Value))
+        Rate(rate) => Some((Gauge, vec![name, ".rate"], rate.round() as Value)),
     }
 }
 
@@ -105,18 +104,14 @@ pub fn all_stats(kind: Kind, name: &str, score: ScoreType) -> Option<(Kind, Vec<
 /// and so exported stats copy their metric's name.
 pub fn average(kind: Kind, name: &str, score: ScoreType) -> Option<(Kind, Vec<&str>, Value)> {
     match kind {
-        Marker => {
-            match score {
-                Count(count) => Some((Counter, vec![name], count)),
-                _ => None,
-            }
-        }
-        _ => {
-            match score {
-                Mean(avg) => Some((Gauge, vec![name], avg.round() as Value)),
-                _ => None,
-            }
-        }
+        Marker => match score {
+            Count(count) => Some((Counter, vec![name], count)),
+            _ => None,
+        },
+        _ => match score {
+            Mean(avg) => Some((Gauge, vec![name], avg.round() as Value)),
+            _ => None,
+        },
     }
 }
 
@@ -128,23 +123,17 @@ pub fn average(kind: Kind, name: &str, score: ScoreType) -> Option<(Kind, Vec<&s
 /// and so exported stats copy their metric's name.
 pub fn summary(kind: Kind, name: &str, score: ScoreType) -> Option<(Kind, Vec<&str>, Value)> {
     match kind {
-        Marker => {
-            match score {
-                Count(count) => Some((Counter, vec![name], count)),
-                _ => None,
-            }
-        }
-        Counter | Timer => {
-            match score {
-                Sum(sum) => Some((kind, vec![name], sum)),
-                _ => None,
-            }
-        }
-        Gauge => {
-            match score {
-                Mean(mean) => Some((Gauge, vec![name], mean.round() as Value)),
-                _ => None,
-            }
-        }
+        Marker => match score {
+            Count(count) => Some((Counter, vec![name], count)),
+            _ => None,
+        },
+        Counter | Timer => match score {
+            Sum(sum) => Some((kind, vec![name], sum)),
+            _ => None,
+        },
+        Gauge => match score {
+            Mean(mean) => Some((Gauge, vec![name], mean.round() as Value)),
+            _ => None,
+        },
     }
 }

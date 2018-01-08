@@ -1,7 +1,7 @@
 //! A sample application sending ad-hoc counter values both to statsd _and_ to stdout.
 
-extern crate dipstick;
 extern crate badlog;
+extern crate dipstick;
 
 use dipstick::*;
 use std::time::Duration;
@@ -9,9 +9,9 @@ use std::time::Duration;
 fn main() {
     badlog::init(Some("info"));
 
-    let metrics = global_metrics(
+    let metrics = app_metrics(
         to_graphite("localhost:2003").expect("Connect to graphite")
-    );
+            .with_namespace(&["my", "app"]));
 
     loop {
         metrics.counter("counter_a").count(123);

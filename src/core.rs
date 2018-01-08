@@ -2,8 +2,14 @@
 //! This is mostly centered around the backend.
 //! Application-facing types are in the `app` module.
 
+use self::Kind::*;
+use self::ScopeCmd::*;
+
 use time;
 use std::sync::Arc;
+
+// TODO define an 'AsValue' trait + impl for supported number types, then drop 'num' crate
+pub use num::ToPrimitive;
 
 /// Base type for recorded metric values.
 // TODO should this be f64? f32?
@@ -50,7 +56,6 @@ pub enum Kind {
     Timer,
 }
 
-
 /// Dynamic metric definition function.
 /// Metrics can be defined from any thread, concurrently (Fn is Sync).
 /// The resulting metrics themselves can be also be safely shared across threads (<M> is Send + Sync).
@@ -69,7 +74,14 @@ pub type OpenScopeFn<M> = Arc<Fn(bool) -> ControlScopeFn<M> + Send + Sync>;
 /// Complex applications may define a new scope fo each operation or request.
 /// Scopes can be moved acrossed threads (Send) but are not required to be thread-safe (Sync).
 /// Some implementations _may_ be 'Sync', otherwise queue()ing or threadlocal() can be used.
-pub type ControlScopeFn<M> = Arc<Fn(ScopeCmd<M>) + Send + Sync>;
+#[derive(Clone)]
+pub struct ControlScopeFn<M> {
+    flush_on_drop: bool,
+    scope_fn: Arc<Fn(ScopeCmd<M>)>,
+}
+
+unsafe impl<M> Sync for ControlScopeFn<M> {}
+unsafe impl<M> Send for ControlScopeFn<M> {}
 
 /// An method dispatching command enum to manipulate metric scopes.
 /// Replaces a potential `Writer` trait that would have methods `write` and `flush`.
@@ -83,20 +95,79 @@ pub enum ScopeCmd<'a, M: 'a> {
     Flush,
 }
 
+impl<M> ControlScopeFn<M> {
+    /// Create a new metric scope based on the provided scope function.
+    ///
+    /// ```rust
+    /// use dipstick::ControlScopeFn;
+    /// let ref mut scope: ControlScopeFn<String> = ControlScopeFn::new(|_cmd| { /* match cmd {} */  });
+    /// ```
+    ///
+    pub fn new<F>(scope_fn: F) -> Self
+        where F: Fn(ScopeCmd<M>) + 'static
+    {
+        ControlScopeFn {
+            flush_on_drop: true,
+            scope_fn: Arc::new(scope_fn)
+        }
+    }
+
+    /// Write a value to this scope.
+    ///
+    /// ```rust
+    /// let ref mut scope = dipstick::to_log().open_scope(false);
+    /// scope.write(&"counter".to_string(), 6);
+    /// ```
+    ///
+    #[inline]
+    pub fn write(&self, metric: &M, value: Value) {
+        (self.scope_fn)(Write(metric, value))
+    }
+
+    /// Flush this scope, if buffered.
+    ///
+    /// ```rust
+    /// let ref mut scope = dipstick::to_log().open_scope(true);
+    /// scope.flush();
+    /// ```
+    ///
+    #[inline]
+    pub fn flush(&self) {
+        (self.scope_fn)(Flush)
+    }
+
+    /// If scope is buffered, controls whether to flush the scope one last time when it is dropped.
+    /// The default is true.
+    ///
+    /// ```rust
+    /// let ref mut scope = dipstick::to_log().open_scope(true).flush_on_drop(false);
+    /// ```
+    ///
+    pub fn flush_on_drop(mut self, enable: bool) -> Self {
+        self.flush_on_drop = enable;
+        self
+    }
+}
+
+impl<M> Drop for ControlScopeFn<M> {
+    fn drop(&mut self) {
+        if self.flush_on_drop {
+            self.flush()
+        }
+    }
+}
+
 /// A pair of functions composing a twin "chain of command".
 /// This is the building block for the metrics backend.
 #[derive(Derivative, Clone)]
 #[derivative(Debug)]
 pub struct Chain<M> {
-    #[derivative(Debug = "ignore")]
-    define_metric_fn: DefineMetricFn<M>,
+    #[derivative(Debug = "ignore")] define_metric_fn: DefineMetricFn<M>,
 
-    #[derivative(Debug = "ignore")]
-    scope_metric_fn: OpenScopeFn<M>,
+    #[derivative(Debug = "ignore")] scope_metric_fn: OpenScopeFn<M>,
 }
 
-impl<M: Send + Sync> Chain<M> {
-
+impl<M: Send + Sync + Clone + 'static> Chain<M> {
     /// Define a new metric.
     #[allow(unused_variables)]
     pub fn define_metric(&self, kind: Kind, name: &str, sampling: Rate) -> M {
@@ -104,22 +175,73 @@ impl<M: Send + Sync> Chain<M> {
     }
 
     /// Open a new metric scope.
-    #[allow(unused_variables)]
-    pub fn open_scope(&self, auto_flush: bool) -> ControlScopeFn<M> {
-        (self.scope_metric_fn)(auto_flush)
+    /// Scope metrics allow an application to emit per-operation statistics,
+    /// For example, producing a per-request performance log.
+    ///
+    /// Although the scope metrics can be predefined like in ['AppMetrics'], the application needs to
+    /// create a scope that will be passed back when reporting scoped metric values.
+    ///
+    /// ```rust
+    /// use dipstick::*;
+    /// let scope_metrics = to_log();
+    /// let request_counter = scope_metrics.counter("scope_counter");
+    /// {
+    ///     let ref mut request_scope = scope_metrics.open_scope(true);
+    ///     request_counter.count(request_scope, 42);
+    /// }
+    /// ```
+    ///
+    pub fn open_scope(&self, buffered: bool) -> ControlScopeFn<M> {
+        (self.scope_metric_fn)(buffered)
+    }
+
+    /// Open a buffered scope.
+    #[inline]
+    pub fn buffered_scope(&self) -> ControlScopeFn<M> {
+        self.open_scope(true)
+    }
+
+    /// Open an unbuffered scope.
+    #[inline]
+    pub fn unbuffered_scope(&self) -> ControlScopeFn<M> {
+        self.open_scope(false)
     }
 
     /// Create a new metric chain with the provided metric definition and scope creation functions.
     pub fn new<MF, WF>(make_metric: MF, make_scope: WF) -> Self
-        where
-            MF: Fn(Kind, &str, Rate) -> M + Send + Sync + 'static,
-            WF: Fn(bool) -> ControlScopeFn<M> + Send + Sync + 'static,
+    where
+        MF: Fn(Kind, &str, Rate) -> M + Send + Sync + 'static,
+        WF: Fn(bool) -> ControlScopeFn<M> + Send + Sync + 'static,
     {
         Chain {
             // capture the provided closures in Arc to provide cheap clones
             define_metric_fn: Arc::new(make_metric),
             scope_metric_fn: Arc::new(make_scope),
         }
+    }
+
+    /// Get an event counter of the provided name.
+    pub fn marker<AS: AsRef<str>>(&self, name: AS) -> ScopeMarker<M> {
+        let metric = self.define_metric(Marker, name.as_ref(), 1.0);
+        ScopeMarker { metric }
+    }
+
+    /// Get a counter of the provided name.
+    pub fn counter<AS: AsRef<str>>(&self, name: AS) -> ScopeCounter<M> {
+        let metric = self.define_metric(Counter, name.as_ref(), 1.0);
+        ScopeCounter { metric }
+    }
+
+    /// Get a timer of the provided name.
+    pub fn timer<AS: AsRef<str>>(&self, name: AS) -> ScopeTimer<M> {
+        let metric = self.define_metric(Timer, name.as_ref(), 1.0);
+        ScopeTimer { metric }
+    }
+
+    /// Get a gauge of the provided name.
+    pub fn gauge<AS: AsRef<str>>(&self, name: AS) -> ScopeGauge<M> {
+        let metric = self.define_metric(Gauge, name.as_ref(), 1.0);
+        ScopeGauge { metric }
     }
 
     /// Intercept metric definition without changing the metric type.
@@ -129,7 +251,7 @@ impl<M: Send + Sync> Chain<M> {
     {
         Chain {
             define_metric_fn: mod_fn(self.define_metric_fn.clone()),
-            scope_metric_fn: self.scope_metric_fn.clone()
+            scope_metric_fn: self.scope_metric_fn.clone(),
         }
     }
 
@@ -139,10 +261,11 @@ impl<M: Send + Sync> Chain<M> {
         MF: Fn(DefineMetricFn<M>, OpenScopeFn<M>) -> (DefineMetricFn<N>, OpenScopeFn<N>),
         N: Clone + Send + Sync,
     {
-        let (metric_fn, scope_fn) = mod_fn(self.define_metric_fn.clone(), self.scope_metric_fn.clone());
+        let (metric_fn, scope_fn) =
+            mod_fn(self.define_metric_fn.clone(), self.scope_metric_fn.clone());
         Chain {
             define_metric_fn: metric_fn,
-            scope_metric_fn: scope_fn
+            scope_metric_fn: scope_fn,
         }
     }
 
@@ -153,7 +276,119 @@ impl<M: Send + Sync> Chain<M> {
     {
         Chain {
             define_metric_fn: self.define_metric_fn.clone(),
-            scope_metric_fn: mod_fn(self.scope_metric_fn.clone())
+            scope_metric_fn: mod_fn(self.scope_metric_fn.clone()),
         }
     }
 }
+
+/// A monotonic counter metric.
+/// Since value is only ever increased by one, no value parameter is provided,
+/// preventing programming errors.
+#[derive(Derivative)]
+#[derivative(Debug)]
+pub struct ScopeMarker<M> {
+    metric: M,
+}
+
+impl<M> ScopeMarker<M> {
+    /// Record a single event occurence.
+    #[inline]
+    pub fn mark(&self, scope: &mut ControlScopeFn<M>) {
+        scope.write(&self.metric, 1);
+    }
+}
+
+/// A counter that sends values to the metrics backend
+#[derive(Derivative)]
+#[derivative(Debug)]
+pub struct ScopeCounter<M> {
+    metric: M,
+}
+
+impl<M> ScopeCounter<M> {
+    /// Record a value count.
+    #[inline]
+    pub fn count<V>(&self, scope: &mut ControlScopeFn<M>, count: V)
+        where
+            V: ToPrimitive,
+    {
+        scope.write(&self.metric, count.to_u64().unwrap());
+    }
+}
+
+/// A gauge that sends values to the metrics backend
+#[derive(Derivative)]
+#[derivative(Debug)]
+pub struct ScopeGauge<M> {
+    metric: M,
+}
+
+impl<M: Clone> ScopeGauge<M> {
+    /// Record a value point for this gauge.
+    #[inline]
+    pub fn value<V>(&self, scope: &mut ControlScopeFn<M>, value: V)
+        where
+            V: ToPrimitive,
+    {
+        scope.write(&self.metric, value.to_u64().unwrap());
+    }
+}
+
+/// A timer that sends values to the metrics backend
+/// Timers can record time intervals in multiple ways :
+/// - with the time! macrohich wraps an expression or block with start() and stop() calls.
+/// - with the time(Fn) methodhich wraps a closure with start() and stop() calls.
+/// - with start() and stop() methodsrapping around the operation to time
+/// - with the interval_us() method, providing an externally determined microsecond interval
+#[derive(Derivative)]
+#[derivative(Debug)]
+pub struct ScopeTimer<M> {
+    metric: M,
+}
+
+impl<M: Clone> ScopeTimer<M> {
+    /// Record a microsecond interval for this timer
+    /// Can be used in place of start()/stop() if an external time interval source is used
+    #[inline]
+    pub fn interval_us<V>(&self, scope: &mut ControlScopeFn<M>, interval_us: V) -> V
+        where
+            V: ToPrimitive,
+    {
+        scope.write(&self.metric, interval_us.to_u64().unwrap());
+        interval_us
+    }
+
+    /// Obtain a opaque handle to the current time.
+    /// The handle is passed back to the stop() method to record a time interval.
+    /// This is actually a convenience method to the TimeHandle::now()
+    /// Beware, handles obtained here are not bound to this specific timer instance
+    /// _for now_ but might be in the future for safety.
+    /// If you require safe multi-timer handles, get them through TimeType::now()
+    #[inline]
+    pub fn start(&self) -> TimeHandle {
+        TimeHandle::now()
+    }
+
+    /// Record the time elapsed since the start_time handle was obtained.
+    /// This call can be performed multiple times using the same handle,
+    /// reporting distinct time intervals each time.
+    /// Returns the microsecond interval value that was recorded.
+    #[inline]
+    pub fn stop(&self, scope: &mut ControlScopeFn<M>, start_time: TimeHandle) -> u64 {
+        let elapsed_us = start_time.elapsed_us();
+        self.interval_us(scope, elapsed_us)
+    }
+
+    /// Record the time taken to execute the provided closure
+    #[inline]
+    pub fn time<F, R>(&self, scope: &mut ControlScopeFn<M>, operations: F) -> R
+        where
+            F: FnOnce() -> R,
+    {
+        let start_time = self.start();
+        let value: R = operations();
+        self.stop(scope, start_time);
+        value
+    }
+}
+

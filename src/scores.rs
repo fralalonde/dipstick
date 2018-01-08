@@ -21,9 +21,9 @@ pub enum ScoreType {
     Max(u64),
     /// Smallest value reported.
     Min(u64),
-    /// Approximative average value (hit count / sum, non-atomic)
+    /// Average value (hit count / sum, non-atomic)
     Mean(f64),
-    /// Approximative mean rate (hit count / period length in seconds, non-atomic)
+    /// Mean rate (hit count / period length in seconds, non-atomic)
     Rate(f64),
 }
 
@@ -40,7 +40,7 @@ pub struct Scoreboard {
     /// The metric's name.
     name: String,
 
-    scores: [AtomicUsize; 5]
+    scores: [AtomicUsize; 5],
 }
 
 impl Scoreboard {
@@ -50,7 +50,7 @@ impl Scoreboard {
         Scoreboard {
             kind,
             name,
-            scores: unsafe { mem::transmute(Scoreboard::blank(now)) }
+            scores: unsafe { mem::transmute(Scoreboard::blank(now)) },
         }
     }
 
@@ -65,7 +65,7 @@ impl Scoreboard {
         let value = value as usize;
         self.scores[1].fetch_add(1, Acquire);
         match self.kind {
-            Marker => {},
+            Marker => {}
             _ => {
                 // optimization - these fields are unused for Marker stats
                 self.scores[2].fetch_add(value, Acquire);
@@ -77,16 +77,19 @@ impl Scoreboard {
 
     /// Reset scores to zero, return previous values
     fn snapshot(&self, now: usize, scores: &mut [usize; 5]) -> bool {
-        // SNAPSHOT OF ATOMICS IN PROGRESS, HANG TIGHT
+        // NOTE copy timestamp, count AND sum _before_ testing for data to reduce concurrent discrepancies
         scores[0] = self.scores[0].swap(now, Release);
         scores[1] = self.scores[1].swap(0, Release);
         scores[2] = self.scores[2].swap(0, Release);
-        scores[3] = self.scores[3].swap(usize::MIN, Release);
-        scores[4] = self.scores[4].swap(usize::MAX, Release);
-        // SNAPSHOT COMPLETE, YOU CAN RELAX NOW
 
         // if hit count is zero, then no values were recorded.
-        scores[1] != 0
+        if scores[1] == 0 {
+            return false;
+        }
+
+        scores[3] = self.scores[3].swap(usize::MIN, Release);
+        scores[4] = self.scores[4].swap(usize::MAX, Release);
+        true
     }
 
     /// Map raw scores (if any) to applicable statistics
@@ -101,12 +104,12 @@ impl Scoreboard {
                 Marker => {
                     snapshot.push(Count(scores[1] as u64));
                     snapshot.push(Rate(scores[2] as f64 / duration_seconds))
-                },
+                }
                 Gauge => {
                     snapshot.push(Max(scores[3] as u64));
                     snapshot.push(Min(scores[4] as u64));
                     snapshot.push(Mean(scores[2] as f64 / scores[1] as f64));
-                },
+                }
                 Timer | Counter => {
                     snapshot.push(Count(scores[1] as u64));
                     snapshot.push(Sum(scores[2] as u64));
@@ -115,15 +118,13 @@ impl Scoreboard {
                     snapshot.push(Min(scores[4] as u64));
                     snapshot.push(Mean(scores[2] as f64 / scores[1] as f64));
                     snapshot.push(Rate(scores[2] as f64 / duration_seconds))
-                },
+                }
             }
             Some((self.kind, self.name.clone(), snapshot))
         } else {
             None
         }
     }
-
-
 }
 
 /// Spinlock until success or clear loss to concurrent update.
@@ -131,7 +132,9 @@ impl Scoreboard {
 fn swap_if_more(counter: &AtomicUsize, new_value: usize) {
     let mut current = counter.load(Acquire);
     while current < new_value {
-        if counter.compare_and_swap(current, new_value, Release) == new_value { break }
+        if counter.compare_and_swap(current, new_value, Release) == new_value {
+            break;
+        }
         current = counter.load(Acquire);
     }
 }
@@ -141,11 +144,12 @@ fn swap_if_more(counter: &AtomicUsize, new_value: usize) {
 fn swap_if_less(counter: &AtomicUsize, new_value: usize) {
     let mut current = counter.load(Acquire);
     while current > new_value {
-        if counter.compare_and_swap(current, new_value, Release) == new_value { break }
+        if counter.compare_and_swap(current, new_value, Release) == new_value {
+            break;
+        }
         current = counter.load(Acquire);
     }
 }
-
 
 #[cfg(feature = "bench")]
 mod bench {
@@ -158,7 +162,6 @@ mod bench {
         let metric = Scoreboard::new(Marker, "event_a".to_string());
         b.iter(|| test::black_box(metric.update(1)));
     }
-
 
     #[bench]
     fn bench_score_update_count(b: &mut test::Bencher) {
@@ -173,6 +176,5 @@ mod bench {
         let mut scores = Scoreboard::blank(now);
         b.iter(|| test::black_box(metric.snapshot(now, &mut scores)));
     }
-
 
 }

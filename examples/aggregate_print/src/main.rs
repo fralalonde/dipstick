@@ -7,9 +7,9 @@ use std::time::Duration;
 use dipstick::*;
 
 fn main() {
-    let to_quick_aggregate = aggregate(16, summary, to_stdout());
+    let to_aggregate = aggregate(summary, to_stdout());
 
-    let app_metrics = global_metrics(to_quick_aggregate);
+    let app_metrics = app_metrics(to_aggregate);
 
     app_metrics.flush_every(Duration::from_secs(3));
 
@@ -34,5 +34,4 @@ fn main() {
 
         marker.mark();
     }
-
 }

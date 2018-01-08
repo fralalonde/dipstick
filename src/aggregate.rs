@@ -18,28 +18,33 @@ use std::sync::{Arc, RwLock};
 /// metrics.marker("my_event").mark();
 /// metrics.marker("my_event").mark();
 /// ```
-pub fn aggregate<E, M>(capacity: usize, stat_fn: E, to_chain: Chain<M>) -> Chain<Aggregate>
-    where
-        E: Fn(Kind, &str, ScoreType) -> Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static,
-        M: Clone + Send + Sync + Debug + 'static,
+pub fn aggregate<E, M>(stat_fn: E, to_chain: Chain<M>) -> Chain<Aggregate>
+where
+    E: Fn(Kind, &str, ScoreType) -> Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static,
+    M: Clone + Send + Sync + Debug + 'static,
 {
-    let metrics = Arc::new(RwLock::new(HashMap::with_capacity(capacity)));
+    let metrics = Arc::new(RwLock::new(HashMap::new()));
     let metrics0 = metrics.clone();
 
     let publish = Arc::new(Publisher::new(stat_fn, to_chain));
 
     Chain::new(
         move |kind, name, _rate| {
-            metrics.write().unwrap()
+            metrics
+                .write()
+                .unwrap()
                 .entry(name.to_string())
-                .or_insert_with(|| Arc::new(Scoreboard::new(kind, name.to_string()))
-            ).clone()
+                .or_insert_with(|| Arc::new(Scoreboard::new(kind, name.to_string())))
+                .clone()
         },
-        move |_auto_flush| {
+        move |_buffered| {
             let metrics = metrics0.clone();
             let publish = publish.clone();
-            Arc::new(move |cmd| match cmd {
-                ScopeCmd::Write(metric, value) => metric.update(value),
+            ControlScopeFn::new(move |cmd| match cmd {
+                ScopeCmd::Write(metric, value) => {
+                    let metric: &Aggregate = metric;
+                    metric.update(value)
+                },
                 ScopeCmd::Flush => {
                     let metrics = metrics.read().expect("Lock scoreboards for a snapshot.");
                     let snapshot = metrics.values().flat_map(|score| score.reset()).collect();
@@ -60,7 +65,6 @@ pub struct Aggregator {
 }
 
 impl Aggregator {
-
     /// Build a new metric aggregation point with specified initial capacity of metrics to aggregate.
     pub fn with_capacity(size: usize, publish: Arc<Publish>) -> Aggregator {
         Aggregator {
@@ -78,12 +82,12 @@ impl Aggregator {
             .collect();
         if !orphans.is_empty() {
             let mut remover = self.metrics.write().unwrap();
-            orphans.iter().for_each(|k| {remover.remove(k);});
+            orphans.iter().for_each(|k| {
+                remover.remove(k);
+            });
         }
     }
-
 }
-
 
 /// The type of metric created by the Aggregator.
 pub type Aggregate = Arc<Scoreboard>;
@@ -96,34 +100,32 @@ mod bench {
     use core::Kind::*;
     use output::*;
 
-
     #[bench]
     fn time_bench_write_event(b: &mut test::Bencher) {
-        let sink = aggregate(4, summary, to_void());
+        let sink = aggregate(summary, to_void());
         let metric = sink.define_metric(Marker, "event_a", 1.0);
         let scope = sink.open_scope(false);
-        b.iter(|| test::black_box(scope(ScopeCmd::Write(&metric, 1))));
+        b.iter(|| test::black_box(scope.write(&metric, 1)));
     }
-
 
     #[bench]
     fn time_bench_write_count(b: &mut test::Bencher) {
-        let sink = aggregate(4, summary, to_void());
+        let sink = aggregate(summary, to_void());
         let metric = sink.define_metric(Counter, "count_a", 1.0);
         let scope = sink.open_scope(false);
-        b.iter(|| test::black_box(scope(ScopeCmd::Write(&metric, 1))));
+        b.iter(|| test::black_box(scope.write(&metric, 1)));
     }
 
     #[bench]
     fn time_bench_read_event(b: &mut test::Bencher) {
-        let sink = aggregate(4, summary, to_void());
+        let sink = aggregate(summary, to_void());
         let metric = sink.define_metric(Marker, "marker_a", 1.0);
         b.iter(|| test::black_box(metric.reset()));
     }
 
     #[bench]
     fn time_bench_read_count(b: &mut test::Bencher) {
-        let sink = aggregate(4, summary, to_void());
+        let sink = aggregate(summary, to_void());
         let metric = sink.define_metric(Counter, "count_a", 1.0);
         b.iter(|| test::black_box(metric.reset()));
     }

@@ -6,27 +6,24 @@ use dipstick::*;
 use std::time::Duration;
 
 fn main() {
+    let different_type_metrics = app_metrics((
+        // combine metrics of different types in a tuple
+        to_statsd("localhost:8125").expect("connect"),
+        to_stdout(),
+    ));
 
-    let metrics1 = global_metrics(
-        (
-            // use tuples to combine metrics of different types
-            to_statsd("localhost:8125").expect("connect"),
-            to_stdout()
-        )
-    );
-
-    let metrics2 = global_metrics(
-         &[
+    let same_type_metrics = app_metrics(
+        &[
             // use slices to combine multiple metrics of the same type
-            prefix("yeah.", to_stdout()),
-            prefix("ouch.", to_stdout()),
-            prefix("nooo.", to_stdout()),
-        ][..]
+            to_stdout().with_prefix("yeah"),
+            to_stdout().with_prefix("ouch"),
+            to_stdout().with_sampling_rate(0.5),
+        ][..],
     );
 
     loop {
-        metrics1.counter("counter_a").count(123);
-        metrics2.timer("timer_a").interval_us(2000000);
+        different_type_metrics.counter("counter_a").count(123);
+        same_type_metrics.timer("timer_a").interval_us(2000000);
         std::thread::sleep(Duration::from_millis(40));
     }
 }
