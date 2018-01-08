@@ -9,7 +9,7 @@ use dipstick::*;
 
 fn main() {
     // for this demo, print metric values to the console
-    let app_metrics = global_metrics(to_stdout());
+    let app_metrics = app_metrics(to_stdout());
 
     // metrics can be predefined by type and name
     let counter = app_metrics.counter("counter_a");
@@ -41,5 +41,4 @@ fn main() {
     let start_time = timer.start();
     Duration::from_millis(5);
     timer.stop(start_time);
-
 }

@@ -9,7 +9,7 @@ use std::thread::sleep;
 use dipstick::*;
 
 fn main() {
-    let metrics = scoped_metrics(to_stdout());
+    let metrics = to_stdout();
 
     let counter = metrics.counter("counter_a");
     let timer = metrics.timer("timer_a");
@@ -19,7 +19,8 @@ fn main() {
     loop {
         // add counts forever, non-stop
         println!("\n------- open scope");
-        let ref mut scope = metrics.open_scope();
+
+        let ref mut scope = metrics.open_scope(true);
 
         counter.count(scope, 11);
         counter.count(scope, 12);
@@ -39,9 +40,9 @@ fn main() {
 
         sleep(Duration::from_millis(1000));
 
-        println!("------- close scope: ")
+        println!("------- close scope: ");
 
         // scope metrics are printed at the end of every cycle as scope is dropped
+        // use scope.flush_on_drop(false) and scope.flush() to control flushing if required
     }
-
 }

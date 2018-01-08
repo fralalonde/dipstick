@@ -21,7 +21,7 @@ where
     Ok(Chain::new(
         move |kind, name, rate| {
             let mut prefix = String::with_capacity(32);
-            prefix.push_str(name.as_ref());
+            prefix.push_str(name);
             prefix.push(':');
 
             let mut suffix = String::with_capacity(16);
@@ -49,13 +49,13 @@ where
                 scale,
             }
         },
-        move |auto_flush| {
+        move |buffered| {
             let buf = RwLock::new(ScopeBuffer {
                 buffer: String::with_capacity(MAX_UDP_PAYLOAD),
                 socket: socket.clone(),
-                auto_flush,
+                buffered,
             });
-            Arc::new(move |cmd| {
+            ControlScopeFn::new(move |cmd| {
                 if let Ok(mut buf) = buf.write() {
                     match cmd {
                         ScopeCmd::Write(metric, value) => buf.write(metric, value),
@@ -68,9 +68,9 @@ where
 }
 
 lazy_static! {
-    static ref STATSD_METRICS: GlobalMetrics<Aggregate> = SELF_METRICS.with_prefix("statsd.");
-    static ref SEND_ERR: Marker<Aggregate> = STATSD_METRICS.marker("send_failed");
-    static ref SENT_BYTES: Counter<Aggregate> = STATSD_METRICS.counter("sent_bytes");
+    static ref STATSD_METRICS: AppMetrics<Aggregate> = SELF_METRICS.with_prefix("statsd.");
+    static ref SEND_ERR: AppMarker<Aggregate> = STATSD_METRICS.marker("send_failed");
+    static ref SENT_BYTES: AppCounter<Aggregate> = STATSD_METRICS.counter("sent_bytes");
 }
 
 /// Key of a statsd metric.
@@ -90,7 +90,7 @@ const MAX_UDP_PAYLOAD: usize = 576;
 struct ScopeBuffer {
     buffer: String,
     socket: Arc<UdpSocket>,
-    auto_flush: bool,
+    buffered: bool,
 }
 
 /// Any remaining buffered data is flushed on Drop.
@@ -101,7 +101,7 @@ impl Drop for ScopeBuffer {
 }
 
 impl ScopeBuffer {
-    fn write (&mut self, metric: &Statsd, value: Value) {
+    fn write(&mut self, metric: &Statsd, value: Value) {
         let scaled_value = value / metric.scale;
         let value_str = scaled_value.to_string();
         let entry_len = metric.prefix.len() + value_str.len() + metric.suffix.len();
@@ -124,7 +124,7 @@ impl ScopeBuffer {
             self.buffer.push_str(&value_str);
             self.buffer.push_str(&metric.suffix);
         }
-        if self.auto_flush {
+        if self.buffered {
             self.flush();
         }
     }
@@ -158,7 +158,7 @@ mod bench {
         let timer = sd.define_metric(Kind::Timer, "timer", 1000000.0);
         let scope = sd.open_scope(false);
 
-        b.iter(|| test::black_box((scope)(ScopeCmd::Write(&timer, 2000))));
+        b.iter(|| test::black_box(scope.write(&timer, 2000)));
     }
 
 }

@@ -22,7 +22,7 @@
 
 //! A fixed-size cache with LRU expiration criteria.
 //! Adapted from https://github.com/cwbriones/lrucache
-//!
+
 use std::hash::Hash;
 use std::collections::HashMap;
 
@@ -38,8 +38,8 @@ pub struct LRUCache<K, V> {
     table: HashMap<K, usize>,
     entries: Vec<CacheEntry<K, V>>,
     first: Option<usize>,
-    last:  Option<usize>,
-    capacity: usize
+    last: Option<usize>,
+    capacity: usize,
 }
 
 impl<K: Clone + Hash + Eq, V> LRUCache<K, V> {
@@ -76,7 +76,7 @@ impl<K: Clone + Hash + Eq, V> LRUCache<K, V> {
                 key: key.clone(),
                 value: Some(value),
                 next: self.first,
-                prev: None
+                prev: None,
             });
             self.first = Some(idx);
             self.last = self.last.or(self.first);
@@ -89,9 +89,9 @@ impl<K: Clone + Hash + Eq, V> LRUCache<K, V> {
     /// without promoting it.
     pub fn peek(&mut self, key: &K) -> Option<&V> {
         let entries = &self.entries;
-        self.table.get(key).and_then(move |i| {
-            entries[*i].value.as_ref()
-        })
+        self.table
+            .get(key)
+            .and_then(move |i| entries[*i].value.as_ref())
     }
 
     /// Retrieves a reference to the item associated with `key` from the cache.
@@ -109,7 +109,7 @@ impl<K: Clone + Hash + Eq, V> LRUCache<K, V> {
 
     /// Promotes the specified key to the top of the cache.
     fn access(&mut self, key: &K) {
-        let i = *self.table.get(key).unwrap();
+        let i = *self.table[key];
         self.remove_from_list(i);
         self.first = Some(i);
     }
@@ -133,15 +133,15 @@ impl<K: Clone + Hash + Eq, V> LRUCache<K, V> {
                 }
                 let second = &mut self.entries[k];
                 second.prev = prev;
-            },
+            }
             // Item was at the end of the list
             (Some(j), None) => {
                 let first = &mut self.entries[j];
                 first.next = None;
                 self.last = prev;
-            },
+            }
             // Item was at front
-            _ => ()
+            _ => (),
         }
     }
 

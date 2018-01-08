@@ -1,12 +1,17 @@
-A quick, modular metrics toolkit for Rust applications; similar to popular logging frameworks,
+# dipstick
+A quick, modular metrics toolkit for Rust applications of all types. Similar to popular logging frameworks,
 but with counters, markers, gauges and timers.
 
+[![Build Status](https://travis-ci.org/fralalonde/dipstick.svg?branch=master)](https://travis-ci.org/fralalonde/dipstick)
+[![crates.io](https://img.shields.io/crates/v/dipstick.svg)](https://crates.io/crates/dipstick)
+ 
 Dipstick's main attraction is the ability to send metrics to multiple customized outputs.
-For example, captured metrics can be written immediately to the log _and_ 
+For example, metrics could be written immediately to the log _and_ 
 sent over the network after a period of aggregation.
 
-Dipstick builds on stable Rust with minimal dependencies
-and is published as a [crate.](https://crates.io/crates/dipstick)
+Dipstick promotes structured metrics for clean, safe code and good performance.
+ 
+Dipstick builds on stable Rust with minimal dependencies. 
 
 ## Features
 
@@ -18,80 +23,102 @@ and is published as a [crate.](https://crates.io/crates/dipstick)
   - Customizable output statistics and formatting
   - Global or scoped (e.g. per request) metrics
   - Per-application and per-output metric namespaces
-  - Predefined or ad-hoc metrics
+   
+## Examples
 
-## Cookbook
+For complete applications see the [examples](https://github.com/fralalonde/dipstick/tree/master/examples).
 
-Dipstick is easy to add to your code:
-```rust
-use dipstick::*;
-let app_metrics = metrics(to_graphite("host.com:2003"));
-app_metrics.counter("my_counter").count(3);
+To use Dipstick in your project, add the following line to your `Cargo.toml`
+in the `[dependencies]` section:
+
+```toml
+dipstick = "0.4.18"
 ```
 
-Metrics can be sent to multiple outputs at the same time:
-```rust
-let app_metrics = metrics((to_stdout(), to_statsd("localhost:8125", "app1.host.")));
+Then add it to your code:
+
+```rust,skt-fail,no_run
+let metrics = app_metrics(to_graphite("host.com:2003")?);
+let counter = metrics.counter("my_counter");
+counter.count(3);
+```
+
+Send metrics to multiple outputs:
+
+```rust,skt-fail,no_run
+let _app_metrics = app_metrics((
+        to_stdout(), 
+        to_statsd("localhost:8125")?.with_namespace(&["my", "app"])
+    ));
 ```
 Since instruments are decoupled from the backend, outputs can be swapped easily.
 
-Metrics can be aggregated and scheduled to be published periodically in the background:
-```rust
+Aggregate metrics and schedule to be periodical publication in the background:
+```rust,skt-run
 use std::time::Duration;
-let (to_aggregate, from_aggregate) = aggregate();
-publish_every(Duration::from_secs(10), from_aggregate, to_log("last_ten_secs:"), all_stats);
-let app_metrics = metrics(to_aggregate);
+
+let app_metrics = app_metrics(aggregate(all_stats, to_stdout()));
+app_metrics.flush_every(Duration::from_secs(3));
 ```
+
 Aggregation is performed locklessly and is very fast.
 Count, sum, min, max and average are tracked where they make sense.
 Published statistics can be selected with presets such as `all_stats` (see previous example),
 `summary`, `average`.
 
-For more control over published statistics, a custom filter can be provided:
-```rust
-let (_to_aggregate, from_aggregate) = aggregate();
-publish(from_aggregate, to_log("my_custom_stats:"),
-    |metric_kind, metric_name, metric_score|
-        match metric_score {
-            HitCount(hit_count) => Some((Counter, vec![metric_name, ".per_thousand"], hit_count / 1000)),
+For more control over published statistics, provide your own strategy:
+```rust,skt-run
+app_metrics(aggregate(
+    |_kind, name, score|
+        match score {
+            ScoreType::Count(count) => 
+                Some((Kind::Counter, vec![name, ".per_thousand"], count / 1000)),
             _ => None
-        });
+        },
+    to_log()));
 ```
 
-Metrics can be statistically sampled:
-```rust
-let app_metrics = metrics(sample(0.001, to_statsd("server:8125", "app.sampled.")));
+Apply statistical sampling to metrics:
+```rust,skt-fail
+let _app_metrics = app_metrics(to_statsd("server:8125")?.with_sampling_rate(0.01));
 ```
 A fast random algorithm is used to pick samples.
 Outputs can use sample rate to expand or format published data.
 
 Metrics can be recorded asynchronously:
-```rust
-let app_metrics = metrics(async(48, to_stdout()));
+```rust,skt-run
+let _app_metrics = app_metrics(to_stdout()).with_async_queue(64);
 ```
 The async queue uses a Rust channel and a standalone thread.
 The current behavior is to block when full.
 
 Metric definitions can be cached to make using _ad-hoc metrics_ faster:
-```rust
-let app_metrics = metrics(cache(512, to_log()));
+```rust,skt-run
+let app_metrics = app_metrics(to_log().with_cache(512));
 app_metrics.gauge(format!("my_gauge_{}", 34)).value(44);
 ```
 
 The preferred way is to _predefine metrics_,
 possibly in a [lazy_static!](https://crates.io/crates/lazy_static) block:
-```rust
-#[macro_use] external crate lazy_static;
+```rust,skt-plain
+#[macro_use] extern crate lazy_static;
+extern crate dipstick;
+
+use dipstick::*;
 
 lazy_static! {
-    pub static ref METRICS: GlobalMetrics<String> = metrics(to_stdout());
-    pub static ref COUNTER_A: Counter<Aggregate> = METRICS.counter("counter_a");
+    pub static ref METRICS: AppMetrics<String> = app_metrics(to_stdout());
+    pub static ref COUNTER_A: AppCounter<String> = METRICS.counter("counter_a");
 }
-COUNTER_A.count(11);
+
+fn main() {
+    COUNTER_A.count(11);
+}
 ```
 
 Timers can be used multiple ways:
-```rust
+```rust,skt-run
+let app_metrics = app_metrics(to_stdout());
 let timer =  app_metrics.timer("my_timer");
 time!(timer, {/* slow code here */} );
 timer.time(|| {/* slow code here */} );
@@ -104,47 +131,14 @@ timer.interval_us(123_456);
 ```
 
 Related metrics can share a namespace:
-```rust
-let db_metrics = app_metrics.with_prefix("database.");
-let db_timer = db_metrics.timer("db_timer");
-let db_counter = db_metrics.counter("db_counter");
+```rust,skt-run
+let app_metrics = app_metrics(to_stdout());
+let db_metrics = app_metrics.with_prefix("database");
+let _db_timer = db_metrics.timer("db_timer");
+let _db_counter = db_metrics.counter("db_counter");
 ```
 
+## License
 
-## Design
-Dipstick's design goals are to:
-- support as many metrics backends as possible while favoring none
-- support all types of applications, from embedded to servers
-- promote metrics conventions that facilitate app monitoring and maintenance
-- stay out of the way in the code and at runtime (ergonomic, fast, resilient)
+Dipstick is licensed under the terms of the Apache 2.0 and MIT license.
 
-## Performance
-Predefined timers use a bit more code but are generally faster because their initialization cost is is only paid once.
-Ad-hoc timers are redefined "inline" on each use. They are more flexible, but have more overhead because their init cost is paid on each use.
-Defining a metric `cache()` reduces that cost for recurring metrics.
-
-Run benchmarks with `cargo +nightly bench --features bench`.
-
-## TODO
-Although already usable, Dipstick is still under heavy development and makes no guarantees
-of any kind at this point. See the following list for any potential caveats :
-- META turn TODOs into GitHub issues
-- generic publisher / sources
-- feature flags
-- time measurement units in metric kind (us, ms, etc.) for naming & scaling
-- heartbeat metric on publish
-- logger templates
-- configurable aggregation (?)
-- non-aggregating buffers
-- framework glue (rocket, iron, gotham, indicatif, etc.)
-- more tests & benchmarks
-- complete doc / inline samples
-- more example apps
-- A cool logo
-- method annotation processors `#[timer("name")]`
-- fastsinks (M / &M) vs. safesinks (Arc<M>)
-- `static_metric!` macro to replace `lazy_static!` blocks and handle generics boilerplate.
-
-License: MIT/Apache-2.0
-
-_this file was generated using [cargo readme](https://github.com/livioribeiro/cargo-readme)_

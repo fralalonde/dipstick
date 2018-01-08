@@ -7,27 +7,47 @@ use lru_cache::LRUCache;
 /// Cache metrics to prevent them from being re-defined on every use.
 /// Use of this should be transparent, this has no effect on the values.
 /// Stateful sinks (i.e. Aggregate) may naturally cache their definitions.
-pub fn cache<M, IC>(size: usize, chain: IC) -> Chain<M>
+pub trait WithCache
+where
+    Self: Sized,
+{
+    /// Cache metrics to prevent them from being re-defined on every use.
+    fn with_cache(&self, cache_size: usize) -> Self;
+}
+
+// TODO add selfmetrics cache stats
+
+impl<M: Send + Sync + Clone + 'static> WithCache for Chain<M> {
+    fn with_cache(&self, cache_size: usize) -> Self {
+        self.mod_metric(|next| {
+            let cache: RwLock<LRUCache<String, M>> =
+                RwLock::new(LRUCache::with_capacity(cache_size));
+            Arc::new(move |kind, name, rate| {
+                let mut cache = cache.write().expect("Lock metric cache");
+                let name_str = String::from(name);
+
+                // FIXME lookup should use straight &str
+                if let Some(value) = cache.get(&name_str) {
+                    return value.clone();
+                }
+
+                let new_value = (next)(kind, name, rate).clone();
+                cache.insert(name_str, new_value.clone());
+                new_value
+            })
+        })
+    }
+}
+
+/// Cache metrics to prevent them from being re-defined on every use.
+/// Use of this should be transparent, this has no effect on the values.
+/// Stateful sinks (i.e. Aggregate) may naturally cache their definitions.
+#[deprecated(since = "0.5.0", note = "Use `with_cache` instead.")]
+pub fn cache<M, IC>(cache_size: usize, chain: IC) -> Chain<M>
 where
     M: Clone + Send + Sync + 'static,
     IC: Into<Chain<M>>,
 {
     let chain = chain.into();
-    chain.mod_metric(|next| {
-        let cache: RwLock<LRUCache<String, M>> = RwLock::new(LRUCache::with_capacity(size));
-        Arc::new(move |kind, name, rate| {
-            let mut cache = cache.write().expect("Lock metric cache");
-            let name_str = String::from(name);
-
-            // FIXME lookup should use straight &str
-            if let Some(value) = cache.get(&name_str) {
-                return value.clone()
-            }
-
-            let new_value = (next)(kind, name, rate).clone();
-            cache.insert(name_str, new_value.clone());
-            new_value
-        })
-    })
+    chain.with_cache(cache_size)
 }
-

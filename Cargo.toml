@@ -10,11 +10,12 @@ members = [
   "examples/graphite/",
   "examples/static_metrics/",
   "examples/scoped_print/",
+  "examples/sampling/",
 ]
 
 [package]
 name = "dipstick"
-version = "0.5.2-alpha.0"
+version = "0.6.0-alpha.0"
 authors = ["Francis Lalonde <fralalonde@gmail.com>"]
 
 description = """A fast and modular metrics library decoupling app instrumentation from reporting backend.
@@ -27,6 +28,7 @@ repository = "https://github.com/fralalonde/dipstick"
 readme = "README.md"
 keywords = ["metrics", "statsd", "graphite", "timer", "monitoring"]
 license = "MIT/Apache-2.0"
+build = "build.rs"
 
 [badges]
 travis-ci = { repository = "fralalonde/dipstick", branch = "master" }
@@ -34,8 +36,14 @@ travis-ci = { repository = "fralalonde/dipstick", branch = "master" }
 [dependencies]
 log = { version = "0.3" }
 time = "0.1"
-lazy_static = "0.2.9"
+lazy_static = "0.2"
 derivative = "1.0"
+
+[build-dependencies]
+skeptic = "0.13"
+
+[dev-dependencies]
+skeptic = "0.13"
 
 [dependencies.num]
 default-features = false
@@ -43,3 +51,10 @@ version = "0.1"
 
 [features]
 bench = []
+
+[package.metadata.release]
+#sign-commit = true
+#upload-doc = true
+pre-release-replacements = [
+  {file="README.md", search="^dipstick = \"[a-z0-9\\.-]+\"", replace="dipstick = \"{{version}}\""}
+  ]
