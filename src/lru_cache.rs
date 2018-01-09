@@ -109,7 +109,7 @@ impl<K: Clone + Hash + Eq, V> LRUCache<K, V> {
 
     /// Promotes the specified key to the top of the cache.
     fn access(&mut self, key: &K) {
-        let i = *self.table[key];
+        let i = *self.table.get(key).unwrap();
         self.remove_from_list(i);
         self.first = Some(i);
     }
