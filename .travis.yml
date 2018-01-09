@@ -3,4 +3,5 @@ rust:
   - stable
 cache: cargo
 script:
+- cargo clean
 - cargo test
