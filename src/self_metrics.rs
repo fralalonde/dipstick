@@ -11,6 +11,7 @@ pub use namespace::*;
 
 use output::to_void;
 
+// TODO send to_dispatch()
 fn build_aggregator() -> Chain<Aggregate> {
     aggregate(summary, to_void())
 }
@@ -21,15 +22,10 @@ pub fn snapshot() -> Vec<ScoreSnapshot> {
 }
 
 fn build_self_metrics() -> AppMetrics<Aggregate> {
-    // TODO send to_map() when snapshot() is called
     app_metrics(AGGREGATOR.clone()).with_prefix("dipstick")
 }
 
-lazy_static! {
-
-    static ref AGGREGATOR: Chain<Aggregate> = build_aggregator();
-
-}
+lazy_static! { static ref AGGREGATOR: Chain<Aggregate> = build_aggregator(); }
 
 /// Application metrics are collected to the aggregator
-app_metric!(Aggregate, DIPSTICK_METRICS, build_self_metrics());
+app_metric!(Aggregate, DIPSTICK_METRICS = build_self_metrics());

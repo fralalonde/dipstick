@@ -32,7 +32,6 @@ mod pcg32;
 mod lru_cache;
 
 pub mod error;
-pub use error::*;
 
 pub mod core;
 pub use core::*;
