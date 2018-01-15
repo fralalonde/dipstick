@@ -23,7 +23,7 @@ impl<M: Send + Sync + Clone + 'static> WithCache for Chain<M> {
             let cache: RwLock<LRUCache<String, M>> =
                 RwLock::new(LRUCache::with_capacity(cache_size));
             Arc::new(move |kind, name, rate| {
-                let mut cache = cache.write().expect("Lock metric cache");
+                let mut cache = cache.write().expect("Locking metric cache");
                 let name_str = String::from(name);
 
                 // FIXME lookup should use straight &str

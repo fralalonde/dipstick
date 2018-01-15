@@ -9,6 +9,10 @@ use std::sync::{Arc, RwLock};
 
 pub use std::net::ToSocketAddrs;
 
+mod_metric!(Aggregate, STATSD_METRICS, DIPSTICK_METRICS.with_prefix("statsd"));
+mod_marker!(Aggregate, STATSD_METRICS, SEND_ERR: "send_failed");
+mod_counter!(Aggregate, STATSD_METRICS, SENT_BYTES: "sent_bytes");
+
 /// Send metrics to a statsd server at the address and port provided.
 pub fn to_statsd<ADDR>(address: ADDR) -> error::Result<Chain<Statsd>>
 where
@@ -65,12 +69,6 @@ where
             })
         },
     ))
-}
-
-lazy_static! {
-    static ref STATSD_METRICS: AppMetrics<Aggregate> = SELF_METRICS.with_prefix("statsd.");
-    static ref SEND_ERR: AppMarker<Aggregate> = STATSD_METRICS.marker("send_failed");
-    static ref SENT_BYTES: AppCounter<Aggregate> = STATSD_METRICS.counter("sent_bytes");
 }
 
 /// Key of a statsd metric.

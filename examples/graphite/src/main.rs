@@ -10,7 +10,7 @@ fn main() {
     badlog::init(Some("info"));
 
     let metrics = app_metrics(
-        to_graphite("localhost:2003").expect("Connect to graphite")
+        to_graphite("localhost:2003").expect("Connecting")
             .with_namespace(&["my", "app"]));
 
     loop {

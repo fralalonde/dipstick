@@ -16,3 +16,228 @@ macro_rules! time {
         value
     }}
 }
+
+/////////////
+// APP SCOPE
+
+/// Define application-scoped metrics.
+#[macro_export]
+macro_rules! app_metric {
+    ($type_param: ty, $metric_id: ident, $app_metrics: expr) => {
+        lazy_static! { pub static ref $metric_id: AppMetrics<$type_param> = $app_metrics; }
+    };
+}
+
+/// Define application-scoped markers.
+#[macro_export]
+macro_rules! app_marker {
+    ($type_param: ty, $app_metrics: expr, { $($metric_id: ident: $metric_name: expr),* $(,)* } ) => {
+        lazy_static! { $(pub static ref $metric_id: AppMarker<$type_param> = $app_metrics.marker( $metric_name );)* }
+    };
+    ($type_param: ty, $app_metrics: expr, $metric_id: ident: $metric_name: expr) => {
+        lazy_static! { pub static ref $metric_id: AppMarker<$type_param> = $app_metrics.marker( $metric_name ); }
+    }
+}
+
+/// Define application-scoped counters.
+#[macro_export]
+macro_rules! app_counter {
+    ($type_param: ty, $app_metrics: expr, { $($metric_id: ident: $metric_name: expr),* $(,)* } ) => {
+        lazy_static! { $(pub static ref $metric_id: AppCounter<$type_param> = $app_metrics.counter( $metric_name );)* }
+    };
+    ($type_param: ty, $app_metrics: expr, $metric_id: ident: $metric_name: expr) => {
+        lazy_static! { pub static ref $metric_id: AppCounter<$type_param> = $app_metrics.counter( $metric_name ); }
+    }
+}
+
+/// Define application-scoped gauges.
+#[macro_export]
+macro_rules! app_gauge {
+    ($type_param: ty, $app_metrics: expr, { $($metric_id: ident: $metric_name: expr),* $(,)* } ) => {
+        lazy_static! { $(pub static ref $metric_id: AppGauge<$type_param> = $app_metrics.gauge( $metric_name );)* }
+    };
+    ($type_param: ty, $app_metrics: expr, $metric_id: ident: $metric_name: expr) => {
+        lazy_static! { pub static ref $metric_id: AppGauge<$type_param> = $app_metrics.gauge( $metric_name ); }
+    }
+}
+
+/// Define application-scoped timers.
+#[macro_export]
+macro_rules! app_timer {
+    ($type_param: ty, $app_metrics: expr, { $($metric_id: ident: $metric_name: expr),* $(,)* } ) => {
+        lazy_static! { $(pub static ref $metric_id: AppTimer<$type_param> = $app_metrics.timer( $metric_name );)* }
+    };
+    ($type_param: ty, $app_metrics: expr, $metric_id: ident: $metric_name: expr) => {
+        lazy_static! { pub static ref $metric_id: AppTimer<$type_param> = $app_metrics.timer( $metric_name ); }
+    }
+}
+
+
+/////////////
+// MOD SCOPE
+
+/// Define module-scoped metrics.
+#[macro_export]
+macro_rules! mod_metric {
+    ($type_param: ty, $metric_id: ident, $mod_metrics: expr) => {
+        lazy_static! { static ref $metric_id: AppMetrics<$type_param> = $mod_metrics; }
+    };
+}
+
+/// Define module-scoped markers.
+#[macro_export]
+macro_rules! mod_marker {
+    ($type_param: ty, $mod_metrics: expr, { $($metric_id: ident: $metric_name: expr),* $(,)* } ) => {
+        lazy_static! { $(static ref $metric_id: AppMarker<$type_param> = $mod_metrics.marker( $metric_name );)* }
+    };
+    ($type_param: ty, $mod_metrics: expr, $metric_id: ident: $metric_name: expr) => {
+        lazy_static! { static ref $metric_id: AppMarker<$type_param> = $mod_metrics.marker( $metric_name ); }
+    }
+}
+
+/// Define module-scoped counters.
+#[macro_export]
+macro_rules! mod_counter {
+    ($type_param: ty, $mod_metrics: expr, { $($metric_id: ident: $metric_name: expr),* $(,)* } ) => {
+        lazy_static! { $(static ref $metric_id: AppCounter<$type_param> = $mod_metrics.counter( $metric_name );)* }
+    };
+    ($type_param: ty, $mod_metrics: expr, $metric_id: ident: $metric_name: expr) => {
+        lazy_static! { static ref $metric_id: AppCounter<$type_param> = $mod_metrics.counter( $metric_name ); }
+    }
+}
+
+/// Define module-scoped gauges.
+#[macro_export]
+macro_rules! mod_gauge {
+    ($type_param: ty, $mod_metrics: expr, { $($metric_id: ident: $metric_name: expr),* $(,)* } ) => {
+        lazy_static! { $(static ref $metric_id: AppGauge<$type_param> = $mod_metrics.gauge( $metric_name );)* }
+    };
+    ($type_param: ty, $mod_metrics: expr, $metric_id: ident: $metric_name: expr) => {
+        lazy_static! { static ref $metric_id: AppGauge<$type_param> = $mod_metrics.gauge( $metric_name ); }
+    }
+}
+
+/// Define module-scoped timers.
+#[macro_export]
+macro_rules! mod_timer {
+    ($type_param: ty, $mod_metrics: expr, { $($metric_id: ident: $metric_name: expr),* $(,)* } ) => {
+        lazy_static! { $(static ref $metric_id: AppTimer<$type_param> = $mod_metrics.timer( $metric_name );)* }
+    };
+    ($type_param: ty, $mod_metrics: expr, $metric_id: ident: $metric_name: expr) => {
+        lazy_static! { static ref $metric_id: AppTimer<$type_param> = $mod_metrics.timer( $metric_name ); }
+    }
+}
+
+
+
+
+
+#[cfg(test)]
+mod test_app {
+    use self_metrics::*;
+
+    app_metric!(Aggregate, TEST_METRICS, DIPSTICK_METRICS.with_prefix("test_prefix"));
+
+    app_marker!(Aggregate, TEST_METRICS, {
+        M1: "failed",
+        M2: "success",
+    });
+
+    app_marker!(Aggregate, TEST_METRICS, M3: "warn");
+
+    app_counter!(Aggregate, TEST_METRICS, {
+        C1: "failed",
+        C2: "success",
+    });
+
+    app_counter!(Aggregate, TEST_METRICS, C3: "warn");
+
+    app_gauge!(Aggregate, TEST_METRICS, {
+        G1: "failed",
+        G2: "success",
+    });
+
+    app_gauge!(Aggregate, TEST_METRICS, G3: "warn");
+
+    app_timer!(Aggregate, TEST_METRICS, {
+        T1: "failed",
+        T2: "success",
+    });
+
+    app_timer!(Aggregate, TEST_METRICS, T3: "warn");
+
+
+    #[test]
+    fn call_macro_defined_metrics() {
+        M1.mark();
+        M2.mark();
+        M3.mark();
+
+        C1.count(1);
+        C2.count(2);
+        C3.count(3);
+
+        G1.value(1);
+        G2.value(2);
+        G3.value(3);
+
+        T1.interval_us(1);
+        T2.interval_us(2);
+        T3.interval_us(3);
+    }
+}
+
+#[cfg(test)]
+mod test_mod {
+    use self_metrics::*;
+
+    mod_metric!(Aggregate, TEST_METRICS, DIPSTICK_METRICS.with_prefix("test_prefix"));
+
+    mod_marker!(Aggregate, TEST_METRICS, {
+        M1: "failed",
+        M2: "success",
+    });
+
+    mod_marker!(Aggregate, TEST_METRICS, M3: "warn");
+
+    mod_counter!(Aggregate, TEST_METRICS, {
+        C1: "failed",
+        C2: "success",
+    });
+
+    mod_counter!(Aggregate, TEST_METRICS, C3: "warn");
+
+    mod_gauge!(Aggregate, TEST_METRICS, {
+        G1: "failed",
+        G2: "success",
+    });
+
+    mod_gauge!(Aggregate, TEST_METRICS, G3: "warn");
+
+    mod_timer!(Aggregate, TEST_METRICS, {
+        T1: "failed",
+        T2: "success",
+    });
+
+    mod_timer!(Aggregate, TEST_METRICS, T3: "warn");
+
+
+    #[test]
+    fn call_macro_defined_metrics() {
+        M1.mark();
+        M2.mark();
+        M3.mark();
+
+        C1.count(1);
+        C2.count(2);
+        C3.count(3);
+
+        G1.value(1);
+        G2.value(2);
+        G3.value(3);
+
+        T1.interval_us(1);
+        T2.interval_us(2);
+        T3.interval_us(3);
+    }
+}

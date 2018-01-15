@@ -9,6 +9,9 @@ use std::sync::Arc;
 use std::sync::mpsc;
 use std::thread;
 
+mod_metric!(Aggregate, QUEUE_METRICS, DIPSTICK_METRICS.with_prefix("async_queue"));
+mod_marker!(Aggregate, QUEUE_METRICS, SEND_FAILED: "send_failed");
+
 /// Enqueue collected metrics for dispatch on background thread.
 pub trait WithAsyncQueue
 where
@@ -78,11 +81,6 @@ where
 {
     let chain = chain.into();
     chain.with_async_queue(queue_size)
-}
-
-lazy_static! {
-    static ref QUEUE_METRICS: AppMetrics<Aggregate> = SELF_METRICS.with_prefix("async");
-    static ref SEND_FAILED: AppMarker<Aggregate> = QUEUE_METRICS.marker("send_failed");
 }
 
 /// Carry the scope command over the queue, from the sender, to be executed by the receiver.

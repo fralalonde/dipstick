@@ -8,7 +8,7 @@ use std::time::Duration;
 fn main() {
     let different_type_metrics = app_metrics((
         // combine metrics of different types in a tuple
-        to_statsd("localhost:8125").expect("connect"),
+        to_statsd("localhost:8125").expect("Connecting"),
         to_stdout(),
     ));
 
