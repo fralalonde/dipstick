@@ -37,6 +37,7 @@ pub use error::*;
 pub mod core;
 pub use core::*;
 
+#[macro_use]
 pub mod macros;
 
 mod output;
@@ -57,9 +58,6 @@ pub use aggregate::*;
 mod publish;
 pub use publish::*;
 
-//mod with_buffer;
-//pub use with_buffer::*;
-
 mod statsd;
 pub use statsd::*;
 
@@ -68,6 +66,9 @@ pub use namespace::*;
 
 mod graphite;
 pub use graphite::*;
+
+mod http;
+pub use http::*;
 
 mod socket;
 pub use socket::*;

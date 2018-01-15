@@ -46,7 +46,7 @@ where
                     metric.update(value)
                 },
                 ScopeCmd::Flush => {
-                    let metrics = metrics.read().expect("Lock scoreboards for a snapshot.");
+                    let metrics = metrics.read().expect("Locking metrics scoreboards");
                     let snapshot = metrics.values().flat_map(|score| score.reset()).collect();
                     publish.publish(snapshot);
                 }

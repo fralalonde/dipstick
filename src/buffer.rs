@@ -1,3 +1,7 @@
+/*!
+UNUSED FOR THE MOMENT
+archived code
+*/
 use core::*;
 use core::ScopeCmd::*;
 use std::sync::{Arc, RwLock};
@@ -15,7 +19,7 @@ impl<M: Send + Sync + Clone + 'static> WithBuffer for Chain<M> {
                 scope: self.open_scope(false),
             });
             Arc::new(move |cmd: ScopeCmd<M>| {
-                let mut buf = scope_buffer.write().expect("Lock metric scope.");
+                let mut buf = scope_buffer.write().expect("Lock metric scope");
                 match cmd {
                     Write(metric, value) => buf.buffer.push(ScopeCommand {
                         metric: (*metric).clone(),

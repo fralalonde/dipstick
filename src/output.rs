@@ -17,7 +17,7 @@ pub fn to_stdout() -> Chain<String> {
             } else {
                 let buf = RwLock::new(String::new());
                 ControlScopeFn::new(move |cmd| {
-                    let mut buf = buf.write().expect("Lock string buffer.");
+                    let mut buf = buf.write().expect("Locking stdout buffer");
                     match cmd {
                         ScopeCmd::Write(metric, value) => buf.push_str(format!("{}: {}\n", metric, value).as_ref()),
                         ScopeCmd::Flush => {
@@ -46,7 +46,7 @@ pub fn to_log() -> Chain<String> {
             } else {
                 let buf = RwLock::new(String::new());
                 ControlScopeFn::new(move |cmd| {
-                    let mut buf = buf.write().expect("Lock string buffer.");
+                    let mut buf = buf.write().expect("Locking string buffer");
                     match cmd {
                         ScopeCmd::Write(metric, value) => buf.push_str(format!("{}: {}\n", metric, value).as_ref()),
                         ScopeCmd::Flush => {

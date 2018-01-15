@@ -63,12 +63,12 @@ where
 // TODO make configurable?
 const BUFFER_FLUSH_THRESHOLD: usize = 65_536;
 
-lazy_static! {
-    static ref GRAPHITE_METRICS: AppMetrics<Aggregate> = SELF_METRICS.with_prefix("graphite");
-    static ref SEND_ERR: AppMarker<Aggregate> = GRAPHITE_METRICS.marker("send_failed");
-    static ref SENT_BYTES: AppCounter<Aggregate> = GRAPHITE_METRICS.counter("sent_bytes");
-    static ref TRESHOLD_EXCEEDED: AppMarker<Aggregate> = GRAPHITE_METRICS.marker("bufsize_exceeded");
-}
+mod_metric!(Aggregate, GRAPHITE_METRICS, DIPSTICK_METRICS.with_prefix("graphite"));
+mod_marker!(Aggregate, GRAPHITE_METRICS, {
+    SEND_ERR: "send_failed",
+    TRESHOLD_EXCEEDED: "bufsize_exceeded",
+});
+mod_counter!(Aggregate, GRAPHITE_METRICS, SENT_BYTES: "sent_bytes");
 
 /// Key of a graphite metric.
 #[derive(Debug, Clone)]
@@ -100,7 +100,7 @@ impl ScopeBuffer {
         let start = SystemTime::now();
         match start.duration_since(UNIX_EPOCH) {
             Ok(timestamp) => {
-                let mut buf = self.buffer.write().expect("Lock graphite buffer.");
+                let mut buf = self.buffer.write().expect("Locking graphite buffer");
 
                 buf.push_str(&metric.prefix);
                 buf.push_str(&value_str);
@@ -128,7 +128,7 @@ impl ScopeBuffer {
 
     fn flush_inner(&self, buf: &mut String) {
         if !buf.is_empty() {
-            let mut sock = self.socket.write().expect("Lock graphite socket.");
+            let mut sock = self.socket.write().expect("Locking graphite socket");
             match sock.write(buf.as_bytes()) {
                 Ok(size) => {
                     buf.clear();
@@ -146,7 +146,7 @@ impl ScopeBuffer {
     }
 
     fn flush(&self) {
-        let mut buf = self.buffer.write().expect("Lock graphite buffer.");
+        let mut buf = self.buffer.write().expect("Locking graphite buffer");
         self.flush_inner(&mut buf);
     }
 }
