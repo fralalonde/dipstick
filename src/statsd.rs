@@ -9,9 +9,9 @@ use std::sync::{Arc, RwLock};
 
 pub use std::net::ToSocketAddrs;
 
-mod_metric!(Aggregate, STATSD_METRICS, DIPSTICK_METRICS.with_prefix("statsd"));
-mod_marker!(Aggregate, STATSD_METRICS, SEND_ERR: "send_failed");
-mod_counter!(Aggregate, STATSD_METRICS, SENT_BYTES: "sent_bytes");
+mod_metric!(Aggregate, STATSD_METRICS = DIPSTICK_METRICS.with_prefix("statsd"));
+mod_marker!(Aggregate, STATSD_METRICS, { SEND_ERR: "send_failed" });
+mod_counter!(Aggregate, STATSD_METRICS, { SENT_BYTES: "sent_bytes" });
 
 /// Send metrics to a statsd server at the address and port provided.
 pub fn to_statsd<ADDR>(address: ADDR) -> error::Result<Chain<Statsd>>

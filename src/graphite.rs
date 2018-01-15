@@ -13,6 +13,14 @@ use std::fmt::Debug;
 
 use socket::RetrySocket;
 
+mod_metric!(Aggregate, GRAPHITE_METRICS = DIPSTICK_METRICS.with_prefix("graphite"));
+mod_marker!(Aggregate, GRAPHITE_METRICS, {
+    SEND_ERR: "send_failed",
+    TRESHOLD_EXCEEDED: "bufsize_exceeded",
+});
+mod_counter!(Aggregate, GRAPHITE_METRICS, { SENT_BYTES: "sent_bytes" });
+
+
 /// Send metrics to a graphite server at the address and port provided.
 pub fn to_graphite<ADDR>(address: ADDR) -> error::Result<Chain<Graphite>>
 where
@@ -62,13 +70,6 @@ where
 /// Its hard to see how a single scope could get more metrics than this.
 // TODO make configurable?
 const BUFFER_FLUSH_THRESHOLD: usize = 65_536;
-
-mod_metric!(Aggregate, GRAPHITE_METRICS, DIPSTICK_METRICS.with_prefix("graphite"));
-mod_marker!(Aggregate, GRAPHITE_METRICS, {
-    SEND_ERR: "send_failed",
-    TRESHOLD_EXCEEDED: "bufsize_exceeded",
-});
-mod_counter!(Aggregate, GRAPHITE_METRICS, SENT_BYTES: "sent_bytes");
 
 /// Key of a graphite metric.
 #[derive(Debug, Clone)]
