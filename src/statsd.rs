@@ -9,7 +9,7 @@ use std::sync::{Arc, RwLock};
 
 pub use std::net::ToSocketAddrs;
 
-mod_metric!(Aggregate, STATSD_METRICS = DIPSTICK_METRICS.with_prefix("statsd"));
+mod_metrics!(Aggregate, STATSD_METRICS = DIPSTICK_METRICS.with_prefix("statsd"));
 mod_marker!(Aggregate, STATSD_METRICS, { SEND_ERR: "send_failed" });
 mod_counter!(Aggregate, STATSD_METRICS, { SENT_BYTES: "sent_bytes" });
 

@@ -13,7 +13,7 @@ fn main() {
     let counter = metrics.counter("counter_a");
     let timer = metrics.timer("timer_b");
 
-    let subsystem_metrics = metrics.with_prefix("subsystem.");
+    let subsystem_metrics = metrics.with_name("subsystem");
     let event = subsystem_metrics.marker("event_c");
     let gauge = subsystem_metrics.gauge("gauge_d");
 

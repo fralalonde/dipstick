@@ -13,7 +13,7 @@ use std::fmt::Debug;
 
 use socket::RetrySocket;
 
-mod_metric!(Aggregate, GRAPHITE_METRICS = DIPSTICK_METRICS.with_prefix("graphite"));
+mod_metrics!(Aggregate, GRAPHITE_METRICS = DIPSTICK_METRICS.with_prefix("graphite"));
 mod_marker!(Aggregate, GRAPHITE_METRICS, {
     SEND_ERR: "send_failed",
     TRESHOLD_EXCEEDED: "bufsize_exceeded",

@@ -220,9 +220,9 @@ where
 }
 
 impl<M: Send + Sync + Clone + 'static> WithNamespace for AppMetrics<M> {
-    fn with_namespace(&self, nspace: &[&str]) -> Self {
+    fn with_name<IN: Into<Namespace>>(&self, names: IN) -> Self {
         AppMetrics {
-            chain: Arc::new(self.chain.with_namespace(nspace)),
+            chain: Arc::new(self.chain.with_name(names)),
             scope: self.scope.clone(),
         }
     }
