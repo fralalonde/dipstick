@@ -22,7 +22,7 @@ macro_rules! time {
 
 /// Define application-scoped metrics.
 #[macro_export]
-macro_rules! app_metric {
+macro_rules! app_metrics {
     ($type_param: ty, $metric_id: ident = $app_metrics: expr) => {
         lazy_static! { pub static ref $metric_id: AppMetrics<$type_param> = $app_metrics; }
     };
@@ -66,7 +66,7 @@ macro_rules! app_timer {
 
 /// Define module-scoped metrics.
 #[macro_export]
-macro_rules! mod_metric {
+macro_rules! mod_metrics {
     ($type_param: ty, $metric_id: ident = $mod_metrics: expr) => {
         lazy_static! { static ref $metric_id: AppMetrics<$type_param> = $mod_metrics; }
     };
@@ -111,7 +111,7 @@ macro_rules! mod_timer {
 mod test_app {
     use self_metrics::*;
 
-    app_metric!(Aggregate, TEST_METRICS = DIPSTICK_METRICS.with_prefix("test_prefix"));
+    app_metrics!(Aggregate, TEST_METRICS = DIPSTICK_METRICS.with_prefix("test_prefix"));
 
     app_marker!(Aggregate, TEST_METRICS, {
         M1: "failed",
@@ -154,7 +154,7 @@ mod test_app {
 mod test_mod {
     use self_metrics::*;
 
-    mod_metric!(Aggregate, TEST_METRICS = DIPSTICK_METRICS.with_prefix("test_prefix"));
+    mod_metrics!(Aggregate, TEST_METRICS = DIPSTICK_METRICS.with_prefix("test_prefix"));
 
     mod_marker!(Aggregate, TEST_METRICS, {
         M1: "failed",

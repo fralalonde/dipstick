@@ -92,29 +92,31 @@ let _app_metrics = app_metrics(to_stdout()).with_async_queue(64);
 The async queue uses a Rust channel and a standalone thread.
 The current behavior is to block when full.
 
-Metric definitions can be cached to make using _ad-hoc metrics_ faster:
-```rust,skt-run
-let app_metrics = app_metrics(to_log().with_cache(512));
-app_metrics.gauge(format!("my_gauge_{}", 34)).value(44);
-```
-
-The preferred way is to _predefine metrics_,
-possibly in a [lazy_static!](https://crates.io/crates/lazy_static) block:
+For better performance and easy maintenance, metrics should usually be predefined:
 ```rust,skt-plain
+#[macro_use] extern crate dipstick;
 #[macro_use] extern crate lazy_static;
-extern crate dipstick;
-
 use dipstick::*;
 
-lazy_static! {
-    pub static ref METRICS: AppMetrics<String> = app_metrics(to_stdout());
-    pub static ref COUNTER_A: AppCounter<String> = METRICS.counter("counter_a");
-}
+app_metric!(String, APP_METRICS, app_metrics(to_stdout()));
+app_counter!(String, APP_METRICS, {
+    COUNTER_A: "counter_a",
+});
 
 fn main() {
     COUNTER_A.count(11);
 }
 ```
+Metric definition macros are just `lazy_static!` wrappers.
+
+
+Where necessary, metrics can be defined _ad-hoc_:
+```rust,skt-run
+let user_name = "john_day";
+let app_metrics = app_metrics(to_log().with_cache(512));
+app_metrics.gauge(format!("gauge_for_user_{}", user_name)).value(44);
+```
+Defining a cache is optional but will speed up re-definition of common ad-hoc metrics.
 
 Timers can be used multiple ways:
 ```rust,skt-run

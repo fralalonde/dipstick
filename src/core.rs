@@ -209,9 +209,9 @@ impl<M: Send + Sync + Clone + 'static> Chain<M> {
 
     /// Create a new metric chain with the provided metric definition and scope creation functions.
     pub fn new<MF, WF>(make_metric: MF, make_scope: WF) -> Self
-    where
-        MF: Fn(Kind, &str, Rate) -> M + Send + Sync + 'static,
-        WF: Fn(bool) -> ControlScopeFn<M> + Send + Sync + 'static,
+        where
+            MF: Fn(Kind, &str, Rate) -> M + Send + Sync + 'static,
+            WF: Fn(bool) -> ControlScopeFn<M> + Send + Sync + 'static,
     {
         Chain {
             // capture the provided closures in Arc to provide cheap clones
@@ -246,8 +246,8 @@ impl<M: Send + Sync + Clone + 'static> Chain<M> {
 
     /// Intercept metric definition without changing the metric type.
     pub fn mod_metric<MF>(&self, mod_fn: MF) -> Chain<M>
-    where
-        MF: Fn(DefineMetricFn<M>) -> DefineMetricFn<M>,
+        where
+            MF: Fn(DefineMetricFn<M>) -> DefineMetricFn<M>,
     {
         Chain {
             define_metric_fn: mod_fn(self.define_metric_fn.clone()),
@@ -257,9 +257,9 @@ impl<M: Send + Sync + Clone + 'static> Chain<M> {
 
     /// Intercept both metric definition and scope creation, possibly changing the metric type.
     pub fn mod_both<MF, N>(&self, mod_fn: MF) -> Chain<N>
-    where
-        MF: Fn(DefineMetricFn<M>, OpenScopeFn<M>) -> (DefineMetricFn<N>, OpenScopeFn<N>),
-        N: Clone + Send + Sync,
+        where
+            MF: Fn(DefineMetricFn<M>, OpenScopeFn<M>) -> (DefineMetricFn<N>, OpenScopeFn<N>),
+            N: Clone + Send + Sync,
     {
         let (metric_fn, scope_fn) =
             mod_fn(self.define_metric_fn.clone(), self.scope_metric_fn.clone());
@@ -271,8 +271,8 @@ impl<M: Send + Sync + Clone + 'static> Chain<M> {
 
     /// Intercept scope creation.
     pub fn mod_scope<MF>(&self, mod_fn: MF) -> Self
-    where
-        MF: Fn(OpenScopeFn<M>) -> OpenScopeFn<M>,
+        where
+            MF: Fn(OpenScopeFn<M>) -> OpenScopeFn<M>,
     {
         Chain {
             define_metric_fn: self.define_metric_fn.clone(),
@@ -391,4 +391,3 @@ impl<M: Clone> ScopeTimer<M> {
         value
     }
 }
-

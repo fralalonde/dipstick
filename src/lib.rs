@@ -33,11 +33,14 @@ mod lru_cache;
 
 pub mod error;
 
+#[macro_use]
+pub mod macros;
+
 pub mod core;
 pub use core::*;
 
-#[macro_use]
-pub mod macros;
+//pub mod dispatch;
+//pub use dispatch::*;
 
 mod output;
 pub use output::*;

@@ -28,4 +28,4 @@ fn build_self_metrics() -> AppMetrics<Aggregate> {
 lazy_static! { static ref AGGREGATOR: Chain<Aggregate> = build_aggregator(); }
 
 /// Application metrics are collected to the aggregator
-app_metric!(Aggregate, DIPSTICK_METRICS = build_self_metrics());
+app_metrics!(Aggregate, DIPSTICK_METRICS = build_self_metrics());

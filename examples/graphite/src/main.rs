@@ -11,7 +11,7 @@ fn main() {
 
     let metrics = app_metrics(
         to_graphite("localhost:2003").expect("Connecting")
-            .with_namespace(&["my", "app"]));
+            .with_namespace(&["my", "app"][..]));
 
     loop {
         metrics.counter("counter_a").count(123);
