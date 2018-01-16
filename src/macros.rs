@@ -31,7 +31,7 @@ macro_rules! app_metrics {
 #[macro_export]
 #[deprecated(since = "0.6.3", note = "Use `app_metrics!` instead.")]
 macro_rules! app_metric {
-    ($type_param: ty, $metric_id: ident, $app_metrics: expr) => {
+    ($type_param: ty, $metric_id: ident = $app_metrics: expr) => {
         lazy_static! { pub static ref $metric_id: AppMetrics<$type_param> = $app_metrics; }
     };
 }
@@ -83,7 +83,7 @@ macro_rules! mod_metrics {
 #[macro_export]
 #[deprecated(since = "0.6.3", note = "Use `mod_metrics!` instead.")]
 macro_rules! mod_metric {
-    ($type_param: ty, $metric_id: ident, $mod_metrics: expr) => {
+    ($type_param: ty, $metric_id: ident = $mod_metrics: expr) => {
         lazy_static! { static ref $metric_id: AppMetrics<$type_param> = $mod_metrics; }
     };
 }
