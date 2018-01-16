@@ -99,9 +99,6 @@ impl Scoreboard {
         if self.snapshot(now, &mut scores) {
             let duration_seconds = (now - scores[0]) as f64 / 1_000_000_000.0;
 
-            println!("duration {}s", duration_seconds);
-            println!("rate {}/s", scores[2] as f64 / duration_seconds);
-
             let mut snapshot = Vec::new();
             match self.kind {
                 Marker => {

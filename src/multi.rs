@@ -43,11 +43,11 @@ where
 
 /// Multiple chains of the same type can be combined in a slice.
 /// The chains will act as one, each receiving calls in the order the appear in the slice.
-impl<'a, M> From<&'a [Chain<M>]> for Chain<Box<[M]>>
+impl<'a, M> From<&'a [Chain<M>]> for Chain<Vec<M>>
 where
     M: 'static + Clone + Send + Sync,
 {
-    fn from(chains: &'a [Chain<M>]) -> Chain<Box<[M]>> {
+    fn from(chains: &'a [Chain<M>]) -> Chain<Vec<M>> {
         let chains = chains.to_vec();
         let chains2 = chains.clone();
 
@@ -57,7 +57,7 @@ where
                 for chain in &chains {
                     metric.push(chain.define_metric(kind, name, rate));
                 }
-                metric.into_boxed_slice()
+                metric
             },
             move |buffered| {
                 let mut scopes = Vec::with_capacity(chains2.len());
@@ -67,7 +67,7 @@ where
 
                 ControlScopeFn::new(move |cmd| match cmd {
                     ScopeCmd::Write(metric, value) => {
-                        let metric: &Box<[M]> = metric;
+                        let metric: &Vec<M> = metric;
                         for (i, scope) in scopes.iter().enumerate() {
                             scope.write(&metric[i], value)
                         }

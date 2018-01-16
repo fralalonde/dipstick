@@ -167,7 +167,7 @@ pub struct Chain<M> {
     #[derivative(Debug = "ignore")] scope_metric_fn: OpenScopeFn<M>,
 }
 
-impl<M: Send + Sync + Clone + 'static> Chain<M> {
+impl<M> Chain<M> {
     /// Define a new metric.
     #[allow(unused_variables)]
     pub fn define_metric(&self, kind: Kind, name: &str, sampling: Rate) -> M {
@@ -206,7 +206,9 @@ impl<M: Send + Sync + Clone + 'static> Chain<M> {
     pub fn unbuffered_scope(&self) -> ControlScopeFn<M> {
         self.open_scope(false)
     }
+}
 
+impl<M: Send + Sync + Clone + 'static> Chain<M> {
     /// Create a new metric chain with the provided metric definition and scope creation functions.
     pub fn new<MF, WF>(make_metric: MF, make_scope: WF) -> Self
         where
@@ -336,9 +338,9 @@ impl<M: Clone> ScopeGauge<M> {
 
 /// A timer that sends values to the metrics backend
 /// Timers can record time intervals in multiple ways :
-/// - with the time! macrohich wraps an expression or block with start() and stop() calls.
-/// - with the time(Fn) methodhich wraps a closure with start() and stop() calls.
-/// - with start() and stop() methodsrapping around the operation to time
+/// - with the time! macro which wraps an expression or block with start() and stop() calls.
+/// - with the time(Fn) method which wraps a closure with start() and stop() calls.
+/// - with start() and stop() methods wrapping around the operation to time
 /// - with the interval_us() method, providing an externally determined microsecond interval
 #[derive(Derivative)]
 #[derivative(Debug)]
