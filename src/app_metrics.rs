@@ -48,6 +48,16 @@ where
     }
 }
 
+impl<M> From<Chain<M>> for AppMetrics<M> {
+    fn from(chain: Chain<M>) -> AppMetrics<M> {
+        let static_scope = chain.open_scope(false);
+        AppMetrics {
+            scope: static_scope,
+            chain: Arc::new(chain),
+        }
+    }
+}
+
 /// A monotonic counter metric.
 /// Since value is only ever increased by one, no value parameter is provided,
 /// preventing programming errors.

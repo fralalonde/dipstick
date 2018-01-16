@@ -7,7 +7,7 @@ use dipstick::*;
 
 fn main() {
     // print only 1 out of every 10000 metrics recorded
-    let app_metrics = app_metrics(to_stdout().with_sampling_rate(0.0001));
+    let app_metrics: AppMetrics<String> = app_metrics(to_stdout().with_sampling_rate(0.0001));
 
     let marker = app_metrics.marker("marker_a");
 
