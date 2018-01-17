@@ -32,6 +32,7 @@ mod pcg32;
 mod lru_cache;
 
 pub mod error;
+pub use error::*;
 
 #[macro_use]
 pub mod macros;

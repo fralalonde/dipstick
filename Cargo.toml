@@ -58,5 +58,5 @@ bench = []
 #sign-commit = true
 #upload-doc = true
 pre-release-replacements = [
-  {file="README.md", search="^dipstick = \"[a-z0-9\\.-]+\"", replace="dipstick = \"{{version}}\""}
+  {file="README.md", search="dipstick = \"[a-z0-9\\.-]+\"", replace="dipstick = \"{{version}}\""}
   ]
