@@ -12,6 +12,7 @@ fn main() {{
 ```rust,skt-fail
 extern crate dipstick;
 use dipstick::*;
+use dipstick::error::Error;
 use std::result::Result;
 
 fn main() {{

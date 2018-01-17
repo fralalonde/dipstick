@@ -92,13 +92,13 @@ let _app_metrics = app_metrics(to_stdout()).with_async_queue(64);
 The async queue uses a Rust channel and a standalone thread.
 The current behavior is to block when full.
 
-For better performance and easy maintenance, metrics should usually be predefined:
+For speed and easier maintenance, metrics are usually defined statically:
 ```rust,skt-plain
 #[macro_use] extern crate dipstick;
 #[macro_use] extern crate lazy_static;
 use dipstick::*;
 
-app_metric!(String, APP_METRICS, app_metrics(to_stdout()));
+app_metrics!(String, APP_METRICS = to_stdout());
 app_counter!(String, APP_METRICS, {
     COUNTER_A: "counter_a",
 });
