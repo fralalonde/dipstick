@@ -20,6 +20,7 @@
 //! ```
 
 use core::*;
+use scope_metrics::*;
 use core::Kind::*;
 use scores::{ScoreSnapshot, ScoreType};
 use scores::ScoreType::*;
@@ -38,7 +39,7 @@ pub trait Publish: Send + Sync + Debug {
 #[derivative(Debug)]
 pub struct Publisher<E, M> {
     #[derivative(Debug = "ignore")] statistics: Box<E>,
-    target_chain: Chain<M>,
+    target_chain: ScopeMetrics<M>,
 }
 
 impl<E, M> Publisher<E, M>
@@ -48,7 +49,7 @@ where
 {
     /// Define a new metrics publishing strategy, from a transformation
     /// function and a target metric chain.
-    pub fn new(stat_fn: E, target_chain: Chain<M>) -> Self {
+    pub fn new(stat_fn: E, target_chain: ScopeMetrics<M>) -> Self {
         Publisher {
             statistics: Box::new(stat_fn),
             target_chain,

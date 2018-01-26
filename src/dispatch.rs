@@ -1,102 +1,174 @@
+//! Decouple metric definition from configuration with trait objects.
+
 use core::*;
-use chain::*;
-use std::collections::{HashMap, LinkedList};
+use app_metrics::*;
+use output::*;
 
-pub struct MetricHandle (usize);
+use std::collections::HashMap;
+use std::sync::{Arc, RwLock, Weak};
 
-pub struct ScopeHandle (usize);
+use atomic_refcell::*;
 
-pub trait Observer {
+/// Create a new dispatcher.
+// TODO add dispatch name for registry
+pub fn dispatch() -> DispatchPoint {
+    DispatchPoint {
+        inner: Arc::new(RwLock::new(InnerDispatcher {
+            metrics: HashMap::new(),
+            receiver: Box::new(app_metrics(to_void())),
+        }))
+    }
+}
+
+/// Dynamic counterpart of a `Dispatcher`.
+/// Adapter to AppMetrics<_> of unknown type.
+pub trait Receiver {
     /// Register a new metric.
     /// Only one metric of a certain name will be defined.
     /// Observer must return a MetricHandle that uniquely identifies the metric.
-    fn metric_create(&self, kind: Kind, name: &str, rate: Rate) -> MetricHandle;
+    fn box_metric(&self, kind: Kind, name: &str, rate: Rate) -> Box<ReceiverMetric + Send + Sync>;
 
-    /// Drop a previously registered metric.
-    /// Drop is called once per handle.
-    /// Dropped handle will never be used again.
-    /// Drop is only called with previously registered handles.
-    fn metric_drop(&self, metric: MetricHandle);
+    /// Flush the receiver's scope.
+    fn flush(&self);
+}
 
-    /// Open a new scope.
-    /// Observer must return a new ScopeHandle that uniquely identifies the scope.
-    fn scope_open(&self, buffered: bool) -> ScopeHandle;
-
+/// Dynamic counterpart of the `DispatcherMetric`.
+/// Adapter to a metric of unknown type.
+pub trait ReceiverMetric {
     /// Write metric value to a scope.
     /// Observers only receive previously registered handles.
-    fn scope_write(&self, scope: ScopeHandle, metric: MetricHandle, value:Value);
-
-    /// Flush a scope.
-    /// Observers only receive previously registered handles.
-    fn scope_flush(&self, scope: ScopeHandle);
-
-    /// Drop a previously registered scope.
-    /// Drop is called once per handle.
-    /// Dropped handle will never be used again.
-    /// Drop is only called with previously registered handles.
-    fn scope_close(&self, scope: ScopeHandle);
+    fn write(&self, value: Value);
 }
 
-pub struct ChainObserver<T> {
-    chain: Chain<T>
+/// Shortcut name because `AppMetrics<Dispatch>`
+/// looks better than `AppMetrics<Arc<DispatcherMetric>>`.
+pub type Dispatch = Arc<DispatcherMetric>;
+
+/// A dynamically dispatched metric.
+#[derive(Derivative)]
+#[derivative(Debug)]
+pub struct DispatcherMetric {
+    kind: Kind,
+    name: String,
+    rate: Rate,
+    #[derivative(Debug = "ignore")]
+    receiver: AtomicRefCell<Box<ReceiverMetric + Send + Sync>>,
+    #[derivative(Debug = "ignore")]
+    dispatcher: DispatchPoint,
 }
 
-impl<T> Observer for ChainObserver<T> {
-    fn metric_create(&self, kind: Kind, name: &str, rate: Rate) -> MetricHandle {
-        self.chain.define_metric(kind, name, rate)
+/// Dispatcher weak ref does not prevent dropping but still needs to be cleaned out.
+impl Drop for DispatcherMetric {
+    fn drop(&mut self) {
+        self.dispatcher.drop_metric(self)
     }
-
-    fn metric_drop(&self, metric: MetricHandle) {}
-
-    fn scope_open(&self, buffered: bool) -> ScopeHandle {}
-    fn scope_write(&self, scope: ScopeHandle, metric: MetricHandle, value:Value) {}
-    fn scope_flush(&self, scope: ScopeHandle) {}
-    fn scope_close(&self, scope: ScopeHandle) {}
 }
 
-pub struct Dispatcher {
-    active_observers: usize,
-    metrics: HashMap<String, Dispatch>,
-    observers: RwLock<Vec<Observer>>
+/// A dynamic dispatch point for app and lib metrics.
+/// Decouples metrics definition from backend configuration.
+/// Allows defining metrics before a concrete type has been selected.
+/// Allows replacing metrics backend on the fly at runtime.
+#[derive(Clone)]
+pub struct DispatchPoint {
+    inner: Arc<RwLock<InnerDispatcher>>,
 }
 
-/// Aggregate metrics in memory.
-/// Depending on the type of metric, count, sum, minimum and maximum of values will be tracked.
-/// Needs to be connected to a publish to be useful.
-/// ```
-/// use dipstick::*;
-/// let sink = aggregate(4, summary, to_stdout());
-/// let metrics = global_metrics(sink);
-/// metrics.marker("my_event").mark();
-/// metrics.marker("my_event").mark();
-/// ```
-pub fn dispatch<E, M>(stat_fn: E, to_chain: Chain<M>) -> Chain<Dispatch>
-    where
-        E: Fn(Kind, &str, ScoreType) -> Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static,
-        M: Clone + Send + Sync + Debug + 'static,
-{
-    let metrics = Arc::new(RwLock::new(HashMap::new()));
-    let metrics0 = metrics.clone();
+struct InnerDispatcher {
+    metrics: HashMap<String, Weak<DispatcherMetric>>,
+    receiver: Box<Receiver + Send + Sync>,
+}
 
-    let publish = Arc::new(Publisher::new(stat_fn, to_chain));
+impl From<DispatchPoint> for AppMetrics<Dispatch> {
+    fn from(dispatcher: DispatchPoint) -> AppMetrics<Dispatch> {
+        let dispatcher_1 = dispatcher.clone();
+        AppMetrics::new(
+            // define metric
+            Arc::new(move |kind, name, rate| dispatcher.define_metric(kind, name, rate)),
 
-    Chain::new(
-        move |kind, name, _rate| {
-            // add metric
-        },
-        move |_buffered| {
-            // open scope
-            ControlScopeFn::new(move |cmd| match cmd {
+            // write / flush metric
+            control_scope(move |cmd| match cmd {
                 ScopeCmd::Write(metric, value) => {
-                    let metric: &Aggregate = metric;
-                    metric.update(value)
+                    let dispatch: &Arc<DispatcherMetric> = metric;
+                    let receiver_metric: AtomicRef<Box<ReceiverMetric + Send + Sync>> = dispatch.receiver.borrow();
+                    receiver_metric.write(value)
                 },
                 ScopeCmd::Flush => {
-                    let metrics = metrics.read().expect("Locking metrics scoreboards");
-                    let snapshot = metrics.values().flat_map(|score| score.reset()).collect();
-                    publish.publish(snapshot);
-                }
+                    dispatcher_1.inner.write().expect("Locking dispatcher").receiver.flush()
+                },
             })
-        },
-    )
+        )
+    }
+}
+
+impl DispatchPoint {
+
+    /// Install a new metric receiver, replacing the previous one.
+    pub fn set_receiver<IS: Into<AppMetrics<T>>, T: Send + Sync + Clone + 'static>(&self, receiver: IS) {
+        let receiver: Box<Receiver + Send + Sync> = Box::new(receiver.into());
+        let inner: &mut InnerDispatcher = &mut *self.inner.write().expect("Locking dispatcher");
+
+        for mut metric in inner.metrics.values() {
+            if let Some(metric) = metric.upgrade() {
+                let receiver_metric = receiver.box_metric(metric.kind, metric.name.as_ref(), metric.rate);
+                *metric.receiver.borrow_mut() = receiver_metric;
+            }
+        }
+        // TODO return old receiver (swap, how?)
+        inner.receiver = receiver;
+    }
+
+    /// Define a dispatch metric, registering it with the current receiver.
+    /// A weak ref is kept to update receiver metric if receiver is replaced.
+    pub fn define_metric(&self, kind: Kind, name: &str, rate: Rate) -> Dispatch {
+        let mut inner = self.inner.write().expect("Locking dispatcher");
+
+        let receiver_metric = inner.receiver.box_metric(kind, name, rate);
+
+        let dispatcher_metric = Arc::new(DispatcherMetric {
+            kind,
+            name: name.to_string(),
+            rate,
+            receiver: AtomicRefCell::new(receiver_metric),
+            dispatcher: self.clone(),
+        });
+
+        inner.metrics.insert(dispatcher_metric.name.clone(), Arc::downgrade(&dispatcher_metric));
+        dispatcher_metric
+    }
+
+    fn drop_metric(&self, metric: &DispatcherMetric) {
+        let mut inner = self.inner.write().expect("Locking dispatcher");
+        if let None = inner.metrics.remove(&metric.name) {
+            panic!("Could not remove DispatchMetric weak ref from Dispatcher")
+        }
+    }
+
+}
+
+#[cfg(feature = "bench")]
+mod bench {
+
+    use super::*;
+    use test;
+    use core::Kind::*;
+    use aggregate::*;
+    use publish::*;
+
+    #[bench]
+    fn dispatch_marker_to_aggregate(b: &mut test::Bencher) {
+        let dispatch = dispatch();
+        let sink: AppMetrics<Dispatch> = dispatch.clone().into();
+        dispatch.set_receiver(aggregate(summary, to_void()));
+        let metric = sink.marker("event_a");
+        b.iter(|| test::black_box(metric.mark()));
+    }
+
+    #[bench]
+    fn dispatch_marker_to_void(b: &mut test::Bencher) {
+        let dispatch = dispatch();
+        let sink: AppMetrics<Dispatch> = dispatch.into();
+        let metric = sink.marker("event_a");
+        b.iter(|| test::black_box(metric.mark()));
+    }
+
 }

@@ -5,7 +5,7 @@ members = [
   "examples/multi_outs/",
   "examples/macro_outs/",
   "examples/aggregate_print/",
-  "examples/summary_print/",
+  "examples/dispatch_print/",
   "examples/async_print/",
   "examples/custom_publish/",
   "examples/raw_log/",
@@ -36,10 +36,11 @@ build = "build.rs"
 travis-ci = { repository = "fralalonde/dipstick", branch = "master" }
 
 [dependencies]
-log = { version = "0.3" }
+log = "0.3"
 time = "0.1"
-lazy_static = "0.2"
+lazy_static = "1.0"
 derivative = "1.0"
+atomic_refcell = "0.1"
 
 [build-dependencies]
 skeptic = "0.13"

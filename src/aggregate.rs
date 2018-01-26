@@ -1,6 +1,9 @@
 //! Maintain aggregated metrics for deferred reporting,
 //!
 use core::*;
+use scope_metrics::*;
+use app_metrics::*;
+
 use scores::*;
 use publish::*;
 
@@ -18,46 +21,37 @@ use std::sync::{Arc, RwLock};
 /// metrics.marker("my_event").mark();
 /// metrics.marker("my_event").mark();
 /// ```
-pub fn aggregate<E, M>(stat_fn: E, to_chain: Chain<M>) -> Chain<Aggregate>
+pub fn aggregate<E, M>(stat_fn: E, to_chain: ScopeMetrics<M>) -> Aggregator
 where
     E: Fn(Kind, &str, ScoreType) -> Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static,
     M: Clone + Send + Sync + Debug + 'static,
 {
-    let metrics = Arc::new(RwLock::new(HashMap::new()));
-    let metrics0 = metrics.clone();
+    Aggregator {
+        metrics: Arc::new(RwLock::new(HashMap::new())),
+        publish: Arc::new(Publisher::new(stat_fn, to_chain))
+    }
+}
 
-    let publish = Arc::new(Publisher::new(stat_fn, to_chain));
-
-    Chain::new(
-        move |kind, name, _rate| {
-            metrics
-                .write()
-                .unwrap()
-                .entry(name.to_string())
-                .or_insert_with(|| Arc::new(Scoreboard::new(kind, name.to_string())))
-                .clone()
-        },
-        move |_buffered| {
-            let metrics = metrics0.clone();
-            let publish = publish.clone();
-            ControlScopeFn::new(move |cmd| match cmd {
+impl From<Aggregator> for AppMetrics<Aggregate> {
+    fn from(agg: Aggregator) -> AppMetrics<Aggregate> {
+        let agg_1 = agg.clone();
+        AppMetrics::new(
+            Arc::new(move |kind, name, rate| agg.define_metric(kind, name, rate)),
+            control_scope(move |cmd| match cmd {
                 ScopeCmd::Write(metric, value) => {
                     let metric: &Aggregate = metric;
                     metric.update(value)
                 },
                 ScopeCmd::Flush => {
-                    let metrics = metrics.read().expect("Locking metrics scoreboards");
-                    let snapshot = metrics.values().flat_map(|score| score.reset()).collect();
-                    publish.publish(snapshot);
+                    agg_1.flush()
                 }
             })
-        },
-    )
+        )
+    }
 }
 
 /// Central aggregation structure.
-/// Since `AggregateKey`s themselves contain scores, the aggregator simply maintains
-/// a shared list of metrics for enumeration when used as source.
+/// Maintains a list of metrics for enumeration when used as source.
 #[derive(Debug, Clone)]
 pub struct Aggregator {
     metrics: Arc<RwLock<HashMap<String, Arc<Scoreboard>>>>,
@@ -77,6 +71,7 @@ impl Aggregator {
     pub fn cleanup(&self) {
         let orphans: Vec<String> = self.metrics.read().unwrap().iter()
             // is aggregator now the sole owner?
+            // TODO use weak ref + impl Drop to mark abandoned metrics (see dispatch)
             .filter(|&(_k, v)| Arc::strong_count(v) == 1)
             .map(|(k, _v)| k.to_string())
             .collect();
@@ -86,6 +81,22 @@ impl Aggregator {
                 remover.remove(k);
             });
         }
+    }
+
+    /// Lookup or create a scoreboard for the requested metric.
+    pub fn define_metric(&self, kind: Kind, name: &str, _rate: Rate) -> Aggregate {
+        self.metrics.write().expect("Locking aggregator")
+            .entry(name.to_string())
+            .or_insert_with(|| Arc::new(Scoreboard::new(kind, name.to_string())))
+            .clone()
+    }
+
+    /// Collect and reset aggregated data.
+    /// Publish statistics
+    pub fn flush(&self) {
+        let metrics = self.metrics.read().expect("Locking metrics scoreboards");
+        let snapshot = metrics.values().flat_map(|score| score.reset()).collect();
+        self.publish.publish(snapshot);
     }
 }
 
@@ -101,7 +112,7 @@ mod bench {
     use output::*;
 
     #[bench]
-    fn time_bench_write_event(b: &mut test::Bencher) {
+    fn aggregate_marker(b: &mut test::Bencher) {
         let sink = aggregate(summary, to_void());
         let metric = sink.define_metric(Marker, "event_a", 1.0);
         let scope = sink.open_scope(false);
@@ -109,7 +120,7 @@ mod bench {
     }
 
     #[bench]
-    fn time_bench_write_count(b: &mut test::Bencher) {
+    fn aggregate_counter(b: &mut test::Bencher) {
         let sink = aggregate(summary, to_void());
         let metric = sink.define_metric(Counter, "count_a", 1.0);
         let scope = sink.open_scope(false);
@@ -117,14 +128,14 @@ mod bench {
     }
 
     #[bench]
-    fn time_bench_read_event(b: &mut test::Bencher) {
+    fn reset_marker(b: &mut test::Bencher) {
         let sink = aggregate(summary, to_void());
         let metric = sink.define_metric(Marker, "marker_a", 1.0);
         b.iter(|| test::black_box(metric.reset()));
     }
 
     #[bench]
-    fn time_bench_read_count(b: &mut test::Bencher) {
+    fn reset_counter(b: &mut test::Bencher) {
         let sink = aggregate(summary, to_void());
         let metric = sink.define_metric(Counter, "count_a", 1.0);
         b.iter(|| test::black_box(metric.reset()));

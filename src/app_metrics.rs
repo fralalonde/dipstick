@@ -8,54 +8,25 @@
 //! If multiple [AppMetrics] are defined, they'll each have their scope.
 //!
 use core::*;
+use core::Kind::*;
 use namespace::*;
 use cache::*;
-use async_queue::*;
-use sample::*;
-use core::Kind::*;
-
-use std::sync::Arc;
-use std::time::Duration;
 use schedule::*;
+use dispatch::*;
+
+use std::time::Duration;
 
 // TODO define an 'AsValue' trait + impl for supported number types, then drop 'num' crate
 pub use num::ToPrimitive;
 
 /// Wrap the metrics backend to provide an application-friendly interface.
 /// Open a metric scope to share across the application.
-#[deprecated(since = "0.5.0", note = "Use `app_metrics` instead.")]
-pub fn metrics<M, IC>(chain: IC) -> AppMetrics<M>
-    where
-        M: Clone + Send + Sync + 'static,
-        IC: Into<Chain<M>>,
-{
-    app_metrics(chain)
-}
-
-
-/// Wrap the metrics backend to provide an application-friendly interface.
-/// Open a metric scope to share across the application.
-pub fn app_metrics<M, IC>(chain: IC) -> AppMetrics<M>
+pub fn app_metrics<M, AM>(app_metrics: AM) -> AppMetrics<M>
 where
     M: Clone + Send + Sync + 'static,
-    IC: Into<Chain<M>>,
+    AM: Into<AppMetrics<M>>,
 {
-    let chain = chain.into();
-    let static_scope = chain.open_scope(false);
-    AppMetrics {
-        scope: static_scope,
-        chain: Arc::new(chain),
-    }
-}
-
-impl<M> From<Chain<M>> for AppMetrics<M> {
-    fn from(chain: Chain<M>) -> AppMetrics<M> {
-        let static_scope = chain.open_scope(false);
-        AppMetrics {
-            scope: static_scope,
-            chain: Arc::new(chain),
-        }
-    }
+    app_metrics.into()
 }
 
 /// A monotonic counter metric.
@@ -166,21 +137,35 @@ impl<M> AppTimer<M> {
     }
 }
 
+//// AppMetrics proper
+
 /// Variations of this should also provide control of the metric recording scope.
 #[derive(Derivative, Clone)]
 #[derivative(Debug)]
 pub struct AppMetrics<M> {
-    chain: Arc<Chain<M>>,
+    #[derivative(Debug = "ignore")] define_metric_fn: DefineMetricFn<M>,
     #[derivative(Debug = "ignore")] scope: ControlScopeFn<M>,
 }
 
+impl<M> AppMetrics<M> {
+    /// Create new application metrics instance.
+    pub fn new(define_metric_fn: DefineMetricFn<M>, scope: ControlScopeFn<M>, ) -> Self {
+        AppMetrics { define_metric_fn, scope }
+    }
+}
+
 impl<M> AppMetrics<M>
-where
-    M: Clone + Send + Sync + 'static,
+    where
+        M: Clone + Send + Sync + 'static,
 {
+    #[inline]
+    fn define_metric(&self, kind: Kind, name: &str, rate: Rate) -> M {
+        (self.define_metric_fn)(kind, name, rate)
+    }
+    
     /// Get an event counter of the provided name.
     pub fn marker<AS: AsRef<str>>(&self, name: AS) -> AppMarker<M> {
-        let metric = self.chain.define_metric(Marker, name.as_ref(), 1.0);
+        let metric = self.define_metric(Marker, name.as_ref(), 1.0);
         AppMarker {
             metric,
             scope: self.scope.clone(),
@@ -189,7 +174,7 @@ where
 
     /// Get a counter of the provided name.
     pub fn counter<AS: AsRef<str>>(&self, name: AS) -> AppCounter<M> {
-        let metric = self.chain.define_metric(Counter, name.as_ref(), 1.0);
+        let metric = self.define_metric(Counter, name.as_ref(), 1.0);
         AppCounter {
             metric,
             scope: self.scope.clone(),
@@ -198,7 +183,7 @@ where
 
     /// Get a timer of the provided name.
     pub fn timer<AS: AsRef<str>>(&self, name: AS) -> AppTimer<M> {
-        let metric = self.chain.define_metric(Timer, name.as_ref(), 1.0);
+        let metric = self.define_metric(Timer, name.as_ref(), 1.0);
         AppTimer {
             metric,
             scope: self.scope.clone(),
@@ -207,7 +192,7 @@ where
 
     /// Get a gauge of the provided name.
     pub fn gauge<AS: AsRef<str>>(&self, name: AS) -> AppGauge<M> {
-        let metric = self.chain.define_metric(Gauge, name.as_ref(), 1.0);
+        let metric = self.define_metric(Gauge, name.as_ref(), 1.0);
         AppGauge {
             metric,
             scope: self.scope.clone(),
@@ -229,10 +214,42 @@ where
     }
 }
 
+//// Dispatch / Receiver impl
+
+struct AppReceiverMetric<M> {
+    metric: M,
+    scope: ControlScopeFn<M>,
+}
+
+impl<M: Send + Sync + Clone + 'static> Receiver for AppMetrics<M> {
+    fn box_metric(&self, kind: Kind, name: &str, rate: Rate) -> Box<ReceiverMetric + Send + Sync> {
+        let scope: ControlScopeFn<M> = self.scope.clone();
+        let metric: M = self.define_metric(kind, name, rate);
+
+        Box::new(AppReceiverMetric {
+            metric,
+            scope,
+        })
+    }
+
+    fn flush(&self) {
+        self.flush()
+    }
+}
+
+impl<M> ReceiverMetric for AppReceiverMetric<M> {
+    fn write(&self, value: Value) {
+        self.scope.write(&self.metric, value);
+    }
+}
+
+//// Mutators impl
+
 impl<M: Send + Sync + Clone + 'static> WithNamespace for AppMetrics<M> {
     fn with_name<IN: Into<Namespace>>(&self, names: IN) -> Self {
+        let ref ns = names.into();
         AppMetrics {
-            chain: Arc::new(self.chain.with_name(names)),
+            define_metric_fn: add_namespace(ns, self.define_metric_fn.clone()),
             scope: self.scope.clone(),
         }
     }
@@ -241,25 +258,7 @@ impl<M: Send + Sync + Clone + 'static> WithNamespace for AppMetrics<M> {
 impl<M: Send + Sync + Clone + 'static> WithCache for AppMetrics<M> {
     fn with_cache(&self, cache_size: usize) -> Self {
         AppMetrics {
-            chain: Arc::new(self.chain.with_cache(cache_size)),
-            scope: self.scope.clone(),
-        }
-    }
-}
-
-impl<M: Send + Sync + Clone + 'static> WithSamplingRate for AppMetrics<M> {
-    fn with_sampling_rate(&self, sampling_rate: Rate) -> Self {
-        AppMetrics {
-            chain: Arc::new(self.chain.with_sampling_rate(sampling_rate)),
-            scope: self.scope.clone(),
-        }
-    }
-}
-
-impl<M: Send + Sync + Clone + 'static> WithAsyncQueue for AppMetrics<M> {
-    fn with_async_queue(&self, queue_size: usize) -> Self {
-        AppMetrics {
-            chain: Arc::new(self.chain.with_async_queue(queue_size)),
+            define_metric_fn: add_cache(cache_size, self.define_metric_fn.clone()),
             scope: self.scope.clone(),
         }
     }

@@ -8,7 +8,7 @@ use std::time::Duration;
 use dipstick::*;
 
 fn main() {
-    let metrics = app_metrics(to_stdout()).with_async_queue(0);
+    let metrics = app_metrics(to_stdout().with_async_queue(0));
 
     let counter = metrics.counter("counter_a");
     let timer = metrics.timer("timer_b");
