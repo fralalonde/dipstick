@@ -1,6 +1,7 @@
 //! Send metrics to a statsd server.
 
 use core::*;
+use scope_metrics::*;
 use error;
 use self_metrics::*;
 
@@ -14,7 +15,7 @@ mod_marker!(Aggregate, STATSD_METRICS, { SEND_ERR: "send_failed" });
 mod_counter!(Aggregate, STATSD_METRICS, { SENT_BYTES: "sent_bytes" });
 
 /// Send metrics to a statsd server at the address and port provided.
-pub fn to_statsd<ADDR>(address: ADDR) -> error::Result<Chain<Statsd>>
+pub fn to_statsd<ADDR>(address: ADDR) -> error::Result<ScopeMetrics<Statsd>>
 where
     ADDR: ToSocketAddrs,
 {
@@ -22,7 +23,7 @@ where
     socket.set_nonblocking(true)?;
     socket.connect(address)?;
 
-    Ok(Chain::new(
+    Ok(ScopeMetrics::new(
         move |kind, name, rate| {
             let mut prefix = String::with_capacity(32);
             prefix.push_str(name);
@@ -59,7 +60,7 @@ where
                 socket: socket.clone(),
                 buffered,
             });
-            ControlScopeFn::new(move |cmd| {
+            control_scope(move |cmd| {
                 if let Ok(mut buf) = buf.write() {
                     match cmd {
                         ScopeCmd::Write(metric, value) => buf.write(metric, value),

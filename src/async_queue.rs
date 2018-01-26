@@ -3,6 +3,7 @@
 //! If queue size is exceeded, calling code reverts to blocking.
 //!
 use core::*;
+use scope_metrics::*;
 use self_metrics::*;
 
 use std::sync::Arc;
@@ -21,7 +22,7 @@ where
     fn with_async_queue(&self, queue_size: usize) -> Self;
 }
 
-impl<M: Send + Sync + Clone + 'static> WithAsyncQueue for Chain<M> {
+impl<M: Send + Sync + Clone + 'static> WithAsyncQueue for ScopeMetrics<M> {
     fn with_async_queue(&self, queue_size: usize) -> Self {
         self.mod_scope(|next| {
             // setup channel
@@ -49,7 +50,7 @@ impl<M: Send + Sync + Clone + 'static> WithAsyncQueue for Chain<M> {
                 let sender = sender.clone();
 
                 // forward any scope command through the channel
-                ControlScopeFn::new(move |cmd| {
+                control_scope(move |cmd| {
                     let send_cmd = match cmd {
                         ScopeCmd::Write(metric, value) => {
                             let metric: &M = metric;
@@ -74,10 +75,10 @@ impl<M: Send + Sync + Clone + 'static> WithAsyncQueue for Chain<M> {
 
 /// Enqueue collected metrics for dispatch on background thread.
 #[deprecated(since = "0.5.0", note = "Use `with_async_queue` instead.")]
-pub fn async<M, IC>(queue_size: usize, chain: IC) -> Chain<M>
+pub fn async<M, IC>(queue_size: usize, chain: IC) -> ScopeMetrics<M>
 where
     M: Clone + Send + Sync + 'static,
-    IC: Into<Chain<M>>,
+    IC: Into<ScopeMetrics<M>>,
 {
     let chain = chain.into();
     chain.with_async_queue(queue_size)

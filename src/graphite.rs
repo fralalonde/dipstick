@@ -1,6 +1,7 @@
 //! Send metrics to a graphite server.
 
 use core::*;
+use scope_metrics::*;
 use error;
 use self_metrics::*;
 
@@ -22,13 +23,13 @@ mod_counter!(Aggregate, GRAPHITE_METRICS, { SENT_BYTES: "sent_bytes" });
 
 
 /// Send metrics to a graphite server at the address and port provided.
-pub fn to_graphite<ADDR>(address: ADDR) -> error::Result<Chain<Graphite>>
+pub fn to_graphite<ADDR>(address: ADDR) -> error::Result<ScopeMetrics<Graphite>>
 where
     ADDR: ToSocketAddrs + Debug + Clone,
 {
     debug!("Connecting to graphite {:?}", address);
     let socket = Arc::new(RwLock::new(RetrySocket::new(address.clone())?));
-    Ok(Chain::new(
+    Ok(ScopeMetrics::new(
         move |kind, name, rate| {
             let mut prefix = String::with_capacity(32);
             prefix.push_str(name);
@@ -59,7 +60,7 @@ where
                 socket: socket.clone(),
                 buffered,
             };
-            ControlScopeFn::new(move |cmd| match cmd {
+            control_scope(move |cmd| match cmd {
                 ScopeCmd::Write(metric, value) => buf.write(metric, value),
                 ScopeCmd::Flush => buf.flush(),
             })

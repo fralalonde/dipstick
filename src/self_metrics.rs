@@ -2,17 +2,26 @@
 //! Collect statistics about various metrics modules at runtime.
 //! Stats can can be obtained for publication from `selfstats::SOURCE`.
 
+pub use core::*;
+
 pub use app_metrics::*;
 pub use aggregate::*;
 pub use publish::*;
 pub use scores::*;
-pub use core::*;
 pub use namespace::*;
 
 use output::to_void;
 
-// TODO send to_dispatch()
-fn build_aggregator() -> Chain<Aggregate> {
+lazy_static! {
+    static ref DIPSTICK_AGGREGATOR: Aggregator = build_aggregator();
+}
+
+/// Application metrics are collected to the aggregator
+
+app_metrics!(Aggregate, DIPSTICK_METRICS = build_self_metrics());
+
+fn build_aggregator() -> Aggregator {
+    // TODO make publishable
     aggregate(summary, to_void())
 }
 
@@ -22,10 +31,8 @@ pub fn snapshot() -> Vec<ScoreSnapshot> {
 }
 
 fn build_self_metrics() -> AppMetrics<Aggregate> {
-    app_metrics(AGGREGATOR.clone()).with_prefix("dipstick")
+    let mug: &Aggregator = &DIPSTICK_AGGREGATOR;
+    let am: AppMetrics<Aggregate> = mug.clone().into();
+    am.with_prefix("dipstick")
 }
 
-lazy_static! { static ref AGGREGATOR: Chain<Aggregate> = build_aggregator(); }
-
-/// Application metrics are collected to the aggregator
-app_metrics!(Aggregate, DIPSTICK_METRICS = build_self_metrics());

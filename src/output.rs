@@ -1,22 +1,23 @@
 //! Standard stateless metric outputs.
 // TODO parameterize templates
 use core::*;
+use scope_metrics::*;
 use std::sync::RwLock;
 
 /// Write metric values to stdout using `println!`.
-pub fn to_stdout() -> Chain<String> {
-    Chain::new(
+pub fn to_stdout() -> ScopeMetrics<String> {
+    ScopeMetrics::new(
         |_kind, name, _rate| String::from(name),
         |buffered| {
             if !buffered {
-                ControlScopeFn::new(|cmd| {
+                control_scope(|cmd| {
                     if let ScopeCmd::Write(m, v) = cmd {
                         println!("{}: {}", m, v)
                     }
                 })
             } else {
                 let buf = RwLock::new(String::new());
-                ControlScopeFn::new(move |cmd| {
+                control_scope(move |cmd| {
                     let mut buf = buf.write().expect("Locking stdout buffer");
                     match cmd {
                         ScopeCmd::Write(metric, value) => buf.push_str(format!("{}: {}\n", metric, value).as_ref()),
@@ -33,19 +34,19 @@ pub fn to_stdout() -> Chain<String> {
 
 /// Write metric values to the standard log using `info!`.
 // TODO parameterize log level
-pub fn to_log() -> Chain<String> {
-    Chain::new(
+pub fn to_log() -> ScopeMetrics<String> {
+    ScopeMetrics::new(
         |_kind, name, _rate| String::from(name),
         |buffered| {
             if !buffered {
-                ControlScopeFn::new(|cmd| {
+                control_scope(|cmd| {
                     if let ScopeCmd::Write(m, v) = cmd {
                         info!("{}: {}", m, v)
                     }
                 })
             } else {
                 let buf = RwLock::new(String::new());
-                ControlScopeFn::new(move |cmd| {
+                control_scope(move |cmd| {
                     let mut buf = buf.write().expect("Locking string buffer");
                     match cmd {
                         ScopeCmd::Write(metric, value) => buf.push_str(format!("{}: {}\n", metric, value).as_ref()),
@@ -61,10 +62,10 @@ pub fn to_log() -> Chain<String> {
 }
 
 /// Discard all metric values sent to it.
-pub fn to_void() -> Chain<String> {
-    Chain::new(
+pub fn to_void() -> ScopeMetrics<String> {
+    ScopeMetrics::new(
         move |_kind, name, _rate| String::from(name),
-        |_buffered| ControlScopeFn::new(|_cmd| {}),
+        |_buffered| control_scope(|_cmd| {}),
     )
 }
 

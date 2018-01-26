@@ -1,6 +1,8 @@
 //! Reduce the amount of data to process or transfer by statistically dropping some of it.
 
 use core::*;
+use scope_metrics::*;
+
 use pcg32;
 
 use std::sync::Arc;
@@ -14,7 +16,7 @@ where
     fn with_sampling_rate(&self, sampling_rate: Rate) -> Self;
 }
 
-impl<M: Send + Sync + 'static + Clone> WithSamplingRate for Chain<M> {
+impl<M: Send + Sync + 'static + Clone> WithSamplingRate for ScopeMetrics<M> {
     fn with_sampling_rate(&self, sampling_rate: Rate) -> Self {
         let int_sampling_rate = pcg32::to_int_rate(sampling_rate);
 
@@ -34,7 +36,7 @@ impl<M: Send + Sync + 'static + Clone> WithSamplingRate for Chain<M> {
                 }),
                 Arc::new(move |buffered| {
                     let next_scope = scope_fn(buffered);
-                    ControlScopeFn::new(move |cmd| {
+                    control_scope(move |cmd| {
                         match cmd {
                             ScopeCmd::Write(metric, value) => {
                                 if pcg32::accept_sample(int_sampling_rate) {
@@ -52,10 +54,10 @@ impl<M: Send + Sync + 'static + Clone> WithSamplingRate for Chain<M> {
 
 /// Perform random sampling of values according to the specified rate.
 #[deprecated(since = "0.5.0", note = "Use `with_sampling_rate` instead.")]
-pub fn sample<M, IC>(sampling_rate: Rate, chain: IC) -> Chain<M>
+pub fn sample<M, IC>(sampling_rate: Rate, chain: IC) -> ScopeMetrics<M>
 where
     M: Clone + Send + Sync + 'static,
-    IC: Into<Chain<M>>,
+    IC: Into<ScopeMetrics<M>>,
 {
     let chain = chain.into();
     chain.with_sampling_rate(sampling_rate)
