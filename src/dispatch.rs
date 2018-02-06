@@ -9,15 +9,28 @@ use std::sync::{Arc, RwLock, Weak};
 
 use atomic_refcell::*;
 
+lazy_static! {
+    static ref DISPATCH_REGISTRY: RwLock<Vec<DispatchPoint>> = RwLock::new(vec![]);
+}
+
+pub fn set_default_receiver<IS: Into<AppMetrics<T>>, T: Send + Sync + Clone + 'static>(receiver: IS) {
+    let rec = receiver.into();
+    for d in DISPATCH_REGISTRY.read().unwrap().iter() {
+        d.set_receiver(rec.clone());
+    }
+}
+
 /// Create a new dispatcher.
 // TODO add dispatch name for registry
 pub fn dispatch() -> DispatchPoint {
-    DispatchPoint {
+    let dispatch_point = DispatchPoint {
         inner: Arc::new(RwLock::new(InnerDispatcher {
             metrics: HashMap::new(),
             receiver: Box::new(app_metrics(to_void())),
         }))
-    }
+    };
+    DISPATCH_REGISTRY.write().unwrap().push(dispatch_point.clone());
+    dispatch_point
 }
 
 /// Dynamic counterpart of a `Dispatcher`.
@@ -76,6 +89,33 @@ pub struct DispatchPoint {
 struct InnerDispatcher {
     metrics: HashMap<String, Weak<DispatcherMetric>>,
     receiver: Box<Receiver + Send + Sync>,
+}
+
+impl From<&'static str> for DispatchPoint {
+    fn from(ztr: &'static str) -> DispatchPoint {
+        dispatch().with_prefix(ztr)
+    }
+}
+
+//// Mutators impl
+
+impl WithNamespace for DispatchPoint {
+    fn with_name<IN: Into<Namespace>>(&self, names: IN) -> Self {
+        let ref ns = names.into();
+        DispatchPoint {
+            define_metric_fn: add_namespace(ns, self.define_metric_fn.clone()),
+            scope: self.scope.clone(),
+        }
+    }
+}
+
+impl WithCache for DispatchPoint {
+    fn with_cache(&self, cache_size: usize) -> Self {
+        DispatchPoint {
+            define_metric_fn: add_cache(cache_size, self.define_metric_fn.clone()),
+            scope: self.scope.clone(),
+        }
+    }
 }
 
 impl From<DispatchPoint> for AppMetrics<Dispatch> {

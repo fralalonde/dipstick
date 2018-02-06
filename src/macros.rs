@@ -32,6 +32,9 @@ macro_rules! app_metrics {
     ($type_param: ty, $metric_id: ident = $app_metrics: expr) => {
         lazy_static! { pub static ref $metric_id: AppMetrics<$type_param> = $app_metrics.into(); }
     };
+    ($metric_id: ident = $app_metrics: expr) => {
+        lazy_static! { pub static ref $metric_id: DispatchPoint = dispatch().with_prefix($app_metrics); }
+    };
 }
 
 /// Define application-scoped markers.
@@ -81,6 +84,9 @@ macro_rules! mod_metrics {
     };
     ($type_param: ty, $metric_id: ident = $mod_metrics: expr) => {
         lazy_static! { static ref $metric_id: AppMetrics<$type_param> = $mod_metrics.into(); }
+    };
+    ($type_param: ty, $metric_id: ident = $mod_metrics: expr) => {
+        lazy_static! { static ref $metric_id: DispatchPoint = $mod_metrics.into(); }
     };
 }
 
