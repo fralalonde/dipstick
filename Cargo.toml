@@ -3,6 +3,7 @@ members = [
   "./",
   "examples/counter_timer_gauge/",
   "examples/multi_outs/",
+  "examples/macro_dispatch/",
   "examples/macro_outs/",
   "examples/aggregate_print/",
   "examples/dispatch_print/",
