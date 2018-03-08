@@ -10,16 +10,16 @@ app_metrics!((Statsd, String), DIFFERENT_TYPES = (
         // combine outputs of different types by using a tuple
         to_statsd("localhost:8125").expect("Connecting"),
         to_stdout(),
-    ));
+    ););
 
 app_metrics!(Vec<String>, SAME_TYPE = [
         // combine multiple outputs of the same type by using an array
         to_stdout().with_prefix("yeah"),
         to_stdout().with_prefix("ouch"),
         to_stdout().with_sampling_rate(0.5),
-    ]);
+    ][..];);
 
-app_metrics!(Vec<String>, MUTANT_CHILD = SAME_TYPE.with_prefix("super").with_prefix("duper"));
+app_metrics!(Vec<String>, MUTANT_CHILD = SAME_TYPE.with_prefix("super").with_prefix("duper"););
 
 fn main() {
 

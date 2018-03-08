@@ -12,7 +12,7 @@ use core::Kind::*;
 use namespace::*;
 use cache::*;
 use schedule::*;
-use dispatch::*;
+use delegate::*;
 
 use std::time::Duration;
 
@@ -144,13 +144,13 @@ impl<M> AppTimer<M> {
 #[derivative(Debug)]
 pub struct AppMetrics<M> {
     #[derivative(Debug = "ignore")] define_metric_fn: DefineMetricFn<M>,
-    #[derivative(Debug = "ignore")] scope: ControlScopeFn<M>,
+    #[derivative(Debug = "ignore")] single_scope: ControlScopeFn<M>,
 }
 
 impl<M> AppMetrics<M> {
     /// Create new application metrics instance.
     pub fn new(define_metric_fn: DefineMetricFn<M>, scope: ControlScopeFn<M>, ) -> Self {
-        AppMetrics { define_metric_fn, scope }
+        AppMetrics { define_metric_fn, single_scope: scope }
     }
 }
 
@@ -168,7 +168,7 @@ impl<M> AppMetrics<M>
         let metric = self.define_metric(Marker, name.as_ref(), 1.0);
         AppMarker {
             metric,
-            scope: self.scope.clone(),
+            scope: self.single_scope.clone(),
         }
     }
 
@@ -177,7 +177,7 @@ impl<M> AppMetrics<M>
         let metric = self.define_metric(Counter, name.as_ref(), 1.0);
         AppCounter {
             metric,
-            scope: self.scope.clone(),
+            scope: self.single_scope.clone(),
         }
     }
 
@@ -186,7 +186,7 @@ impl<M> AppMetrics<M>
         let metric = self.define_metric(Timer, name.as_ref(), 1.0);
         AppTimer {
             metric,
-            scope: self.scope.clone(),
+            scope: self.single_scope.clone(),
         }
     }
 
@@ -195,7 +195,7 @@ impl<M> AppMetrics<M>
         let metric = self.define_metric(Gauge, name.as_ref(), 1.0);
         AppGauge {
             metric,
-            scope: self.scope.clone(),
+            scope: self.single_scope.clone(),
         }
     }
 
@@ -203,13 +203,13 @@ impl<M> AppMetrics<M>
     /// This is usually not required since static metrics use auto flushing scopes.
     /// The effect, if any, of this method depends on the selected metrics backend.
     pub fn flush(&self) {
-        self.scope.flush();
+        self.single_scope.flush();
     }
 
     /// Schedule for the metrics aggregated of buffered by downstream metrics sinks to be
     /// sent out at regular intervals.
     pub fn flush_every(&self, period: Duration) -> CancelHandle {
-        let scope = self.scope.clone();
+        let scope = self.single_scope.clone();
         schedule(period, move || scope.flush())
     }
 }
@@ -223,7 +223,7 @@ struct AppReceiverMetric<M> {
 
 impl<M: Send + Sync + Clone + 'static> Receiver for AppMetrics<M> {
     fn box_metric(&self, kind: Kind, name: &str, rate: Rate) -> Box<ReceiverMetric + Send + Sync> {
-        let scope: ControlScopeFn<M> = self.scope.clone();
+        let scope: ControlScopeFn<M> = self.single_scope.clone();
         let metric: M = self.define_metric(kind, name, rate);
 
         Box::new(AppReceiverMetric {
@@ -250,7 +250,7 @@ impl<M: Send + Sync + Clone + 'static> WithNamespace for AppMetrics<M> {
         let ref ns = names.into();
         AppMetrics {
             define_metric_fn: add_namespace(ns, self.define_metric_fn.clone()),
-            scope: self.scope.clone(),
+            single_scope: self.single_scope.clone(),
         }
     }
 }
@@ -259,7 +259,7 @@ impl<M: Send + Sync + Clone + 'static> WithCache for AppMetrics<M> {
     fn with_cache(&self, cache_size: usize) -> Self {
         AppMetrics {
             define_metric_fn: add_cache(cache_size, self.define_metric_fn.clone()),
-            scope: self.scope.clone(),
+            single_scope: self.single_scope.clone(),
         }
     }
 }
