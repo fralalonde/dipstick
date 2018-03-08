@@ -1,7 +1,0 @@
-[package]
-name = "sampling"
-version = "0.0.0"
-workspace = "../../"
-
-[dependencies]
-dipstick = { path = '../../' }

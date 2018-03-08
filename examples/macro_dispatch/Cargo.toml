@@ -1,8 +1,0 @@
-[package]
-name = "macro_dispatch"
-version = "0.0.0"
-workspace = "../../"
-
-[dependencies]
-dipstick = { path = '../../' }
-lazy_static = "0.2"

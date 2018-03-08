@@ -10,8 +10,10 @@ use std::sync::Arc;
 use std::sync::mpsc;
 use std::thread;
 
-mod_metrics!(Aggregate, QUEUE_METRICS = DIPSTICK_METRICS.with_prefix("async_queue"));
-mod_marker!(Aggregate, QUEUE_METRICS, { SEND_FAILED: "send_failed" });
+mod_metrics!{
+    Aggregate, DIPSTICK_METRICS.with_prefix("async_queue");
+    @Marker SEND_FAILED: "send_failed";
+}
 
 /// Enqueue collected metrics for dispatch on background thread.
 pub trait WithAsyncQueue

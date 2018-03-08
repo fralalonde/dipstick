@@ -39,8 +39,8 @@ pub use core::*;
 pub mod scope_metrics;
 pub use scope_metrics::*;
 
-pub mod dispatch;
-pub use dispatch::*;
+pub mod delegate;
+pub use delegate::*;
 
 mod output;
 pub use output::*;

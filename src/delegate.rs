@@ -3,34 +3,37 @@
 use core::*;
 use app_metrics::*;
 use output::*;
+use namespace::*;
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock, Weak};
 
 use atomic_refcell::*;
 
+/// The registry contains a list of every metrics dispatch point in the app.
 lazy_static! {
-    static ref DISPATCH_REGISTRY: RwLock<Vec<DispatchPoint>> = RwLock::new(vec![]);
+    static ref DISPATCH_REGISTRY: RwLock<Vec<DelegationPoint>> = RwLock::new(vec![]);
 }
 
-pub fn set_default_receiver<IS: Into<AppMetrics<T>>, T: Send + Sync + Clone + 'static>(receiver: IS) {
+/// Install a new receiver for all dispatched metrics, replacing any previous receiver.
+pub fn set_global_metrics_receiver<IS: Into<AppMetrics<T>>, T: Send + Sync + Clone + 'static>(receiver: IS) {
     let rec = receiver.into();
     for d in DISPATCH_REGISTRY.read().unwrap().iter() {
         d.set_receiver(rec.clone());
     }
 }
 
-/// Create a new dispatcher.
-// TODO add dispatch name for registry
-pub fn dispatch() -> DispatchPoint {
-    let dispatch_point = DispatchPoint {
-        inner: Arc::new(RwLock::new(InnerDispatcher {
+/// Create a new dispatch point for metrics.
+/// All dispatch points are automatically entered in the dispatch registry.
+pub fn delegate() -> DelegationPoint {
+    let delegation_point = DelegationPoint {
+        inner: Arc::new(RwLock::new(InnerDelegationPoint {
             metrics: HashMap::new(),
             receiver: Box::new(app_metrics(to_void())),
         }))
     };
-    DISPATCH_REGISTRY.write().unwrap().push(dispatch_point.clone());
-    dispatch_point
+    DISPATCH_REGISTRY.write().unwrap().push(delegation_point.clone());
+    delegation_point
 }
 
 /// Dynamic counterpart of a `Dispatcher`.
@@ -55,23 +58,23 @@ pub trait ReceiverMetric {
 
 /// Shortcut name because `AppMetrics<Dispatch>`
 /// looks better than `AppMetrics<Arc<DispatcherMetric>>`.
-pub type Dispatch = Arc<DispatcherMetric>;
+pub type Delegate = Arc<DelegatingMetric>;
 
 /// A dynamically dispatched metric.
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub struct DispatcherMetric {
+pub struct DelegatingMetric {
     kind: Kind,
     name: String,
     rate: Rate,
     #[derivative(Debug = "ignore")]
     receiver: AtomicRefCell<Box<ReceiverMetric + Send + Sync>>,
     #[derivative(Debug = "ignore")]
-    dispatcher: DispatchPoint,
+    dispatcher: DelegationPoint,
 }
 
 /// Dispatcher weak ref does not prevent dropping but still needs to be cleaned out.
-impl Drop for DispatcherMetric {
+impl Drop for DelegatingMetric {
     fn drop(&mut self) {
         self.dispatcher.drop_metric(self)
     }
@@ -82,44 +85,24 @@ impl Drop for DispatcherMetric {
 /// Allows defining metrics before a concrete type has been selected.
 /// Allows replacing metrics backend on the fly at runtime.
 #[derive(Clone)]
-pub struct DispatchPoint {
-    inner: Arc<RwLock<InnerDispatcher>>,
+pub struct DelegationPoint {
+    inner: Arc<RwLock<InnerDelegationPoint>>,
 }
 
-struct InnerDispatcher {
-    metrics: HashMap<String, Weak<DispatcherMetric>>,
+struct InnerDelegationPoint {
+    metrics: HashMap<String, Weak<DelegatingMetric>>,
     receiver: Box<Receiver + Send + Sync>,
 }
 
-impl From<&'static str> for DispatchPoint {
-    fn from(ztr: &'static str) -> DispatchPoint {
-        dispatch().with_prefix(ztr)
+impl From<&'static str> for AppMetrics<Delegate> {
+    fn from(prefix: &'static str) -> AppMetrics<Delegate> {
+        let app_metrics: AppMetrics<Delegate> = delegate().into();
+        app_metrics.with_prefix(prefix)
     }
 }
 
-//// Mutators impl
-
-impl WithNamespace for DispatchPoint {
-    fn with_name<IN: Into<Namespace>>(&self, names: IN) -> Self {
-        let ref ns = names.into();
-        DispatchPoint {
-            define_metric_fn: add_namespace(ns, self.define_metric_fn.clone()),
-            scope: self.scope.clone(),
-        }
-    }
-}
-
-impl WithCache for DispatchPoint {
-    fn with_cache(&self, cache_size: usize) -> Self {
-        DispatchPoint {
-            define_metric_fn: add_cache(cache_size, self.define_metric_fn.clone()),
-            scope: self.scope.clone(),
-        }
-    }
-}
-
-impl From<DispatchPoint> for AppMetrics<Dispatch> {
-    fn from(dispatcher: DispatchPoint) -> AppMetrics<Dispatch> {
+impl From<DelegationPoint> for AppMetrics<Delegate> {
+    fn from(dispatcher: DelegationPoint) -> AppMetrics<Delegate> {
         let dispatcher_1 = dispatcher.clone();
         AppMetrics::new(
             // define metric
@@ -128,7 +111,7 @@ impl From<DispatchPoint> for AppMetrics<Dispatch> {
             // write / flush metric
             control_scope(move |cmd| match cmd {
                 ScopeCmd::Write(metric, value) => {
-                    let dispatch: &Arc<DispatcherMetric> = metric;
+                    let dispatch: &Arc<DelegatingMetric> = metric;
                     let receiver_metric: AtomicRef<Box<ReceiverMetric + Send + Sync>> = dispatch.receiver.borrow();
                     receiver_metric.write(value)
                 },
@@ -140,12 +123,12 @@ impl From<DispatchPoint> for AppMetrics<Dispatch> {
     }
 }
 
-impl DispatchPoint {
+impl DelegationPoint {
 
     /// Install a new metric receiver, replacing the previous one.
     pub fn set_receiver<IS: Into<AppMetrics<T>>, T: Send + Sync + Clone + 'static>(&self, receiver: IS) {
         let receiver: Box<Receiver + Send + Sync> = Box::new(receiver.into());
-        let inner: &mut InnerDispatcher = &mut *self.inner.write().expect("Locking dispatcher");
+        let inner: &mut InnerDelegationPoint = &mut *self.inner.write().expect("Locking dispatcher");
 
         for mut metric in inner.metrics.values() {
             if let Some(metric) = metric.upgrade() {
@@ -159,12 +142,12 @@ impl DispatchPoint {
 
     /// Define a dispatch metric, registering it with the current receiver.
     /// A weak ref is kept to update receiver metric if receiver is replaced.
-    pub fn define_metric(&self, kind: Kind, name: &str, rate: Rate) -> Dispatch {
+    pub fn define_metric(&self, kind: Kind, name: &str, rate: Rate) -> Delegate {
         let mut inner = self.inner.write().expect("Locking dispatcher");
 
         let receiver_metric = inner.receiver.box_metric(kind, name, rate);
 
-        let dispatcher_metric = Arc::new(DispatcherMetric {
+        let dispatcher_metric = Arc::new(DelegatingMetric {
             kind,
             name: name.to_string(),
             rate,
@@ -176,7 +159,7 @@ impl DispatchPoint {
         dispatcher_metric
     }
 
-    fn drop_metric(&self, metric: &DispatcherMetric) {
+    fn drop_metric(&self, metric: &DelegatingMetric) {
         let mut inner = self.inner.write().expect("Locking dispatcher");
         if let None = inner.metrics.remove(&metric.name) {
             panic!("Could not remove DispatchMetric weak ref from Dispatcher")
@@ -196,8 +179,8 @@ mod bench {
 
     #[bench]
     fn dispatch_marker_to_aggregate(b: &mut test::Bencher) {
-        let dispatch = dispatch();
-        let sink: AppMetrics<Dispatch> = dispatch.clone().into();
+        let dispatch = delegate();
+        let sink: AppMetrics<Delegate> = dispatch.clone().into();
         dispatch.set_receiver(aggregate(summary, to_void()));
         let metric = sink.marker("event_a");
         b.iter(|| test::black_box(metric.mark()));
@@ -205,8 +188,8 @@ mod bench {
 
     #[bench]
     fn dispatch_marker_to_void(b: &mut test::Bencher) {
-        let dispatch = dispatch();
-        let sink: AppMetrics<Dispatch> = dispatch.into();
+        let dispatch = delegate();
+        let sink: AppMetrics<Delegate> = dispatch.into();
         let metric = sink.marker("event_a");
         b.iter(|| test::black_box(metric.mark()));
     }

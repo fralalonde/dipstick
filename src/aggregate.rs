@@ -3,6 +3,8 @@
 use core::*;
 use scope_metrics::*;
 use app_metrics::*;
+use namespace::*;
+use output::to_void;
 
 use scores::*;
 use publish::*;
@@ -50,6 +52,13 @@ impl From<Aggregator> for AppMetrics<Aggregate> {
     }
 }
 
+impl From<&'static str> for AppMetrics<Aggregate> {
+    fn from(prefix: &'static str) -> AppMetrics<Aggregate> {
+        let app_metrics: AppMetrics<Aggregate> = aggregate(summary, to_void()).into();
+        app_metrics.with_prefix(prefix)
+    }
+}
+
 /// Central aggregation structure.
 /// Maintains a list of metrics for enumeration when used as source.
 #[derive(Debug, Clone)]
@@ -57,6 +66,7 @@ pub struct Aggregator {
     metrics: Arc<RwLock<HashMap<String, Arc<Scoreboard>>>>,
     publish: Arc<Publish>,
 }
+
 
 impl Aggregator {
     /// Build a new metric aggregation point with specified initial capacity of metrics to aggregate.
