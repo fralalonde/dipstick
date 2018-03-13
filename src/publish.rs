@@ -4,7 +4,7 @@
 //! ```
 //! use dipstick::*;
 //!
-//! let (sink, source) = aggregate();
+//! let app_metrics = aggregate(summary, to_stdout());
 //! publish(&source, &log("aggregated"), publish::all_stats);
 //! ```
 //!
@@ -13,8 +13,8 @@
 //! use dipstick::*;
 //! use std::time::Duration;
 //!
-//! let (sink, source) = aggregate();
-//! let job = publish_every(Duration::from_millis(100), &source, &log("aggregated"), publish::all_stats);
+//! let (sink, source) = aggregate(summary, to_stdout());
+//! let job = publish_every(Duration::from_millis(100), &source, &log("aggregated"), all_stats);
 //! // publish will go on until cancelled
 //! job.cancel();
 //! ```
@@ -38,7 +38,8 @@ pub trait Publish: Send + Sync + Debug {
 #[derive(Derivative, Clone)]
 #[derivative(Debug)]
 pub struct Publisher<E, M> {
-    #[derivative(Debug = "ignore")] statistics: Box<E>,
+    #[derivative(Debug = "ignore")]
+    statistics: Box<E>,
     target_chain: ScopeMetrics<M>,
 }
 

@@ -36,7 +36,8 @@ where
 #[derivative(Debug)]
 pub struct AppMarker<M> {
     metric: M,
-    #[derivative(Debug = "ignore")] scope: ControlScopeFn<M>,
+    #[derivative(Debug = "ignore")]
+    scope: ControlScopeFn<M>,
 }
 
 impl<M> AppMarker<M> {
@@ -51,7 +52,8 @@ impl<M> AppMarker<M> {
 #[derivative(Debug)]
 pub struct AppCounter<M> {
     metric: M,
-    #[derivative(Debug = "ignore")] scope: ControlScopeFn<M>,
+    #[derivative(Debug = "ignore")]
+    scope: ControlScopeFn<M>,
 }
 
 impl<M> AppCounter<M> {
@@ -69,7 +71,8 @@ impl<M> AppCounter<M> {
 #[derivative(Debug)]
 pub struct AppGauge<M> {
     metric: M,
-    #[derivative(Debug = "ignore")] scope: ControlScopeFn<M>,
+    #[derivative(Debug = "ignore")]
+    scope: ControlScopeFn<M>,
 }
 
 impl<M> AppGauge<M> {
@@ -92,7 +95,8 @@ impl<M> AppGauge<M> {
 #[derivative(Debug)]
 pub struct AppTimer<M> {
     metric: M,
-    #[derivative(Debug = "ignore")] scope: ControlScopeFn<M>,
+    #[derivative(Debug = "ignore")]
+    scope: ControlScopeFn<M>,
 }
 
 impl<M> AppTimer<M> {
@@ -102,7 +106,8 @@ impl<M> AppTimer<M> {
     where
         V: ToPrimitive,
     {
-        self.scope.write(&self.metric, interval_us.to_u64().unwrap());
+        self.scope
+            .write(&self.metric, interval_us.to_u64().unwrap());
         interval_us
     }
 
@@ -143,26 +148,31 @@ impl<M> AppTimer<M> {
 #[derive(Derivative, Clone)]
 #[derivative(Debug)]
 pub struct AppMetrics<M> {
-    #[derivative(Debug = "ignore")] define_metric_fn: DefineMetricFn<M>,
-    #[derivative(Debug = "ignore")] single_scope: ControlScopeFn<M>,
+    #[derivative(Debug = "ignore")]
+    define_metric_fn: DefineMetricFn<M>,
+    #[derivative(Debug = "ignore")]
+    single_scope: ControlScopeFn<M>,
 }
 
 impl<M> AppMetrics<M> {
     /// Create new application metrics instance.
-    pub fn new(define_metric_fn: DefineMetricFn<M>, scope: ControlScopeFn<M>, ) -> Self {
-        AppMetrics { define_metric_fn, single_scope: scope }
+    pub fn new(define_metric_fn: DefineMetricFn<M>, scope: ControlScopeFn<M>) -> Self {
+        AppMetrics {
+            define_metric_fn,
+            single_scope: scope,
+        }
     }
 }
 
 impl<M> AppMetrics<M>
-    where
-        M: Clone + Send + Sync + 'static,
+where
+    M: Clone + Send + Sync + 'static,
 {
     #[inline]
     fn define_metric(&self, kind: Kind, name: &str, rate: Rate) -> M {
         (self.define_metric_fn)(kind, name, rate)
     }
-    
+
     /// Get an event counter of the provided name.
     pub fn marker<AS: AsRef<str>>(&self, name: AS) -> AppMarker<M> {
         let metric = self.define_metric(Marker, name.as_ref(), 1.0);
@@ -226,10 +236,7 @@ impl<M: Send + Sync + Clone + 'static> Receiver for AppMetrics<M> {
         let scope: ControlScopeFn<M> = self.single_scope.clone();
         let metric: M = self.define_metric(kind, name, rate);
 
-        Box::new(AppReceiverMetric {
-            metric,
-            scope,
-        })
+        Box::new(AppReceiverMetric { metric, scope })
     }
 
     fn flush(&self) {
@@ -247,7 +254,7 @@ impl<M> ReceiverMetric for AppReceiverMetric<M> {
 
 impl<M: Send + Sync + Clone + 'static> WithNamespace for AppMetrics<M> {
     fn with_name<IN: Into<Namespace>>(&self, names: IN) -> Self {
-        let ref ns = names.into();
+        let ns = &names.into();
         AppMetrics {
             define_metric_fn: add_namespace(ns, self.define_metric_fn.clone()),
             single_scope: self.single_scope.clone(),

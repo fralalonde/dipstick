@@ -12,13 +12,15 @@ use atomic_refcell::*;
 
 /// The registry contains a list of every metrics dispatch point in the app.
 lazy_static! {
-    static ref DISPATCH_REGISTRY: RwLock<Vec<DelegationPoint>> = RwLock::new(vec![]);
+    static ref DELEGATE_REGISTRY: RwLock<Vec<DelegationPoint>> = RwLock::new(vec![]);
 }
 
 /// Install a new receiver for all dispatched metrics, replacing any previous receiver.
-pub fn set_global_metrics_receiver<IS: Into<AppMetrics<T>>, T: Send + Sync + Clone + 'static>(receiver: IS) {
+pub fn send_delegated_metrics<IS: Into<AppMetrics<T>>, T: Send + Sync + Clone + 'static>(
+    receiver: IS,
+) {
     let rec = receiver.into();
-    for d in DISPATCH_REGISTRY.read().unwrap().iter() {
+    for d in DELEGATE_REGISTRY.read().unwrap().iter() {
         d.set_receiver(rec.clone());
     }
 }
@@ -30,9 +32,12 @@ pub fn delegate() -> DelegationPoint {
         inner: Arc::new(RwLock::new(InnerDelegationPoint {
             metrics: HashMap::new(),
             receiver: Box::new(app_metrics(to_void())),
-        }))
+        })),
     };
-    DISPATCH_REGISTRY.write().unwrap().push(delegation_point.clone());
+    DELEGATE_REGISTRY
+        .write()
+        .unwrap()
+        .push(delegation_point.clone());
     delegation_point
 }
 
@@ -107,32 +112,40 @@ impl From<DelegationPoint> for AppMetrics<Delegate> {
         AppMetrics::new(
             // define metric
             Arc::new(move |kind, name, rate| dispatcher.define_metric(kind, name, rate)),
-
             // write / flush metric
             control_scope(move |cmd| match cmd {
                 ScopeCmd::Write(metric, value) => {
                     let dispatch: &Arc<DelegatingMetric> = metric;
-                    let receiver_metric: AtomicRef<Box<ReceiverMetric + Send + Sync>> = dispatch.receiver.borrow();
+                    let receiver_metric: AtomicRef<
+                        Box<ReceiverMetric + Send + Sync>,
+                    > = dispatch.receiver.borrow();
                     receiver_metric.write(value)
-                },
-                ScopeCmd::Flush => {
-                    dispatcher_1.inner.write().expect("Locking dispatcher").receiver.flush()
-                },
-            })
+                }
+                ScopeCmd::Flush => dispatcher_1
+                    .inner
+                    .write()
+                    .expect("Locking dispatcher")
+                    .receiver
+                    .flush(),
+            }),
         )
     }
 }
 
 impl DelegationPoint {
-
     /// Install a new metric receiver, replacing the previous one.
-    pub fn set_receiver<IS: Into<AppMetrics<T>>, T: Send + Sync + Clone + 'static>(&self, receiver: IS) {
+    pub fn set_receiver<IS: Into<AppMetrics<T>>, T: Send + Sync + Clone + 'static>(
+        &self,
+        receiver: IS,
+    ) {
         let receiver: Box<Receiver + Send + Sync> = Box::new(receiver.into());
-        let inner: &mut InnerDelegationPoint = &mut *self.inner.write().expect("Locking dispatcher");
+        let inner: &mut InnerDelegationPoint =
+            &mut *self.inner.write().expect("Locking dispatcher");
 
         for mut metric in inner.metrics.values() {
             if let Some(metric) = metric.upgrade() {
-                let receiver_metric = receiver.box_metric(metric.kind, metric.name.as_ref(), metric.rate);
+                let receiver_metric =
+                    receiver.box_metric(metric.kind, metric.name.as_ref(), metric.rate);
                 *metric.receiver.borrow_mut() = receiver_metric;
             }
         }
@@ -147,7 +160,7 @@ impl DelegationPoint {
 
         let receiver_metric = inner.receiver.box_metric(kind, name, rate);
 
-        let dispatcher_metric = Arc::new(DelegatingMetric {
+        let delegating_metric = Arc::new(DelegatingMetric {
             kind,
             name: name.to_string(),
             rate,
@@ -155,17 +168,19 @@ impl DelegationPoint {
             dispatcher: self.clone(),
         });
 
-        inner.metrics.insert(dispatcher_metric.name.clone(), Arc::downgrade(&dispatcher_metric));
-        dispatcher_metric
+        inner.metrics.insert(
+            delegating_metric.name.clone(),
+            Arc::downgrade(&delegating_metric),
+        );
+        delegating_metric
     }
 
     fn drop_metric(&self, metric: &DelegatingMetric) {
-        let mut inner = self.inner.write().expect("Locking dispatcher");
-        if let None = inner.metrics.remove(&metric.name) {
-            panic!("Could not remove DispatchMetric weak ref from Dispatcher")
+        let mut inner = self.inner.write().expect("Locking delegation point");
+        if inner.metrics.remove(&metric.name).is_none() {
+            panic!("Could not remove DelegatingMetric weak ref from delegation point")
         }
     }
-
 }
 
 #[cfg(feature = "bench")]

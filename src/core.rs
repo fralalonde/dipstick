@@ -99,16 +99,16 @@ pub enum ScopeCmd<'a, M: 'a> {
 
 /// Create a new metric scope based on the provided scope function.
 pub fn control_scope<M, F>(scope_fn: F) -> ControlScopeFn<M>
-    where F: Fn(ScopeCmd<M>) + 'static
+where
+    F: Fn(ScopeCmd<M>) + 'static,
 {
     Arc::new(InnerControlScopeFn {
         flush_on_drop: true,
-        scope_fn: Box::new(scope_fn)
+        scope_fn: Box::new(scope_fn),
     })
 }
 
 impl<M> InnerControlScopeFn<M> {
-
     /// Write a value to this scope.
     ///
     /// ```rust
@@ -132,7 +132,6 @@ impl<M> InnerControlScopeFn<M> {
     pub fn flush(&self) {
         (self.scope_fn)(Flush)
     }
-
 }
 
 impl<M> Drop for InnerControlScopeFn<M> {
@@ -142,4 +141,3 @@ impl<M> Drop for InnerControlScopeFn<M> {
         }
     }
 }
-

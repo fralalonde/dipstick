@@ -18,7 +18,7 @@ lazy_static! {
 
 /// Application metrics are collected to the aggregator
 
-app_metrics!(Aggregate, DIPSTICK_METRICS = build_self_metrics(););
+app_metrics!(<Aggregate> DIPSTICK_METRICS = build_self_metrics(););
 
 fn build_aggregator() -> Aggregator {
     // TODO make publishable
@@ -35,4 +35,3 @@ fn build_self_metrics() -> AppMetrics<Aggregate> {
     let am: AppMetrics<Aggregate> = mug.clone().into();
     am.with_prefix("dipstick")
 }
-

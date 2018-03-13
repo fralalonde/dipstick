@@ -20,7 +20,7 @@ where
             move |kind, name, rate| {
                 (
                     combo.0.define_metric(kind, name, rate),
-                    combo.1.define_metric(kind, &name, rate),
+                    combo.1.define_metric(kind, name, rate),
                 )
             },
             move |buffered| {
@@ -44,9 +44,9 @@ where
 }
 
 impl<M1, M2> From<(ScopeMetrics<M1>, ScopeMetrics<M2>)> for AppMetrics<(M1, M2)>
-    where
-        M1: 'static + Clone + Send + Sync,
-        M2: 'static + Clone + Send + Sync,
+where
+    M1: 'static + Clone + Send + Sync,
+    M2: 'static + Clone + Send + Sync,
 {
     fn from(combo: (ScopeMetrics<M1>, ScopeMetrics<M2>)) -> AppMetrics<(M1, M2)> {
         let chain: ScopeMetrics<(M1, M2)> = combo.into();
@@ -84,7 +84,7 @@ where
                         for (i, scope) in scopes.iter().enumerate() {
                             scope.write(&metric[i], value)
                         }
-                    },
+                    }
                     ScopeCmd::Flush => for scope in &scopes {
                         scope.flush()
                     },
@@ -95,8 +95,8 @@ where
 }
 
 impl<'a, M> From<&'a [ScopeMetrics<M>]> for AppMetrics<Vec<M>>
-    where
-        M: 'static + Clone + Send + Sync,
+where
+    M: 'static + Clone + Send + Sync,
 {
     fn from(chains: &'a [ScopeMetrics<M>]) -> AppMetrics<Vec<M>> {
         let chain: ScopeMetrics<Vec<M>> = chains.into();

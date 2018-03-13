@@ -15,7 +15,6 @@ pub mod metric {
     // and is even more work because IDE's such as IntelliJ can not yet see through macro blocks :(
     lazy_static! {
         pub static ref METRICS: AppMetrics<String> = app_metrics(to_stdout());
-
         pub static ref COUNTER_A: AppCounter<String> = METRICS.counter("counter_a");
         pub static ref TIMER_B: AppTimer<String> = METRICS.timer("timer_b");
     }

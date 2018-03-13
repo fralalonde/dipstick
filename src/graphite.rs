@@ -15,8 +15,7 @@ use std::fmt::Debug;
 use socket::RetrySocket;
 
 app_metrics!{
-    Aggregate,
-    DIPSTICK_METRICS.with_prefix("graphite") => {
+    <Aggregate> DIPSTICK_METRICS.with_prefix("graphite") => {
         @Marker SEND_ERR: "send_failed";
         @Marker TRESHOLD_EXCEEDED: "bufsize_exceeded";
         @Counter SENT_BYTES: "sent_bytes";
@@ -50,7 +49,7 @@ where
                      by a factor of {} when sent to graphite.",
                     kind, name, rate, upsample
                 );
-                scale = scale * upsample;
+                scale *= upsample;
             }
 
             Graphite { prefix, scale }

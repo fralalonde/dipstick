@@ -1,14 +1,8 @@
 //! A quick, modular metrics toolkit for Rust applications.
 
 #![cfg_attr(feature = "bench", feature(test))]
-#![warn(
-missing_docs,
-trivial_casts,
-trivial_numeric_casts,
-unused_extern_crates,
-unused_import_braces,
-unused_qualifications,
-)]
+#![warn(missing_docs, trivial_casts, trivial_numeric_casts, unused_extern_crates,
+        unused_import_braces, unused_qualifications)]
 
 #[cfg(feature = "bench")]
 extern crate test;
@@ -20,9 +14,9 @@ extern crate log;
 extern crate derivative;
 #[macro_use]
 extern crate lazy_static;
+extern crate atomic_refcell;
 extern crate num;
 extern crate time;
-extern crate atomic_refcell;
 
 mod pcg32;
 mod lru_cache;

@@ -10,9 +10,10 @@ use std::sync::Arc;
 use std::sync::mpsc;
 use std::thread;
 
-mod_metrics!{
-    Aggregate, DIPSTICK_METRICS.with_prefix("async_queue");
-    @Marker SEND_FAILED: "send_failed";
+app_metrics!{
+    <Aggregate> DIPSTICK_METRICS.with_prefix("async_queue") => {
+        @Marker SEND_FAILED: "send_failed";
+    }
 }
 
 /// Enqueue collected metrics for dispatch on background thread.
@@ -57,7 +58,7 @@ impl<M: Send + Sync + Clone + 'static> WithAsyncQueue for ScopeMetrics<M> {
                         ScopeCmd::Write(metric, value) => {
                             let metric: &M = metric;
                             Some((metric.clone(), value))
-                        },
+                        }
                         ScopeCmd::Flush => None,
                     };
                     sender

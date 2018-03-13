@@ -20,7 +20,9 @@ pub fn to_stdout() -> ScopeMetrics<String> {
                 control_scope(move |cmd| {
                     let mut buf = buf.write().expect("Locking stdout buffer");
                     match cmd {
-                        ScopeCmd::Write(metric, value) => buf.push_str(format!("{}: {}\n", metric, value).as_ref()),
+                        ScopeCmd::Write(metric, value) => {
+                            buf.push_str(format!("{}: {}\n", metric, value).as_ref())
+                        }
                         ScopeCmd::Flush => {
                             println!("{}", buf);
                             buf.clear();
@@ -49,7 +51,9 @@ pub fn to_log() -> ScopeMetrics<String> {
                 control_scope(move |cmd| {
                     let mut buf = buf.write().expect("Locking string buffer");
                     match cmd {
-                        ScopeCmd::Write(metric, value) => buf.push_str(format!("{}: {}\n", metric, value).as_ref()),
+                        ScopeCmd::Write(metric, value) => {
+                            buf.push_str(format!("{}: {}\n", metric, value).as_ref())
+                        }
                         ScopeCmd::Flush => {
                             info!("{}", buf);
                             buf.clear();
