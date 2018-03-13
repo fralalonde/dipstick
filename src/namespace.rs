@@ -7,7 +7,7 @@ const DEFAULT_SEPARATOR: &'static str = ".";
 
 /// A list of parts of a metric's name.
 #[derive(Debug, Clone)]
-pub struct Namespace (Vec<String>);
+pub struct Namespace(Vec<String>);
 
 impl Namespace {
     /// Make this namespace a subspace of the parent.
@@ -45,24 +45,23 @@ where
     Self: Sized,
 {
     /// Insert prefix in newly defined metrics.
-//    #[deprecated(since = "0.6.3", note = "Use `with_name` instead.")]
+    //    #[deprecated(since = "0.6.3", note = "Use `with_name` instead.")]
     fn with_prefix<AS: AsRef<str>>(&self, prefix: AS) -> Self {
         self.with_namespace(&[prefix.as_ref()])
     }
 
     /// Join namespace and prepend in newly defined metrics.
-//    #[deprecated(since = "0.6.3", note = "Use `with_name` instead.")]
+    //    #[deprecated(since = "0.6.3", note = "Use `with_name` instead.")]
     fn with_namespace(&self, names: &[&str]) -> Self {
         self.with_name(names)
     }
 
     /// Join namespace and prepend in newly defined metrics.
     fn with_name<IN: Into<Namespace>>(&self, names: IN) -> Self;
-
 }
 
 /// Add a namespace decorator to a metric definition function.
-pub fn add_namespace<M: 'static>(names: &Namespace,  next: DefineMetricFn<M>) -> DefineMetricFn<M> {
+pub fn add_namespace<M: 'static>(names: &Namespace, next: DefineMetricFn<M>) -> DefineMetricFn<M> {
     let nspace = names.join(DEFAULT_SEPARATOR);
     Arc::new(move |kind, name, rate| {
         let name = [nspace.as_ref(), name].join(DEFAULT_SEPARATOR);

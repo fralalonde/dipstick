@@ -6,7 +6,6 @@ use dipstick::*;
 use std::time::Duration;
 
 fn main() {
-
     // note that this can also be done using the app_metrics! macro
     let different_type_metrics = app_metrics((
         // combine metrics of different types in a tuple

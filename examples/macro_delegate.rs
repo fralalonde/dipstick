@@ -1,7 +1,8 @@
 //! A sample application sending ad-hoc counter values both to statsd _and_ to stdout.
 
 extern crate dipstick;
-#[macro_use] extern crate lazy_static;
+#[macro_use]
+extern crate lazy_static;
 
 use dipstick::*;
 use std::time::Duration;
@@ -41,11 +42,11 @@ app_metrics!(LIB_METRICS => {
 });
 
 fn main() {
-
-    set_global_metrics_receiver(to_stdout());
+    send_delegated_metrics(to_stdout());
 
     loop {
         ROOT_COUNTER.count(123);
+        ANOTHER_COUNTER.count(456);
         ROOT_TIMER.interval_us(2000000);
         ROOT_GAUGE.value(34534);
         std::thread::sleep(Duration::from_millis(40));

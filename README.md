@@ -98,12 +98,12 @@ For speed and easier maintenance, metrics are usually defined statically:
 #[macro_use] extern crate lazy_static;
 use dipstick::*;
 
-app_metrics!(String, APP_METRICS = to_stdout());
-app_counter!(String, APP_METRICS, {
-    COUNTER_A: "counter_a",
+app_metrics!("my_app" => {
+    @Counter COUNTER_A: "counter_a";
 });
 
 fn main() {
+    send_delegated_metrics(to_stdout());
     COUNTER_A.count(11);
 }
 ```

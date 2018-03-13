@@ -18,8 +18,7 @@ use std::sync::{Arc, RwLock};
 /// Needs to be connected to a publish to be useful.
 /// ```
 /// use dipstick::*;
-/// let sink = aggregate(4, summary, to_stdout());
-/// let metrics = global_metrics(sink);
+/// let metrics: AppMetrics<_> = aggregate(summary, to_stdout()).into();
 /// metrics.marker("my_event").mark();
 /// metrics.marker("my_event").mark();
 /// ```
@@ -30,7 +29,7 @@ where
 {
     Aggregator {
         metrics: Arc::new(RwLock::new(HashMap::new())),
-        publish: Arc::new(Publisher::new(stat_fn, to_chain))
+        publish: Arc::new(Publisher::new(stat_fn, to_chain)),
     }
 }
 
@@ -43,11 +42,9 @@ impl From<Aggregator> for AppMetrics<Aggregate> {
                 ScopeCmd::Write(metric, value) => {
                     let metric: &Aggregate = metric;
                     metric.update(value)
-                },
-                ScopeCmd::Flush => {
-                    agg_1.flush()
                 }
-            })
+                ScopeCmd::Flush => agg_1.flush(),
+            }),
         )
     }
 }
@@ -66,7 +63,6 @@ pub struct Aggregator {
     metrics: Arc<RwLock<HashMap<String, Arc<Scoreboard>>>>,
     publish: Arc<Publish>,
 }
-
 
 impl Aggregator {
     /// Build a new metric aggregation point with specified initial capacity of metrics to aggregate.
@@ -95,7 +91,9 @@ impl Aggregator {
 
     /// Lookup or create a scoreboard for the requested metric.
     pub fn define_metric(&self, kind: Kind, name: &str, _rate: Rate) -> Aggregate {
-        self.metrics.write().expect("Locking aggregator")
+        self.metrics
+            .write()
+            .expect("Locking aggregator")
             .entry(name.to_string())
             .or_insert_with(|| Arc::new(Scoreboard::new(kind, name.to_string())))
             .clone()

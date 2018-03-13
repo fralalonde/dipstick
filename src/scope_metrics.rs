@@ -9,15 +9,16 @@ use std::sync::Arc;
 use cache::*;
 use namespace::*;
 
-
 /// A pair of functions composing a twin "chain of command".
 /// This is the building block for the metrics backend.
 #[derive(Derivative, Clone)]
 #[derivative(Debug)]
 pub struct ScopeMetrics<M> {
-    #[derivative(Debug = "ignore")] define_metric_fn: DefineMetricFn<M>,
+    #[derivative(Debug = "ignore")]
+    define_metric_fn: DefineMetricFn<M>,
 
-    #[derivative(Debug = "ignore")] scope_metric_fn: OpenScopeFn<M>,
+    #[derivative(Debug = "ignore")]
+    scope_metric_fn: OpenScopeFn<M>,
 }
 
 impl<M> ScopeMetrics<M> {
@@ -64,9 +65,9 @@ impl<M> ScopeMetrics<M> {
 impl<M: Send + Sync + Clone + 'static> ScopeMetrics<M> {
     /// Create a new metric chain with the provided metric definition and scope creation functions.
     pub fn new<MF, WF>(make_metric: MF, make_scope: WF) -> Self
-        where
-            MF: Fn(Kind, &str, Rate) -> M + Send + Sync + 'static,
-            WF: Fn(bool) -> ControlScopeFn<M> + Send + Sync + 'static,
+    where
+        MF: Fn(Kind, &str, Rate) -> M + Send + Sync + 'static,
+        WF: Fn(bool) -> ControlScopeFn<M> + Send + Sync + 'static,
     {
         ScopeMetrics {
             // capture the provided closures in Arc to provide cheap clones
@@ -101,9 +102,9 @@ impl<M: Send + Sync + Clone + 'static> ScopeMetrics<M> {
 
     /// Intercept both metric definition and scope creation, possibly changing the metric type.
     pub fn mod_both<MF, N>(&self, mod_fn: MF) -> ScopeMetrics<N>
-        where
-            MF: Fn(DefineMetricFn<M>, OpenScopeFn<M>) -> (DefineMetricFn<N>, OpenScopeFn<N>),
-            N: Clone + Send + Sync,
+    where
+        MF: Fn(DefineMetricFn<M>, OpenScopeFn<M>) -> (DefineMetricFn<N>, OpenScopeFn<N>),
+        N: Clone + Send + Sync,
     {
         let (metric_fn, scope_fn) =
             mod_fn(self.define_metric_fn.clone(), self.scope_metric_fn.clone());
@@ -115,8 +116,8 @@ impl<M: Send + Sync + Clone + 'static> ScopeMetrics<M> {
 
     /// Intercept scope creation.
     pub fn mod_scope<MF>(&self, mod_fn: MF) -> Self
-        where
-            MF: Fn(OpenScopeFn<M>) -> OpenScopeFn<M>,
+    where
+        MF: Fn(OpenScopeFn<M>) -> OpenScopeFn<M>,
     {
         ScopeMetrics {
             define_metric_fn: self.define_metric_fn.clone(),
@@ -139,7 +140,6 @@ impl<M: Send + Sync + Clone + 'static> WithCache for ScopeMetrics<M> {
         }
     }
 }
-
 
 impl<M: Send + Sync + Clone + 'static> WithNamespace for ScopeMetrics<M> {
     fn with_name<IN: Into<Namespace>>(&self, names: IN) -> Self {
@@ -179,8 +179,8 @@ impl<M> ScopeCounter<M> {
     /// Record a value count.
     #[inline]
     pub fn count<V>(&self, scope: &mut ControlScopeFn<M>, count: V)
-        where
-            V: ToPrimitive,
+    where
+        V: ToPrimitive,
     {
         scope.write(&self.metric, count.to_u64().unwrap());
     }
@@ -197,8 +197,8 @@ impl<M: Clone> ScopeGauge<M> {
     /// Record a value point for this gauge.
     #[inline]
     pub fn value<V>(&self, scope: &mut ControlScopeFn<M>, value: V)
-        where
-            V: ToPrimitive,
+    where
+        V: ToPrimitive,
     {
         scope.write(&self.metric, value.to_u64().unwrap());
     }
@@ -221,8 +221,8 @@ impl<M: Clone> ScopeTimer<M> {
     /// Can be used in place of start()/stop() if an external time interval source is used
     #[inline]
     pub fn interval_us<V>(&self, scope: &mut ControlScopeFn<M>, interval_us: V) -> V
-        where
-            V: ToPrimitive,
+    where
+        V: ToPrimitive,
     {
         scope.write(&self.metric, interval_us.to_u64().unwrap());
         interval_us
@@ -252,8 +252,8 @@ impl<M: Clone> ScopeTimer<M> {
     /// Record the time taken to execute the provided closure
     #[inline]
     pub fn time<F, R>(&self, scope: &mut ControlScopeFn<M>, operations: F) -> R
-        where
-            F: FnOnce() -> R,
+    where
+        F: FnOnce() -> R,
     {
         let start_time = self.start();
         let value: R = operations();

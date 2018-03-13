@@ -20,7 +20,7 @@ where
 /// Add a caching decorator to a metric definition function.
 pub fn add_cache<M>(cache_size: usize, next: DefineMetricFn<M>) -> DefineMetricFn<M>
 where
-    M: Clone + Send + Sync + 'static
+    M: Clone + Send + Sync + 'static,
 {
     let cache: RwLock<LRUCache<String, M>> = RwLock::new(LRUCache::with_capacity(cache_size));
     Arc::new(move |kind, name, rate| {

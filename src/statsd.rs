@@ -10,10 +10,11 @@ use std::sync::{Arc, RwLock};
 
 pub use std::net::ToSocketAddrs;
 
-mod_metrics! {
-    Aggregate, DIPSTICK_METRICS.with_prefix("statsd");
-    @Marker SEND_ERR: "send_failed";
-    @Counter SENT_BYTES: "sent_bytes";
+app_metrics! {
+    <Aggregate> DIPSTICK_METRICS.with_prefix("statsd") => {
+        @Marker SEND_ERR: "send_failed";
+        @Counter SENT_BYTES: "sent_bytes";
+    }
 }
 
 /// Send metrics to a statsd server at the address and port provided.

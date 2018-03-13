@@ -36,15 +36,13 @@ impl<M: Send + Sync + 'static + Clone> WithSamplingRate for ScopeMetrics<M> {
                 }),
                 Arc::new(move |buffered| {
                     let next_scope = scope_fn(buffered);
-                    control_scope(move |cmd| {
-                        match cmd {
-                            ScopeCmd::Write(metric, value) => {
-                                if pcg32::accept_sample(int_sampling_rate) {
-                                    next_scope.write(metric, value)
-                                }
-                            },
-                            ScopeCmd::Flush => next_scope.flush()
+                    control_scope(move |cmd| match cmd {
+                        ScopeCmd::Write(metric, value) => {
+                            if pcg32::accept_sample(int_sampling_rate) {
+                                next_scope.write(metric, value)
+                            }
                         }
+                        ScopeCmd::Flush => next_scope.flush(),
                     })
                 }),
             )

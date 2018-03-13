@@ -121,7 +121,7 @@ impl<K: Clone + Hash + Eq, V> LRUCache<K, V> {
     /// Removes an item from the linked list.
     fn remove_from_list(&mut self, i: usize) {
         let (prev, next) = {
-            let entry = self.entries.get_mut(i).unwrap();
+            let entry = &mut self.entries[i];
             (entry.prev, entry.next)
         };
         match (prev, next) {
