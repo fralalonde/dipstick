@@ -1,7 +1,7 @@
 //! Send metrics to a statsd server.
 
 use core::*;
-use scope_metrics::*;
+use local_metrics::*;
 use error;
 use self_metrics::*;
 
@@ -18,7 +18,7 @@ app_metrics! {
 }
 
 /// Send metrics to a statsd server at the address and port provided.
-pub fn to_statsd<ADDR>(address: ADDR) -> error::Result<ScopeMetrics<Statsd>>
+pub fn to_statsd<ADDR>(address: ADDR) -> error::Result<LocalMetrics<Statsd>>
 where
     ADDR: ToSocketAddrs,
 {
@@ -26,7 +26,7 @@ where
     socket.set_nonblocking(true)?;
     socket.connect(address)?;
 
-    Ok(ScopeMetrics::new(
+    Ok(LocalMetrics::new(
         move |kind, name, rate| {
             let mut prefix = String::with_capacity(32);
             prefix.push_str(name);

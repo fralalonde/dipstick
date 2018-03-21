@@ -30,11 +30,14 @@ pub mod macros;
 pub mod core;
 pub use core::*;
 
-pub mod scope_metrics;
-pub use scope_metrics::*;
+pub mod local_metrics;
+pub use local_metrics::*;
 
-pub mod delegate;
-pub use delegate::*;
+//pub mod local_delegate;
+//pub use local_delegate::*;
+
+pub mod app_delegate;
+pub use app_delegate::*;
 
 mod output;
 pub use output::*;
@@ -80,6 +83,9 @@ pub use async_queue::*;
 
 mod schedule;
 pub use schedule::*;
+
+mod registry;
+pub use registry::*;
 
 mod self_metrics;
 pub use self_metrics::snapshot;

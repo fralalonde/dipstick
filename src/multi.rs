@@ -1,22 +1,22 @@
 //! Dispatch metrics to multiple sinks.
 
 use core::*;
-use scope_metrics::*;
+use local_metrics::*;
 use app_metrics::*;
 
 /// Two chains of different types can be combined in a tuple.
 /// The chains will act as one, each receiving calls in the order the appear in the tuple.
 /// For more than two types, make tuples of tuples, "Yo Dawg" style.
-impl<M1, M2> From<(ScopeMetrics<M1>, ScopeMetrics<M2>)> for ScopeMetrics<(M1, M2)>
+impl<M1, M2> From<(LocalMetrics<M1>, LocalMetrics<M2>)> for LocalMetrics<(M1, M2)>
 where
     M1: 'static + Clone + Send + Sync,
     M2: 'static + Clone + Send + Sync,
 {
-    fn from(combo: (ScopeMetrics<M1>, ScopeMetrics<M2>)) -> ScopeMetrics<(M1, M2)> {
+    fn from(combo: (LocalMetrics<M1>, LocalMetrics<M2>)) -> LocalMetrics<(M1, M2)> {
         let combo0 = combo.0.clone();
         let combo1 = combo.1.clone();
 
-        ScopeMetrics::new(
+        LocalMetrics::new(
             move |kind, name, rate| {
                 (
                     combo.0.define_metric(kind, name, rate),
@@ -43,28 +43,28 @@ where
     }
 }
 
-impl<M1, M2> From<(ScopeMetrics<M1>, ScopeMetrics<M2>)> for AppMetrics<(M1, M2)>
+impl<M1, M2> From<(LocalMetrics<M1>, LocalMetrics<M2>)> for AppMetrics<(M1, M2)>
 where
     M1: 'static + Clone + Send + Sync,
     M2: 'static + Clone + Send + Sync,
 {
-    fn from(combo: (ScopeMetrics<M1>, ScopeMetrics<M2>)) -> AppMetrics<(M1, M2)> {
-        let chain: ScopeMetrics<(M1, M2)> = combo.into();
+    fn from(combo: (LocalMetrics<M1>, LocalMetrics<M2>)) -> AppMetrics<(M1, M2)> {
+        let chain: LocalMetrics<(M1, M2)> = combo.into();
         app_metrics(chain)
     }
 }
 
 /// Multiple chains of the same type can be combined in a slice.
 /// The chains will act as one, each receiving calls in the order the appear in the slice.
-impl<'a, M> From<&'a [ScopeMetrics<M>]> for ScopeMetrics<Vec<M>>
+impl<'a, M> From<&'a [LocalMetrics<M>]> for LocalMetrics<Vec<M>>
 where
     M: 'static + Clone + Send + Sync,
 {
-    fn from(chains: &'a [ScopeMetrics<M>]) -> ScopeMetrics<Vec<M>> {
+    fn from(chains: &'a [LocalMetrics<M>]) -> LocalMetrics<Vec<M>> {
         let chains = chains.to_vec();
         let chains2 = chains.clone();
 
-        ScopeMetrics::new(
+        LocalMetrics::new(
             move |kind, name, rate| {
                 let mut metric = Vec::with_capacity(chains.len());
                 for chain in &chains {
@@ -94,12 +94,12 @@ where
     }
 }
 
-impl<'a, M> From<&'a [ScopeMetrics<M>]> for AppMetrics<Vec<M>>
+impl<'a, M> From<&'a [LocalMetrics<M>]> for AppMetrics<Vec<M>>
 where
     M: 'static + Clone + Send + Sync,
 {
-    fn from(chains: &'a [ScopeMetrics<M>]) -> AppMetrics<Vec<M>> {
-        let chain: ScopeMetrics<Vec<M>> = chains.into();
+    fn from(chains: &'a [LocalMetrics<M>]) -> AppMetrics<Vec<M>> {
+        let chain: LocalMetrics<Vec<M>> = chains.into();
         app_metrics(chain)
     }
 }

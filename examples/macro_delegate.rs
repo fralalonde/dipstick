@@ -42,7 +42,7 @@ app_metrics!(LIB_METRICS => {
 });
 
 fn main() {
-    send_delegated_metrics(to_stdout());
+    send_app_metrics(to_stdout());
 
     loop {
         ROOT_COUNTER.count(123);

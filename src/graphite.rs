@@ -1,7 +1,7 @@
 //! Send metrics to a graphite server.
 
 use core::*;
-use scope_metrics::*;
+use local_metrics::*;
 use error;
 use self_metrics::*;
 
@@ -23,13 +23,13 @@ app_metrics!{
 }
 
 /// Send metrics to a graphite server at the address and port provided.
-pub fn to_graphite<ADDR>(address: ADDR) -> error::Result<ScopeMetrics<Graphite>>
+pub fn to_graphite<ADDR>(address: ADDR) -> error::Result<LocalMetrics<Graphite>>
 where
     ADDR: ToSocketAddrs + Debug + Clone,
 {
     debug!("Connecting to graphite {:?}", address);
     let socket = Arc::new(RwLock::new(RetrySocket::new(address.clone())?));
-    Ok(ScopeMetrics::new(
+    Ok(LocalMetrics::new(
         move |kind, name, rate| {
             let mut prefix = String::with_capacity(32);
             prefix.push_str(name);

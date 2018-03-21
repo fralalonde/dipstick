@@ -20,7 +20,7 @@
 //! ```
 
 use core::*;
-use scope_metrics::*;
+use local_metrics::*;
 use core::Kind::*;
 use scores::{ScoreSnapshot, ScoreType};
 use scores::ScoreType::*;
@@ -40,7 +40,7 @@ pub trait Publish: Send + Sync + Debug {
 pub struct Publisher<E, M> {
     #[derivative(Debug = "ignore")]
     statistics: Box<E>,
-    target_chain: ScopeMetrics<M>,
+    output: LocalMetrics<M>,
 }
 
 impl<E, M> Publisher<E, M>
@@ -50,10 +50,10 @@ where
 {
     /// Define a new metrics publishing strategy, from a transformation
     /// function and a target metric chain.
-    pub fn new(stat_fn: E, target_chain: ScopeMetrics<M>) -> Self {
+    pub fn new(stat_fn: E, output: LocalMetrics<M>) -> Self {
         Publisher {
             statistics: Box::new(stat_fn),
-            target_chain,
+            output,
         }
     }
 }
@@ -64,7 +64,7 @@ where
     E: Fn(Kind, &str, ScoreType) -> Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static,
 {
     fn publish(&self, snapshot: Vec<ScoreSnapshot>) {
-        let publish_scope_fn = self.target_chain.open_scope(false);
+        let publish_scope_fn = self.output.open_scope(false);
         if snapshot.is_empty() {
             // no data was collected for this period
             // TODO repeat previous frame min/max ?
@@ -73,9 +73,8 @@ where
             for metric in snapshot {
                 for score in metric.2 {
                     if let Some(ex) = (self.statistics)(metric.0, metric.1.as_ref(), score) {
-                        let temp_metric =
-                            self.target_chain.define_metric(ex.0, &ex.1.concat(), 1.0);
-                        publish_scope_fn.write(&temp_metric, ex.2);
+                        let pub_metric = self.output.define_metric(ex.0, &ex.1.concat(), 1.0);
+                        publish_scope_fn.write(&pub_metric, ex.2);
                     }
                 }
             }

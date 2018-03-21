@@ -1,7 +1,7 @@
 //! Maintain aggregated metrics for deferred reporting,
 //!
 use core::*;
-use scope_metrics::*;
+use local_metrics::*;
 use app_metrics::*;
 use namespace::*;
 use output::to_void;
@@ -22,7 +22,7 @@ use std::sync::{Arc, RwLock};
 /// metrics.marker("my_event").mark();
 /// metrics.marker("my_event").mark();
 /// ```
-pub fn aggregate<E, M>(stat_fn: E, to_chain: ScopeMetrics<M>) -> Aggregator
+pub fn aggregate<E, M>(stat_fn: E, to_chain: LocalMetrics<M>) -> Aggregator
 where
     E: Fn(Kind, &str, ScoreType) -> Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static,
     M: Clone + Send + Sync + Debug + 'static,
