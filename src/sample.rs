@@ -1,7 +1,7 @@
 //! Reduce the amount of data to process or transfer by statistically dropping some of it.
 
 use core::*;
-use scope_metrics::*;
+use local_metrics::*;
 
 use pcg32;
 
@@ -16,7 +16,7 @@ where
     fn with_sampling_rate(&self, sampling_rate: Rate) -> Self;
 }
 
-impl<M: Send + Sync + 'static + Clone> WithSamplingRate for ScopeMetrics<M> {
+impl<M: Send + Sync + 'static + Clone> WithSamplingRate for LocalMetrics<M> {
     fn with_sampling_rate(&self, sampling_rate: Rate) -> Self {
         let int_sampling_rate = pcg32::to_int_rate(sampling_rate);
 
@@ -52,10 +52,10 @@ impl<M: Send + Sync + 'static + Clone> WithSamplingRate for ScopeMetrics<M> {
 
 /// Perform random sampling of values according to the specified rate.
 #[deprecated(since = "0.5.0", note = "Use `with_sampling_rate` instead.")]
-pub fn sample<M, IC>(sampling_rate: Rate, chain: IC) -> ScopeMetrics<M>
+pub fn sample<M, IC>(sampling_rate: Rate, chain: IC) -> LocalMetrics<M>
 where
     M: Clone + Send + Sync + 'static,
-    IC: Into<ScopeMetrics<M>>,
+    IC: Into<LocalMetrics<M>>,
 {
     let chain = chain.into();
     chain.with_sampling_rate(sampling_rate)

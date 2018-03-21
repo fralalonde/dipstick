@@ -1,12 +1,12 @@
 //! Standard stateless metric outputs.
 // TODO parameterize templates
 use core::*;
-use scope_metrics::*;
+use local_metrics::*;
 use std::sync::RwLock;
 
 /// Write metric values to stdout using `println!`.
-pub fn to_stdout() -> ScopeMetrics<String> {
-    ScopeMetrics::new(
+pub fn to_stdout() -> LocalMetrics<String> {
+    LocalMetrics::new(
         |_kind, name, _rate| String::from(name),
         |buffered| {
             if !buffered {
@@ -36,8 +36,8 @@ pub fn to_stdout() -> ScopeMetrics<String> {
 
 /// Write metric values to the standard log using `info!`.
 // TODO parameterize log level
-pub fn to_log() -> ScopeMetrics<String> {
-    ScopeMetrics::new(
+pub fn to_log() -> LocalMetrics<String> {
+    LocalMetrics::new(
         |_kind, name, _rate| String::from(name),
         |buffered| {
             if !buffered {
@@ -66,9 +66,9 @@ pub fn to_log() -> ScopeMetrics<String> {
 }
 
 /// Discard all metric values sent to it.
-pub fn to_void() -> ScopeMetrics<String> {
-    ScopeMetrics::new(
-        move |_kind, name, _rate| String::from(name),
+pub fn to_void() -> LocalMetrics<()> {
+    LocalMetrics::new(
+        move |_kind, _name, _rate| (),
         |_buffered| control_scope(|_cmd| {}),
     )
 }

@@ -12,7 +12,7 @@ use core::Kind::*;
 use namespace::*;
 use cache::*;
 use schedule::*;
-use delegate::*;
+use app_delegate::*;
 
 use std::time::Duration;
 
@@ -226,17 +226,17 @@ where
 
 //// Dispatch / Receiver impl
 
-struct AppReceiverMetric<M> {
+struct AppRecvMetricImpl<M> {
     metric: M,
     scope: ControlScopeFn<M>,
 }
 
-impl<M: Send + Sync + Clone + 'static> Receiver for AppMetrics<M> {
-    fn box_metric(&self, kind: Kind, name: &str, rate: Rate) -> Box<ReceiverMetric + Send + Sync> {
+impl<M: Send + Sync + Clone + 'static> AppRecv for AppMetrics<M> {
+    fn define_metric(&self, kind: Kind, name: &str, rate: Rate) -> Box<AppRecvMetric + Send + Sync> {
         let scope: ControlScopeFn<M> = self.single_scope.clone();
         let metric: M = self.define_metric(kind, name, rate);
 
-        Box::new(AppReceiverMetric { metric, scope })
+        Box::new(AppRecvMetricImpl { metric, scope })
     }
 
     fn flush(&self) {
@@ -244,7 +244,7 @@ impl<M: Send + Sync + Clone + 'static> Receiver for AppMetrics<M> {
     }
 }
 
-impl<M> ReceiverMetric for AppReceiverMetric<M> {
+impl<M> AppRecvMetric for AppRecvMetricImpl<M> {
     fn write(&self, value: Value) {
         self.scope.write(&self.metric, value);
     }

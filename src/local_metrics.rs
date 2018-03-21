@@ -13,7 +13,7 @@ use namespace::*;
 /// This is the building block for the metrics backend.
 #[derive(Derivative, Clone)]
 #[derivative(Debug)]
-pub struct ScopeMetrics<M> {
+pub struct LocalMetrics<M> {
     #[derivative(Debug = "ignore")]
     define_metric_fn: DefineMetricFn<M>,
 
@@ -21,7 +21,7 @@ pub struct ScopeMetrics<M> {
     scope_metric_fn: OpenScopeFn<M>,
 }
 
-impl<M> ScopeMetrics<M> {
+impl<M> LocalMetrics<M> {
     /// Define a new metric.
     #[allow(unused_variables)]
     pub fn define_metric(&self, kind: Kind, name: &str, sampling: Rate) -> M {
@@ -62,14 +62,14 @@ impl<M> ScopeMetrics<M> {
     }
 }
 
-impl<M: Send + Sync + Clone + 'static> ScopeMetrics<M> {
+impl<M: Send + Sync + Clone + 'static> LocalMetrics<M> {
     /// Create a new metric chain with the provided metric definition and scope creation functions.
     pub fn new<MF, WF>(make_metric: MF, make_scope: WF) -> Self
     where
         MF: Fn(Kind, &str, Rate) -> M + Send + Sync + 'static,
         WF: Fn(bool) -> ControlScopeFn<M> + Send + Sync + 'static,
     {
-        ScopeMetrics {
+        LocalMetrics {
             // capture the provided closures in Arc to provide cheap clones
             define_metric_fn: Arc::new(make_metric),
             scope_metric_fn: Arc::new(make_scope),
@@ -77,38 +77,38 @@ impl<M: Send + Sync + Clone + 'static> ScopeMetrics<M> {
     }
 
     /// Get an event counter of the provided name.
-    pub fn marker<AS: AsRef<str>>(&self, name: AS) -> ScopeMarker<M> {
+    pub fn marker<AS: AsRef<str>>(&self, name: AS) -> LocalMarker<M> {
         let metric = self.define_metric(Marker, name.as_ref(), 1.0);
-        ScopeMarker { metric }
+        LocalMarker { metric }
     }
 
     /// Get a counter of the provided name.
-    pub fn counter<AS: AsRef<str>>(&self, name: AS) -> ScopeCounter<M> {
+    pub fn counter<AS: AsRef<str>>(&self, name: AS) -> LocalCounter<M> {
         let metric = self.define_metric(Counter, name.as_ref(), 1.0);
-        ScopeCounter { metric }
+        LocalCounter { metric }
     }
 
     /// Get a timer of the provided name.
-    pub fn timer<AS: AsRef<str>>(&self, name: AS) -> ScopeTimer<M> {
+    pub fn timer<AS: AsRef<str>>(&self, name: AS) -> LocalTimer<M> {
         let metric = self.define_metric(Timer, name.as_ref(), 1.0);
-        ScopeTimer { metric }
+        LocalTimer { metric }
     }
 
     /// Get a gauge of the provided name.
-    pub fn gauge<AS: AsRef<str>>(&self, name: AS) -> ScopeGauge<M> {
+    pub fn gauge<AS: AsRef<str>>(&self, name: AS) -> LocalGauge<M> {
         let metric = self.define_metric(Gauge, name.as_ref(), 1.0);
-        ScopeGauge { metric }
+        LocalGauge { metric }
     }
 
     /// Intercept both metric definition and scope creation, possibly changing the metric type.
-    pub fn mod_both<MF, N>(&self, mod_fn: MF) -> ScopeMetrics<N>
+    pub fn mod_both<MF, N>(&self, mod_fn: MF) -> LocalMetrics<N>
     where
         MF: Fn(DefineMetricFn<M>, OpenScopeFn<M>) -> (DefineMetricFn<N>, OpenScopeFn<N>),
         N: Clone + Send + Sync,
     {
         let (metric_fn, scope_fn) =
             mod_fn(self.define_metric_fn.clone(), self.scope_metric_fn.clone());
-        ScopeMetrics {
+        LocalMetrics {
             define_metric_fn: metric_fn,
             scope_metric_fn: scope_fn,
         }
@@ -119,32 +119,32 @@ impl<M: Send + Sync + Clone + 'static> ScopeMetrics<M> {
     where
         MF: Fn(OpenScopeFn<M>) -> OpenScopeFn<M>,
     {
-        ScopeMetrics {
+        LocalMetrics {
             define_metric_fn: self.define_metric_fn.clone(),
             scope_metric_fn: mod_fn(self.scope_metric_fn.clone()),
         }
     }
 }
 
-impl<M> From<ScopeMetrics<M>> for AppMetrics<M> {
-    fn from(chain: ScopeMetrics<M>) -> AppMetrics<M> {
-        AppMetrics::new(chain.define_metric_fn.clone(), chain.open_scope(false))
+impl<M> From<LocalMetrics<M>> for AppMetrics<M> {
+    fn from(metrics: LocalMetrics<M>) -> AppMetrics<M> {
+        AppMetrics::new(metrics.define_metric_fn.clone(), metrics.open_scope(false))
     }
 }
 
-impl<M: Send + Sync + Clone + 'static> WithCache for ScopeMetrics<M> {
+impl<M: Send + Sync + Clone + 'static> WithCache for LocalMetrics<M> {
     fn with_cache(&self, cache_size: usize) -> Self {
-        ScopeMetrics {
+        LocalMetrics {
             define_metric_fn: add_cache(cache_size, self.define_metric_fn.clone()),
             scope_metric_fn: self.scope_metric_fn.clone(),
         }
     }
 }
 
-impl<M: Send + Sync + Clone + 'static> WithNamespace for ScopeMetrics<M> {
+impl<M: Send + Sync + Clone + 'static> WithNamespace for LocalMetrics<M> {
     fn with_name<IN: Into<Namespace>>(&self, names: IN) -> Self {
         let ref ninto = names.into();
-        ScopeMetrics {
+        LocalMetrics {
             define_metric_fn: add_namespace(ninto, self.define_metric_fn.clone()),
             scope_metric_fn: self.scope_metric_fn.clone(),
         }
@@ -156,11 +156,11 @@ impl<M: Send + Sync + Clone + 'static> WithNamespace for ScopeMetrics<M> {
 /// preventing programming errors.
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub struct ScopeMarker<M> {
+pub struct LocalMarker<M> {
     metric: M,
 }
 
-impl<M> ScopeMarker<M> {
+impl<M> LocalMarker<M> {
     /// Record a single event occurence.
     #[inline]
     pub fn mark(&self, scope: &mut ControlScopeFn<M>) {
@@ -171,11 +171,11 @@ impl<M> ScopeMarker<M> {
 /// A counter that sends values to the metrics backend
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub struct ScopeCounter<M> {
+pub struct LocalCounter<M> {
     metric: M,
 }
 
-impl<M> ScopeCounter<M> {
+impl<M> LocalCounter<M> {
     /// Record a value count.
     #[inline]
     pub fn count<V>(&self, scope: &mut ControlScopeFn<M>, count: V)
@@ -189,11 +189,11 @@ impl<M> ScopeCounter<M> {
 /// A gauge that sends values to the metrics backend
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub struct ScopeGauge<M> {
+pub struct LocalGauge<M> {
     metric: M,
 }
 
-impl<M: Clone> ScopeGauge<M> {
+impl<M: Clone> LocalGauge<M> {
     /// Record a value point for this gauge.
     #[inline]
     pub fn value<V>(&self, scope: &mut ControlScopeFn<M>, value: V)
@@ -212,11 +212,11 @@ impl<M: Clone> ScopeGauge<M> {
 /// - with the interval_us() method, providing an externally determined microsecond interval
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub struct ScopeTimer<M> {
+pub struct LocalTimer<M> {
     metric: M,
 }
 
-impl<M: Clone> ScopeTimer<M> {
+impl<M: Clone> LocalTimer<M> {
     /// Record a microsecond interval for this timer
     /// Can be used in place of start()/stop() if an external time interval source is used
     #[inline]

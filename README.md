@@ -103,7 +103,7 @@ app_metrics!("my_app" => {
 });
 
 fn main() {
-    send_delegated_metrics(to_stdout());
+    send_app_metrics(to_stdout());
     COUNTER_A.count(11);
 }
 ```
