@@ -4,7 +4,7 @@
 
 pub use core::*;
 
-pub use app_metrics::*;
+pub use metrics::*;
 pub use aggregate::*;
 pub use publish::*;
 pub use scores::*;
@@ -18,7 +18,7 @@ lazy_static! {
 
 /// Application metrics are collected to the aggregator
 
-app_metrics!(<Aggregate> DIPSTICK_METRICS = build_self_metrics(););
+metrics!(<Aggregate> DIPSTICK_METRICS = build_self_metrics(););
 
 fn build_aggregator() -> Aggregator {
     // TODO make publishable
@@ -30,8 +30,8 @@ pub fn snapshot() -> Vec<ScoreSnapshot> {
     vec![]
 }
 
-fn build_self_metrics() -> AppMetrics<Aggregate> {
+fn build_self_metrics() -> Metrics<Aggregate> {
     let mug: &Aggregator = &DIPSTICK_AGGREGATOR;
-    let am: AppMetrics<Aggregate> = mug.clone().into();
+    let am: Metrics<Aggregate> = mug.clone().into();
     am.with_prefix("dipstick")
 }

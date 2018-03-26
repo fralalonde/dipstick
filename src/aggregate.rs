@@ -1,8 +1,8 @@
 //! Maintain aggregated metrics for deferred reporting,
 //!
 use core::*;
-use local_metrics::*;
-use app_metrics::*;
+use context::*;
+use metrics::*;
 use namespace::*;
 use output::to_void;
 
@@ -22,7 +22,7 @@ use std::sync::{Arc, RwLock};
 /// metrics.marker("my_event").mark();
 /// metrics.marker("my_event").mark();
 /// ```
-pub fn aggregate<E, M>(stat_fn: E, to_chain: LocalMetrics<M>) -> Aggregator
+pub fn aggregate<E, M>(stat_fn: E, to_chain: MetricContext<M>) -> Aggregator
 where
     E: Fn(Kind, &str, ScoreType) -> Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static,
     M: Clone + Send + Sync + Debug + 'static,
@@ -33,10 +33,10 @@ where
     }
 }
 
-impl From<Aggregator> for AppMetrics<Aggregate> {
-    fn from(agg: Aggregator) -> AppMetrics<Aggregate> {
+impl From<Aggregator> for Metrics<Aggregate> {
+    fn from(agg: Aggregator) -> Metrics<Aggregate> {
         let agg_1 = agg.clone();
-        AppMetrics::new(
+        Metrics::new(
             Arc::new(move |kind, name, rate| agg.define_metric(kind, name, rate)),
             control_scope(move |cmd| match cmd {
                 ScopeCmd::Write(metric, value) => {
@@ -49,9 +49,9 @@ impl From<Aggregator> for AppMetrics<Aggregate> {
     }
 }
 
-impl From<&'static str> for AppMetrics<Aggregate> {
-    fn from(prefix: &'static str) -> AppMetrics<Aggregate> {
-        let app_metrics: AppMetrics<Aggregate> = aggregate(summary, to_void()).into();
+impl From<&'static str> for Metrics<Aggregate> {
+    fn from(prefix: &'static str) -> Metrics<Aggregate> {
+        let app_metrics: Metrics<Aggregate> = aggregate(summary, to_void()).into();
         app_metrics.with_prefix(prefix)
     }
 }
@@ -120,28 +120,28 @@ mod bench {
 
     #[bench]
     fn aggregate_marker(b: &mut test::Bencher) {
-        let sink: AppMetrics<Aggregate> = aggregate(summary, to_void()).into();
+        let sink: Metrics<Aggregate> = aggregate(summary, to_void()).into();
         let metric = sink.define_metric(Marker, "event_a", 1.0);
         b.iter(|| test::black_box(sink.write(&metric, 1)));
     }
 
     #[bench]
     fn aggregate_counter(b: &mut test::Bencher) {
-        let sink: AppMetrics<Aggregate> = aggregate(summary, to_void()).into();
+        let sink: Metrics<Aggregate> = aggregate(summary, to_void()).into();
         let metric = sink.define_metric(Counter, "count_a", 1.0);
         b.iter(|| test::black_box(sink.write(&metric, 1)));
     }
 
     #[bench]
     fn reset_marker(b: &mut test::Bencher) {
-        let sink: AppMetrics<Aggregate> = aggregate(summary, to_void()).into();
+        let sink: Metrics<Aggregate> = aggregate(summary, to_void()).into();
         let metric = sink.define_metric(Marker, "marker_a", 1.0);
         b.iter(|| test::black_box(metric.reset()));
     }
 
     #[bench]
     fn reset_counter(b: &mut test::Bencher) {
-        let sink: AppMetrics<Aggregate> = aggregate(summary, to_void()).into();
+        let sink: Metrics<Aggregate> = aggregate(summary, to_void()).into();
         let metric = sink.define_metric(Counter, "count_a", 1.0);
         b.iter(|| test::black_box(metric.reset()));
     }

@@ -12,7 +12,7 @@ use core::Kind::*;
 use namespace::*;
 use cache::*;
 use schedule::*;
-use app_delegate::*;
+use delegate::*;
 
 use std::time::Duration;
 
@@ -21,12 +21,23 @@ pub use num::ToPrimitive;
 
 /// Wrap the metrics backend to provide an application-friendly interface.
 /// Open a metric scope to share across the application.
-pub fn app_metrics<M, AM>(app_metrics: AM) -> AppMetrics<M>
+#[deprecated(since="0.7.0", note="Use metrics() instead")]
+pub fn app_metrics<M, AM>(scope: AM) -> Metrics<M>
 where
     M: Clone + Send + Sync + 'static,
-    AM: Into<AppMetrics<M>>,
+    AM: Into<Metrics<M>>,
 {
-    app_metrics.into()
+    scope.into()
+}
+
+/// Wrap the metrics backend to provide an application-friendly interface.
+/// Open a metric scope to share across the application.
+pub fn metrics<M, AM>(scope: AM) -> Metrics<M>
+    where
+        M: Clone + Send + Sync + 'static,
+        AM: Into<Metrics<M>>,
+{
+    scope.into()
 }
 
 /// A monotonic counter metric.
@@ -34,13 +45,13 @@ where
 /// preventing programming errors.
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub struct AppMarker<M> {
+pub struct Marker<M> {
     metric: M,
     #[derivative(Debug = "ignore")]
-    scope: ControlScopeFn<M>,
+    scope: WriteFn<M>,
 }
 
-impl<M> AppMarker<M> {
+impl<M> Marker<M> {
     /// Record a single event occurence.
     pub fn mark(&self) {
         self.scope.write(&self.metric, 1);
@@ -50,13 +61,13 @@ impl<M> AppMarker<M> {
 /// A counter that sends values to the metrics backend
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub struct AppCounter<M> {
+pub struct Counter<M> {
     metric: M,
     #[derivative(Debug = "ignore")]
-    scope: ControlScopeFn<M>,
+    scope: WriteFn<M>,
 }
 
-impl<M> AppCounter<M> {
+impl<M> Counter<M> {
     /// Record a value count.
     pub fn count<V: ToPrimitive>(&self, count: V) {
         self.scope.write(&self.metric, count.to_u64().unwrap());
@@ -66,13 +77,13 @@ impl<M> AppCounter<M> {
 /// A gauge that sends values to the metrics backend
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub struct AppGauge<M> {
+pub struct Gauge<M> {
     metric: M,
     #[derivative(Debug = "ignore")]
-    scope: ControlScopeFn<M>,
+    scope: WriteFn<M>,
 }
 
-impl<M> AppGauge<M> {
+impl<M> Gauge<M> {
     /// Record a value point for this gauge.
     pub fn value<V: ToPrimitive>(&self, value: V) {
         self.scope.write(&self.metric, value.to_u64().unwrap());
@@ -87,13 +98,13 @@ impl<M> AppGauge<M> {
 /// - with the interval_us() method, providing an externally determined microsecond interval
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub struct AppTimer<M> {
+pub struct Timer<M> {
     metric: M,
     #[derivative(Debug = "ignore")]
-    scope: ControlScopeFn<M>,
+    scope: WriteFn<M>,
 }
 
-impl<M> AppTimer<M> {
+impl<M> Timer<M> {
     /// Record a microsecond interval for this timer
     /// Can be used in place of start()/stop() if an external time interval source is used
     pub fn interval_us<V: ToPrimitive>(&self, interval_us: V) -> V  {
@@ -132,29 +143,47 @@ impl<M> AppTimer<M> {
     }
 }
 
-//// AppMetrics proper
+/// Help transition to new syntax
+#[deprecated(since="0.7.0", note="Use Metrics instead")]
+pub type AppMetrics<M> = Metrics<M>;
+
+/// Help transition to new syntax
+#[deprecated(since="0.7.0", note="Use Marker instead")]
+pub type AppMarker<M> = Marker<M>;
+
+/// Help transition to new syntax
+#[deprecated(since="0.7.0", note="Use Counter instead")]
+pub type AppCounter<M> = Counter<M>;
+
+/// Help transition to new syntax
+#[deprecated(since="0.7.0", note="Use Gauge instead")]
+pub type AppGauge<M> = Gauge<M>;
+
+/// Help transition to new syntax
+#[deprecated(since="0.7.0", note="Use Timer instead")]
+pub type AppTimer<M> = Timer<M>;
+
 
 /// Variations of this should also provide control of the metric recording scope.
 #[derive(Derivative, Clone)]
-#[derivative(Debug)]
-pub struct AppMetrics<M> {
+pub struct Metrics<M> {
     #[derivative(Debug = "ignore")]
     define_metric_fn: DefineMetricFn<M>,
     #[derivative(Debug = "ignore")]
-    single_scope: ControlScopeFn<M>,
+    single_scope: WriteFn<M>,
 }
 
-impl<M> AppMetrics<M> {
+impl<M> Metrics<M> {
     /// Create new application metrics instance.
-    pub fn new(define_metric_fn: DefineMetricFn<M>, scope: ControlScopeFn<M>) -> Self {
-        AppMetrics {
+    pub fn new(define_metric_fn: DefineMetricFn<M>, scope: WriteFn<M>) -> Self {
+        Metrics {
             define_metric_fn,
             single_scope: scope,
         }
     }
 }
 
-impl<M> AppMetrics<M>
+impl<M> Metrics<M>
 where
     M: Clone + Send + Sync + 'static,
 {
@@ -164,44 +193,43 @@ where
         (self.define_metric_fn)(kind, name, rate)
     }
 
-    /// Get an event counter of the provided name.
-    pub fn marker<AS: AsRef<str>>(&self, name: AS) -> AppMarker<M> {
+    /// Define an event counter of the provided name.
+    pub fn marker<AS: AsRef<str>>(&self, name: AS) -> Marker<M> {
         let metric = self.define_metric(Marker, name.as_ref(), 1.0);
-        AppMarker {
+        Marker {
             metric,
             scope: self.single_scope.clone(),
         }
     }
 
-    /// Get a counter of the provided name.
-    pub fn counter<AS: AsRef<str>>(&self, name: AS) -> AppCounter<M> {
+    /// Define a counter of the provided name.
+    pub fn counter<AS: AsRef<str>>(&self, name: AS) -> Counter<M> {
         let metric = self.define_metric(Counter, name.as_ref(), 1.0);
-        AppCounter {
+        Counter {
             metric,
             scope: self.single_scope.clone(),
         }
     }
 
-    /// Get a timer of the provided name.
-    pub fn timer<AS: AsRef<str>>(&self, name: AS) -> AppTimer<M> {
+    /// Define a timer of the provided name.
+    pub fn timer<AS: AsRef<str>>(&self, name: AS) -> Timer<M> {
         let metric = self.define_metric(Timer, name.as_ref(), 1.0);
-        AppTimer {
+        Timer {
             metric,
             scope: self.single_scope.clone(),
         }
     }
 
-    /// Get a gauge of the provided name.
-    pub fn gauge<AS: AsRef<str>>(&self, name: AS) -> AppGauge<M> {
+    /// Define a gauge of the provided name.
+    pub fn gauge<AS: AsRef<str>>(&self, name: AS) -> Gauge<M> {
         let metric = self.define_metric(Gauge, name.as_ref(), 1.0);
-        AppGauge {
+        Gauge {
             metric,
             scope: self.single_scope.clone(),
         }
     }
 
-    /// Forcefully flush the backing metrics scope.
-    /// This is usually not required since static metrics use auto flushing scopes.
+    /// Flush the backing metrics buffer.
     /// The effect, if any, of this method depends on the selected metrics backend.
     pub fn flush(&self) {
         self.single_scope.flush();
@@ -223,17 +251,17 @@ where
 
 //// Dispatch / Receiver impl
 
-struct AppRecvMetricImpl<M> {
+struct RecvMetricImpl<M> {
     metric: M,
-    scope: ControlScopeFn<M>,
+    scope: WriteFn<M>,
 }
 
-impl<M: Send + Sync + Clone + 'static> AppRecv for AppMetrics<M> {
-    fn define_metric(&self, kind: Kind, name: &str, rate: Rate) -> Box<AppRecvMetric + Send + Sync> {
-        let scope: ControlScopeFn<M> = self.single_scope.clone();
+impl<M: Send + Sync + Clone + 'static> MetricsRecv for Metrics<M> {
+    fn define_metric(&self, kind: Kind, name: &str, rate: Rate) -> Box<RecvMetric + Send + Sync> {
+        let scope: WriteFn<M> = self.single_scope.clone();
         let metric: M = self.define_metric(kind, name, rate);
 
-        Box::new(AppRecvMetricImpl { metric, scope })
+        Box::new(RecvMetricImpl { metric, scope })
     }
 
     fn flush(&self) {
@@ -241,7 +269,7 @@ impl<M: Send + Sync + Clone + 'static> AppRecv for AppMetrics<M> {
     }
 }
 
-impl<M> AppRecvMetric for AppRecvMetricImpl<M> {
+impl<M> RecvMetric for RecvMetricImpl<M> {
     fn write(&self, value: Value) {
         self.scope.write(&self.metric, value);
     }
@@ -249,19 +277,19 @@ impl<M> AppRecvMetric for AppRecvMetricImpl<M> {
 
 //// Mutators impl
 
-impl<M: Send + Sync + Clone + 'static> WithNamespace for AppMetrics<M> {
+impl<M: Send + Sync + Clone + 'static> WithNamespace for Metrics<M> {
     fn with_name<IN: Into<Namespace>>(&self, names: IN) -> Self {
         let ns = &names.into();
-        AppMetrics {
+        Metrics {
             define_metric_fn: add_namespace(ns, self.define_metric_fn.clone()),
             single_scope: self.single_scope.clone(),
         }
     }
 }
 
-impl<M: Send + Sync + Clone + 'static> WithCache for AppMetrics<M> {
+impl<M: Send + Sync + Clone + 'static> WithCache for Metrics<M> {
     fn with_cache(&self, cache_size: usize) -> Self {
-        AppMetrics {
+        Metrics {
             define_metric_fn: add_cache(cache_size, self.define_metric_fn.clone()),
             single_scope: self.single_scope.clone(),
         }
@@ -277,7 +305,7 @@ mod bench {
     #[bench]
     fn time_bench_direct_dispatch_event(b: &mut test::Bencher) {
         let sink = aggregate(summary, to_void());
-        let metrics = app_metrics(sink);
+        let metrics = metrics(sink);
         let marker = metrics.marker("aaa");
         b.iter(|| test::black_box(marker.mark()));
     }

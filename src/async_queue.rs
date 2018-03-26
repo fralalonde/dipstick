@@ -3,14 +3,14 @@
 //! If queue size is exceeded, calling code reverts to blocking.
 //!
 use core::*;
-use local_metrics::*;
+use context::*;
 use self_metrics::*;
 
 use std::sync::Arc;
 use std::sync::mpsc;
 use std::thread;
 
-app_metrics!{
+metrics!{
     <Aggregate> DIPSTICK_METRICS.with_prefix("async_queue") => {
         @Marker SEND_FAILED: "send_failed";
     }
@@ -25,7 +25,7 @@ where
     fn with_async_queue(&self, queue_size: usize) -> Self;
 }
 
-impl<M: Send + Sync + Clone + 'static> WithAsyncQueue for LocalMetrics<M> {
+impl<M: Send + Sync + Clone + 'static> WithAsyncQueue for MetricContext<M> {
     fn with_async_queue(&self, queue_size: usize) -> Self {
         self.mod_scope(|next| {
             // setup channel
@@ -49,7 +49,7 @@ impl<M: Send + Sync + Clone + 'static> WithAsyncQueue for LocalMetrics<M> {
 
             Arc::new(move || {
                 // open next scope, make it Arc to move across queue
-                let next_scope: ControlScopeFn<M> = next();
+                let next_scope: WriteFn<M> = next();
                 let sender = sender.clone();
 
                 // forward any scope command through the channel
@@ -78,10 +78,10 @@ impl<M: Send + Sync + Clone + 'static> WithAsyncQueue for LocalMetrics<M> {
 
 /// Enqueue collected metrics for dispatch on background thread.
 #[deprecated(since = "0.5.0", note = "Use `with_async_queue` instead.")]
-pub fn async<M, IC>(queue_size: usize, chain: IC) -> LocalMetrics<M>
+pub fn async<M, IC>(queue_size: usize, chain: IC) -> MetricContext<M>
 where
     M: Clone + Send + Sync + 'static,
-    IC: Into<LocalMetrics<M>>,
+    IC: Into<MetricContext<M>>,
 {
     let chain = chain.into();
     chain.with_async_queue(queue_size)
@@ -96,5 +96,5 @@ pub struct QueueCommand<M> {
     cmd: Option<(M, Value)>,
     /// The scope to write the metric to
     #[derivative(Debug = "ignore")]
-    next_scope: ControlScopeFn<M>,
+    next_scope: WriteFn<M>,
 }

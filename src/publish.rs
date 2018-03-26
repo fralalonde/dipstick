@@ -20,7 +20,7 @@
 //! ```
 
 use core::*;
-use local_metrics::*;
+use context::*;
 use core::Kind::*;
 use scores::{ScoreSnapshot, ScoreType};
 use scores::ScoreType::*;
@@ -40,7 +40,7 @@ pub trait Publish: Send + Sync + Debug {
 pub struct Publisher<E, M> {
     #[derivative(Debug = "ignore")]
     statistics: Box<E>,
-    output: LocalMetrics<M>,
+    output: MetricContext<M>,
 }
 
 impl<E, M> Publisher<E, M>
@@ -50,7 +50,7 @@ where
 {
     /// Define a new metrics publishing strategy, from a transformation
     /// function and a target metric chain.
-    pub fn new(stat_fn: E, output: LocalMetrics<M>) -> Self {
+    pub fn new(stat_fn: E, output: MetricContext<M>) -> Self {
         Publisher {
             statistics: Box::new(stat_fn),
             output,

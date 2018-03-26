@@ -63,10 +63,10 @@ pub enum Kind {
 pub type DefineMetricFn<M> = Arc<Fn(Kind, &str, Rate) -> M + Send + Sync>;
 
 /// A function trait that opens a new metric capture scope.
-pub type OpenScopeFn<M> = Arc<Fn() -> ControlScopeFn<M> + Send + Sync>;
+pub type OpenScopeFn<M> = Arc<Fn() -> WriteFn<M> + Send + Sync>;
 
 /// A function trait that writes to or flushes a certain scope.
-pub type ControlScopeFn<M> = Arc<InnerControlScopeFn<M>>;
+pub type WriteFn<M> = Arc<InnerControlScopeFn<M>>;
 
 /// Returns a callback function to send commands to the metric scope.
 /// Writes can be performed by passing Some((&Metric, Value))
@@ -98,7 +98,7 @@ pub enum ScopeCmd<'a, M: 'a> {
 }
 
 /// Create a new metric scope based on the provided scope function.
-pub fn control_scope<M, F>(scope_fn: F) -> ControlScopeFn<M>
+pub fn control_scope<M, F>(scope_fn: F) -> WriteFn<M>
 where
     F: Fn(ScopeCmd<M>) + 'static,
 {

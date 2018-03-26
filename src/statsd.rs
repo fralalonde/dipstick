@@ -1,7 +1,7 @@
 //! Send metrics to a statsd server.
 
 use core::*;
-use local_metrics::*;
+use context::*;
 use error;
 use self_metrics::*;
 
@@ -10,7 +10,7 @@ use std::sync::{Arc, RwLock};
 
 pub use std::net::ToSocketAddrs;
 
-app_metrics! {
+metrics! {
     <Aggregate> DIPSTICK_METRICS.with_prefix("statsd") => {
         @Marker SEND_ERR: "send_failed";
         @Counter SENT_BYTES: "sent_bytes";
@@ -18,7 +18,7 @@ app_metrics! {
 }
 
 /// Send metrics to a statsd server at the address and port provided.
-pub fn to_statsd<ADDR>(address: ADDR) -> error::Result<LocalMetrics<Statsd>>
+pub fn to_statsd<ADDR>(address: ADDR) -> error::Result<MetricContext<Statsd>>
 where
     ADDR: ToSocketAddrs,
 {

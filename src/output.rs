@@ -1,11 +1,11 @@
 //! Standard stateless metric outputs.
 // TODO parameterize templates
 use core::*;
-use local_metrics::*;
+use context::*;
 use std::sync::RwLock;
 
 /// Write metric values to stdout using `println!`.
-pub fn to_stdout() -> LocalMetrics<String> {
+pub fn to_stdout() -> MetricContext<String> {
     metrics_context(
         |_kind, name, _rate| String::from(name),
         || control_scope(|cmd|
@@ -19,7 +19,7 @@ pub fn to_stdout() -> LocalMetrics<String> {
 /// Values are buffered until #flush is called
 /// Buffered operation requires locking.
 /// If thread latency is a concern you may wish to also use #with_async_queue.
-pub fn to_buffered_stdout() -> LocalMetrics<String> {
+pub fn to_buffered_stdout() -> MetricContext<String> {
     metrics_context(
         |_kind, name, _rate| String::from(name),
         || {
@@ -42,7 +42,7 @@ pub fn to_buffered_stdout() -> LocalMetrics<String> {
 
 /// Write metric values to the standard log using `info!`.
 // TODO parameterize log level
-pub fn to_log() -> LocalMetrics<String> {
+pub fn to_log() -> MetricContext<String> {
     metrics_context(
         |_kind, name, _rate| String::from(name),
         || control_scope(|cmd|
@@ -57,7 +57,7 @@ pub fn to_log() -> LocalMetrics<String> {
 /// Buffered operation requires locking.
 /// If thread latency is a concern you may wish to also use #with_async_queue.
 // TODO parameterize log level
-pub fn to_buffered_log() -> LocalMetrics<String> {
+pub fn to_buffered_log() -> MetricContext<String> {
     metrics_context(
         |_kind, name, _rate| String::from(name),
         || {
@@ -80,7 +80,7 @@ pub fn to_buffered_log() -> LocalMetrics<String> {
 
 
 /// Discard all metric values sent to it.
-pub fn to_void() -> LocalMetrics<()> {
+pub fn to_void() -> MetricContext<()> {
     metrics_context(
         move |_kind, _name, _rate| (),
         || control_scope(|_cmd| {}),
