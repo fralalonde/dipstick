@@ -30,20 +30,20 @@ pub mod macros;
 pub mod core;
 pub use core::*;
 
-pub mod local_metrics;
-pub use local_metrics::*;
+pub mod context;
+pub use context::*;
 
 //pub mod local_delegate;
 //pub use local_delegate::*;
 
-pub mod app_delegate;
-pub use app_delegate::*;
+pub mod delegate;
+pub use delegate::*;
 
 mod output;
 pub use output::*;
 
-mod app_metrics;
-pub use app_metrics::*;
+mod metrics;
+pub use metrics::*;
 
 mod sample;
 pub use sample::*;

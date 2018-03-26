@@ -8,7 +8,7 @@ use dipstick::*;
 use std::time::Duration;
 
 // undeclared root (un-prefixed) metrics
-app_metrics!( => {
+metrics!( => {
     // create counter "some_counter"
     pub @Counter ROOT_COUNTER: "root_counter";
     // create counter "root_counter"
@@ -18,7 +18,7 @@ app_metrics!( => {
 });
 
 // public source
-app_metrics!(pub PUB_METRICS ="pub_lib_prefix" => {
+metrics!(pub PUB_METRICS ="pub_lib_prefix" => {
     // create counter "lib_prefix.some_counter"
     pub @Counter PUB_COUNTER: "some_counter";
 });
@@ -30,19 +30,19 @@ app_metrics!(pub PUB_METRICS ="pub_lib_prefix" => {
 //});
 
 // declare mod source
-app_metrics!(LIB_METRICS ="mod_lib_prefix" => {
+metrics!(LIB_METRICS ="mod_lib_prefix" => {
     // create counter "mod_lib_prefix.some_counter"
     pub @Counter SOME_COUNTER: "some_counter";
 });
 
 // reuse declared source
-app_metrics!(LIB_METRICS => {
+metrics!(LIB_METRICS => {
     // create counter "mod_lib_prefix.another_counter"
     @Counter ANOTHER_COUNTER: "another_counter";
 });
 
 fn main() {
-    send_app_metrics(to_stdout());
+    send_metrics(to_stdout());
 
     loop {
         ROOT_COUNTER.count(123);

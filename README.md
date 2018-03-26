@@ -38,7 +38,7 @@ dipstick = "0.6.5"
 Then add it to your code:
 
 ```rust,skt-fail,no_run
-let metrics = app_metrics(to_graphite("host.com:2003")?);
+let metrics = metrics(to_graphite("host.com:2003")?);
 let counter = metrics.counter("my_counter");
 counter.count(3);
 ```
@@ -46,7 +46,7 @@ counter.count(3);
 Send metrics to multiple outputs:
 
 ```rust,skt-fail,no_run
-let _app_metrics = app_metrics((
+let _app_metrics = metrics((
         to_stdout(), 
         to_statsd("localhost:8125")?.with_namespace(&["my", "app"])
     ));
@@ -57,7 +57,7 @@ Aggregate metrics and schedule to be periodical publication in the background:
 ```rust,skt-run
 use std::time::Duration;
 
-let app_metrics = app_metrics(aggregate(all_stats, to_stdout()));
+let app_metrics = metrics(aggregate(all_stats, to_stdout()));
 app_metrics.flush_every(Duration::from_secs(3));
 ```
 
@@ -68,7 +68,7 @@ Published statistics can be selected with presets such as `all_stats` (see previ
 
 For more control over published statistics, provide your own strategy:
 ```rust,skt-run
-app_metrics(aggregate(
+metrics(aggregate(
     |_kind, name, score|
         match score {
             ScoreType::Count(count) => 
@@ -80,14 +80,14 @@ app_metrics(aggregate(
 
 Apply statistical sampling to metrics:
 ```rust,skt-fail
-let _app_metrics = app_metrics(to_statsd("server:8125")?.with_sampling_rate(0.01));
+let _app_metrics = metrics(to_statsd("server:8125")?.with_sampling_rate(0.01));
 ```
 A fast random algorithm is used to pick samples.
 Outputs can use sample rate to expand or format published data.
 
 Metrics can be recorded asynchronously:
 ```rust,skt-run
-let _app_metrics = app_metrics(to_stdout().with_async_queue(64));
+let _app_metrics = metrics(to_stdout().with_async_queue(64));
 ```
 The async queue uses a Rust channel and a standalone thread.
 The current behavior is to block when full.
@@ -98,12 +98,12 @@ For speed and easier maintenance, metrics are usually defined statically:
 #[macro_use] extern crate lazy_static;
 use dipstick::*;
 
-app_metrics!("my_app" => {
+metrics!("my_app" => {
     @Counter COUNTER_A: "counter_a";
 });
 
 fn main() {
-    send_app_metrics(to_stdout());
+    send_metrics(to_stdout());
     COUNTER_A.count(11);
 }
 ```
@@ -113,14 +113,14 @@ Metric definition macros are just `lazy_static!` wrappers.
 Where necessary, metrics can be defined _ad-hoc_:
 ```rust,skt-run
 let user_name = "john_day";
-let app_metrics = app_metrics(to_log()).with_cache(512);
+let app_metrics = metrics(to_log()).with_cache(512);
 app_metrics.gauge(format!("gauge_for_user_{}", user_name)).value(44);
 ```
 Defining a cache is optional but will speed up re-definition of common ad-hoc metrics.
 
 Timers can be used multiple ways:
 ```rust,skt-run
-let app_metrics = app_metrics(to_stdout());
+let app_metrics = metrics(to_stdout());
 let timer =  app_metrics.timer("my_timer");
 time!(timer, {/* slow code here */} );
 timer.time(|| {/* slow code here */} );
@@ -134,7 +134,7 @@ timer.interval_us(123_456);
 
 Related metrics can share a namespace:
 ```rust,skt-run
-let app_metrics = app_metrics(to_stdout());
+let app_metrics = metrics(to_stdout());
 let db_metrics = app_metrics.with_prefix("database");
 let _db_timer = db_metrics.timer("db_timer");
 let _db_counter = db_metrics.counter("db_counter");

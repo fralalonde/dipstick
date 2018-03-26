@@ -9,7 +9,7 @@ use dipstick::*;
 fn main() {
     let to_aggregate = aggregate(summary, to_stdout());
 
-    let app_metrics = app_metrics(to_aggregate);
+    let app_metrics = metrics(to_aggregate);
 
     app_metrics.flush_every(Duration::from_secs(3));
 

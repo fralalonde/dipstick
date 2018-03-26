@@ -1,27 +1,27 @@
 //! Dispatch metrics to multiple sinks.
 
 use core::*;
-use local_metrics::*;
-use app_metrics::*;
+use context::*;
+use metrics::*;
 
 use std::sync::Arc;
 
 /// Two chains of different types can be combined in a tuple.
 /// The chains will act as one, each receiving calls in the order the appear in the tuple.
 /// For more than two types, make tuples of tuples, "Yo Dawg" style.
-impl<M1, M2> From<(LocalMetrics<M1>, LocalMetrics<M2>)> for AppMetrics<(M1, M2)>
+impl<M1, M2> From<(MetricContext<M1>, MetricContext<M2>)> for Metrics<(M1, M2)>
 where
     M1: 'static + Clone + Send + Sync,
     M2: 'static + Clone + Send + Sync,
 {
-    fn from(combo: (LocalMetrics<M1>, LocalMetrics<M2>)) -> AppMetrics<(M1, M2)> {
+    fn from(combo: (MetricContext<M1>, MetricContext<M2>)) -> Metrics<(M1, M2)> {
         let scope0 = combo.0.open_scope();
         let scope1 = combo.1.open_scope();
 
         let scope0a = scope0.clone();
         let scope1a = scope1.clone();
 
-        AppMetrics::new(
+        Metrics::new(
             Arc::new(move |kind, name, rate| (
                 scope0.define_metric(kind, name, rate),
                 scope1.define_metric(kind, name, rate),
@@ -41,15 +41,15 @@ where
     }
 }
 
-impl<'a, M> From<&'a [LocalMetrics<M>]> for AppMetrics<Vec<M>>
+impl<'a, M> From<&'a [MetricContext<M>]> for Metrics<Vec<M>>
 where
     M: 'static + Clone + Send + Sync,
 {
-    fn from(chains: &'a [LocalMetrics<M>]) -> AppMetrics<Vec<M>> {
-        let scopes: Vec<AppMetrics<M>> = chains.iter().map(|x| x.open_scope()).collect();
+    fn from(chains: &'a [MetricContext<M>]) -> Metrics<Vec<M>> {
+        let scopes: Vec<Metrics<M>> = chains.iter().map(|x| x.open_scope()).collect();
         let scopes2 = scopes.clone();
 
-        AppMetrics::new(
+        Metrics::new(
             Arc::new(move |kind, name, rate| {
                 scopes.iter().map(|m| m.define_metric(kind, name, rate)).collect()
             }),

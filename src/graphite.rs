@@ -1,7 +1,7 @@
 //! Send metrics to a graphite server.
 
 use core::*;
-use local_metrics::*;
+use context::*;
 use error;
 use self_metrics::*;
 
@@ -14,7 +14,7 @@ use std::fmt::Debug;
 
 use socket::RetrySocket;
 
-app_metrics!{
+metrics!{
     <Aggregate> DIPSTICK_METRICS.with_prefix("graphite") => {
         @Marker SEND_ERR: "send_failed";
         @Marker TRESHOLD_EXCEEDED: "bufsize_exceeded";
@@ -38,7 +38,7 @@ app_metrics!{
 //}
 
 /// Send metrics to a graphite server at the address and port provided.
-pub fn to_graphite<ADDR>(address: ADDR) -> error::Result<LocalMetrics<Graphite>>
+pub fn to_graphite<ADDR>(address: ADDR) -> error::Result<MetricContext<Graphite>>
 where
     ADDR: ToSocketAddrs + Debug + Clone,
 {
@@ -52,7 +52,7 @@ where
 }
 
 /// Send metrics to a graphite server at the address and port provided.
-pub fn to_buffered_graphite<ADDR>(address: ADDR) -> error::Result<LocalMetrics<Graphite>>
+pub fn to_buffered_graphite<ADDR>(address: ADDR) -> error::Result<MetricContext<Graphite>>
     where
         ADDR: ToSocketAddrs + Debug + Clone,
 {
@@ -90,7 +90,7 @@ fn graphite_metric(kind: Kind, name: &str, rate: Rate) -> Graphite {
     Graphite { prefix, scale }
 }
 
-fn graphite_scope(socket: &Arc<RwLock<RetrySocket>>, buffered: bool) -> ControlScopeFn<Graphite> {
+fn graphite_scope(socket: &Arc<RwLock<RetrySocket>>, buffered: bool) -> WriteFn<Graphite> {
     let buf = ScopeBuffer {
         buffer: Arc::new(RwLock::new(String::new())),
         socket: socket.clone(),
