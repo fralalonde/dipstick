@@ -58,10 +58,7 @@ pub struct AppCounter<M> {
 
 impl<M> AppCounter<M> {
     /// Record a value count.
-    pub fn count<V>(&self, count: V)
-    where
-        V: ToPrimitive,
-    {
+    pub fn count<V: ToPrimitive>(&self, count: V) {
         self.scope.write(&self.metric, count.to_u64().unwrap());
     }
 }
@@ -77,10 +74,7 @@ pub struct AppGauge<M> {
 
 impl<M> AppGauge<M> {
     /// Record a value point for this gauge.
-    pub fn value<V>(&self, value: V)
-    where
-        V: ToPrimitive,
-    {
+    pub fn value<V: ToPrimitive>(&self, value: V) {
         self.scope.write(&self.metric, value.to_u64().unwrap());
     }
 }
@@ -102,12 +96,8 @@ pub struct AppTimer<M> {
 impl<M> AppTimer<M> {
     /// Record a microsecond interval for this timer
     /// Can be used in place of start()/stop() if an external time interval source is used
-    pub fn interval_us<V>(&self, interval_us: V) -> V
-    where
-        V: ToPrimitive,
-    {
-        self.scope
-            .write(&self.metric, interval_us.to_u64().unwrap());
+    pub fn interval_us<V: ToPrimitive>(&self, interval_us: V) -> V  {
+        self.scope.write(&self.metric, interval_us.to_u64().unwrap());
         interval_us
     }
 
@@ -168,8 +158,9 @@ impl<M> AppMetrics<M>
 where
     M: Clone + Send + Sync + 'static,
 {
+    /// Define a raw metric.
     #[inline]
-    fn define_metric(&self, kind: Kind, name: &str, rate: Rate) -> M {
+    pub fn define_metric(&self, kind: Kind, name: &str, rate: Rate) -> M {
         (self.define_metric_fn)(kind, name, rate)
     }
 
@@ -222,6 +213,12 @@ where
         let scope = self.single_scope.clone();
         schedule(period, move || scope.flush())
     }
+
+    /// Record a raw metric value.
+    pub fn write(&self, metric: &M, value: Value) {
+        self.single_scope.write(metric, value);
+    }
+
 }
 
 //// Dispatch / Receiver impl

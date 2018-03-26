@@ -64,7 +64,7 @@ where
     E: Fn(Kind, &str, ScoreType) -> Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static,
 {
     fn publish(&self, snapshot: Vec<ScoreSnapshot>) {
-        let publish_scope_fn = self.output.open_scope(false);
+        let publish_scope = self.output.open_scope();
         if snapshot.is_empty() {
             // no data was collected for this period
             // TODO repeat previous frame min/max ?
@@ -73,8 +73,8 @@ where
             for metric in snapshot {
                 for score in metric.2 {
                     if let Some(ex) = (self.statistics)(metric.0, metric.1.as_ref(), score) {
-                        let pub_metric = self.output.define_metric(ex.0, &ex.1.concat(), 1.0);
-                        publish_scope_fn.write(&pub_metric, ex.2);
+                        let pub_metric = publish_scope.define_metric(ex.0, &ex.1.concat(), 1.0);
+                        publish_scope.write(&pub_metric, ex.2);
                     }
                 }
             }
@@ -82,7 +82,7 @@ where
 
         // TODO parameterize whether to keep ad-hoc metrics after publish
         // source.cleanup();
-        publish_scope_fn.flush()
+        publish_scope.flush()
     }
 }
 

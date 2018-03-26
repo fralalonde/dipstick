@@ -47,9 +47,9 @@ impl<M: Send + Sync + Clone + 'static> WithAsyncQueue for LocalMetrics<M> {
                 }
             });
 
-            Arc::new(move |buffered| {
+            Arc::new(move || {
                 // open next scope, make it Arc to move across queue
-                let next_scope: ControlScopeFn<M> = next(buffered);
+                let next_scope: ControlScopeFn<M> = next();
                 let sender = sender.clone();
 
                 // forward any scope command through the channel

@@ -117,34 +117,31 @@ mod bench {
     use super::*;
     use test;
     use core::Kind::*;
-    use output::*;
 
     #[bench]
     fn aggregate_marker(b: &mut test::Bencher) {
-        let sink = aggregate(summary, to_void());
+        let sink: AppMetrics<Aggregate> = aggregate(summary, to_void()).into();
         let metric = sink.define_metric(Marker, "event_a", 1.0);
-        let scope = sink.open_scope(false);
-        b.iter(|| test::black_box(scope.write(&metric, 1)));
+        b.iter(|| test::black_box(sink.write(&metric, 1)));
     }
 
     #[bench]
     fn aggregate_counter(b: &mut test::Bencher) {
-        let sink = aggregate(summary, to_void());
+        let sink: AppMetrics<Aggregate> = aggregate(summary, to_void()).into();
         let metric = sink.define_metric(Counter, "count_a", 1.0);
-        let scope = sink.open_scope(false);
-        b.iter(|| test::black_box(scope.write(&metric, 1)));
+        b.iter(|| test::black_box(sink.write(&metric, 1)));
     }
 
     #[bench]
     fn reset_marker(b: &mut test::Bencher) {
-        let sink = aggregate(summary, to_void());
+        let sink: AppMetrics<Aggregate> = aggregate(summary, to_void()).into();
         let metric = sink.define_metric(Marker, "marker_a", 1.0);
         b.iter(|| test::black_box(metric.reset()));
     }
 
     #[bench]
     fn reset_counter(b: &mut test::Bencher) {
-        let sink = aggregate(summary, to_void());
+        let sink: AppMetrics<Aggregate> = aggregate(summary, to_void()).into();
         let metric = sink.define_metric(Counter, "count_a", 1.0);
         b.iter(|| test::black_box(metric.reset()));
     }

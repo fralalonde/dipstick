@@ -9,34 +9,34 @@ use std::thread::sleep;
 use dipstick::*;
 
 fn main() {
-    let metrics = to_stdout();
-
-    let counter = metrics.counter("counter_a");
-    let timer = metrics.timer("timer_a");
-    let gauge = metrics.gauge("gauge_a");
-    let marker = metrics.marker("marker_a");
+    let context = to_buffered_stdout();
 
     loop {
         // add counts forever, non-stop
         println!("\n------- open scope");
 
-        let ref mut scope = metrics.open_scope(true);
+        let metrics = context.open_scope();
 
-        counter.count(scope, 11);
-        counter.count(scope, 12);
-        counter.count(scope, 13);
+        let counter = metrics.counter("counter_a");
+        let timer = metrics.timer("timer_a");
+        let gauge = metrics.gauge("gauge_a");
+        let marker = metrics.marker("marker_a");
+        
+        counter.count(11);
+        counter.count(12);
+        counter.count(13);
 
-        timer.interval_us(scope, 11_000_000);
-        timer.interval_us(scope, 12_000_000);
-        timer.interval_us(scope, 13_000_000);
+        timer.interval_us(11_000_000);
+        timer.interval_us(12_000_000);
+        timer.interval_us(13_000_000);
 
         sleep(Duration::from_millis(1000));
 
-        gauge.value(scope, 11);
-        gauge.value(scope, 12);
-        gauge.value(scope, 13);
+        gauge.value(11);
+        gauge.value(12);
+        gauge.value(13);
 
-        marker.mark(scope);
+        marker.mark();
 
         sleep(Duration::from_millis(1000));
 

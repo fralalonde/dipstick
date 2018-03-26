@@ -165,9 +165,9 @@ mod bench {
 
     use super::*;
     use test;
-    use core::Kind::*;
     use aggregate::*;
     use publish::*;
+    use output::*;
 
     #[bench]
     fn dispatch_marker_to_aggregate(b: &mut test::Bencher) {

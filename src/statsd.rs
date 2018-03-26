@@ -26,7 +26,10 @@ where
     socket.set_nonblocking(true)?;
     socket.connect(address)?;
 
-    Ok(LocalMetrics::new(
+    // TODO buffering toggle
+    let buffered = false;
+
+    Ok(metrics_context(
         move |kind, name, rate| {
             let mut prefix = String::with_capacity(32);
             prefix.push_str(name);
@@ -57,7 +60,7 @@ where
                 scale,
             }
         },
-        move |buffered| {
+        move || {
             let buf = RwLock::new(ScopeBuffer {
                 buffer: String::with_capacity(MAX_UDP_PAYLOAD),
                 socket: socket.clone(),
@@ -156,11 +159,10 @@ mod bench {
 
     #[bench]
     pub fn timer_statsd(b: &mut test::Bencher) {
-        let sd = to_statsd("localhost:8125").unwrap();
+        let sd = to_statsd("localhost:8125").unwrap().open_scope();
         let timer = sd.define_metric(Kind::Timer, "timer", 1000000.0);
-        let scope = sd.open_scope(false);
 
-        b.iter(|| test::black_box(scope.write(&timer, 2000)));
+        b.iter(|| test::black_box(sd.write(&timer, 2000)));
     }
 
 }
