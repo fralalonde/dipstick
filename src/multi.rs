@@ -4,92 +4,39 @@ use core::*;
 use local_metrics::*;
 use app_metrics::*;
 
+use std::sync::Arc;
+
 /// Two chains of different types can be combined in a tuple.
 /// The chains will act as one, each receiving calls in the order the appear in the tuple.
 /// For more than two types, make tuples of tuples, "Yo Dawg" style.
-impl<M1, M2> From<(LocalMetrics<M1>, LocalMetrics<M2>)> for LocalMetrics<(M1, M2)>
-where
-    M1: 'static + Clone + Send + Sync,
-    M2: 'static + Clone + Send + Sync,
-{
-    fn from(combo: (LocalMetrics<M1>, LocalMetrics<M2>)) -> LocalMetrics<(M1, M2)> {
-        let combo0 = combo.0.clone();
-        let combo1 = combo.1.clone();
-
-        LocalMetrics::new(
-            move |kind, name, rate| {
-                (
-                    combo.0.define_metric(kind, name, rate),
-                    combo.1.define_metric(kind, name, rate),
-                )
-            },
-            move |buffered| {
-                let scope0 = combo0.open_scope(buffered);
-                let scope1 = combo1.open_scope(buffered);
-
-                control_scope(move |cmd| match cmd {
-                    ScopeCmd::Write(metric, value) => {
-                        let metric: &(M1, M2) = metric;
-                        scope0.write(&metric.0, value);
-                        scope1.write(&metric.1, value);
-                    }
-                    ScopeCmd::Flush => {
-                        scope0.flush();
-                        scope1.flush();
-                    }
-                })
-            },
-        )
-    }
-}
-
 impl<M1, M2> From<(LocalMetrics<M1>, LocalMetrics<M2>)> for AppMetrics<(M1, M2)>
 where
     M1: 'static + Clone + Send + Sync,
     M2: 'static + Clone + Send + Sync,
 {
     fn from(combo: (LocalMetrics<M1>, LocalMetrics<M2>)) -> AppMetrics<(M1, M2)> {
-        let chain: LocalMetrics<(M1, M2)> = combo.into();
-        app_metrics(chain)
-    }
-}
+        let scope0 = combo.0.open_scope();
+        let scope1 = combo.1.open_scope();
 
-/// Multiple chains of the same type can be combined in a slice.
-/// The chains will act as one, each receiving calls in the order the appear in the slice.
-impl<'a, M> From<&'a [LocalMetrics<M>]> for LocalMetrics<Vec<M>>
-where
-    M: 'static + Clone + Send + Sync,
-{
-    fn from(chains: &'a [LocalMetrics<M>]) -> LocalMetrics<Vec<M>> {
-        let chains = chains.to_vec();
-        let chains2 = chains.clone();
+        let scope0a = scope0.clone();
+        let scope1a = scope1.clone();
 
-        LocalMetrics::new(
-            move |kind, name, rate| {
-                let mut metric = Vec::with_capacity(chains.len());
-                for chain in &chains {
-                    metric.push(chain.define_metric(kind, name, rate));
+        AppMetrics::new(
+            Arc::new(move |kind, name, rate| (
+                scope0.define_metric(kind, name, rate),
+                scope1.define_metric(kind, name, rate),
+            )),
+            control_scope(move |cmd| { match cmd {
+                ScopeCmd::Write(metric, value) => {
+                    let metric: &(M1, M2) = metric;
+                    scope0a.write(&metric.0, value);
+                    scope1a.write(&metric.1, value);
                 }
-                metric
-            },
-            move |buffered| {
-                let mut scopes = Vec::with_capacity(chains2.len());
-                for chain in &chains2 {
-                    scopes.push(chain.open_scope(buffered));
+                ScopeCmd::Flush => {
+                    scope0a.flush();
+                    scope1a.flush();
                 }
-
-                control_scope(move |cmd| match cmd {
-                    ScopeCmd::Write(metric, value) => {
-                        let metric: &Vec<M> = metric;
-                        for (i, scope) in scopes.iter().enumerate() {
-                            scope.write(&metric[i], value)
-                        }
-                    }
-                    ScopeCmd::Flush => for scope in &scopes {
-                        scope.flush()
-                    },
-                })
-            },
+            }})
         )
     }
 }
@@ -99,7 +46,24 @@ where
     M: 'static + Clone + Send + Sync,
 {
     fn from(chains: &'a [LocalMetrics<M>]) -> AppMetrics<Vec<M>> {
-        let chain: LocalMetrics<Vec<M>> = chains.into();
-        app_metrics(chain)
+        let scopes: Vec<AppMetrics<M>> = chains.iter().map(|x| x.open_scope()).collect();
+        let scopes2 = scopes.clone();
+
+        AppMetrics::new(
+            Arc::new(move |kind, name, rate| {
+                scopes.iter().map(|m| m.define_metric(kind, name, rate)).collect()
+            }),
+            control_scope(move |cmd| { match cmd {
+                ScopeCmd::Write(metric, value) => {
+                    let metric: &Vec<M> = metric;
+                    for (i, scope) in scopes2.iter().enumerate() {
+                        scope.write(&metric[i], value)
+                    }
+                }
+                ScopeCmd::Flush => for scope in &scopes2 {
+                    scope.flush()
+                },
+            }})
+        )
     }
 }

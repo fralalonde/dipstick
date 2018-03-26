@@ -34,8 +34,8 @@ impl<M: Send + Sync + 'static + Clone> WithSamplingRate for LocalMetrics<M> {
                     let new_rate = sampling_rate * rate;
                     metric_fn(kind, name, new_rate)
                 }),
-                Arc::new(move |buffered| {
-                    let next_scope = scope_fn(buffered);
+                Arc::new(move || {
+                    let next_scope = scope_fn();
                     control_scope(move |cmd| match cmd {
                         ScopeCmd::Write(metric, value) => {
                             if pcg32::accept_sample(int_sampling_rate) {

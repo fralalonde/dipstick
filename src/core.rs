@@ -63,7 +63,7 @@ pub enum Kind {
 pub type DefineMetricFn<M> = Arc<Fn(Kind, &str, Rate) -> M + Send + Sync>;
 
 /// A function trait that opens a new metric capture scope.
-pub type OpenScopeFn<M> = Arc<Fn(bool) -> ControlScopeFn<M> + Send + Sync>;
+pub type OpenScopeFn<M> = Arc<Fn() -> ControlScopeFn<M> + Send + Sync>;
 
 /// A function trait that writes to or flushes a certain scope.
 pub type ControlScopeFn<M> = Arc<InnerControlScopeFn<M>>;
@@ -112,7 +112,7 @@ impl<M> InnerControlScopeFn<M> {
     /// Write a value to this scope.
     ///
     /// ```rust
-    /// let ref mut scope = dipstick::to_log().open_scope(false);
+    /// let scope = dipstick::to_log().open_scope();
     /// scope.write(&"counter".to_string(), 6);
     /// ```
     ///
@@ -121,10 +121,11 @@ impl<M> InnerControlScopeFn<M> {
         (self.scope_fn)(Write(metric, value))
     }
 
-    /// Flush this scope, if buffered.
+    /// Flush this scope.
+    /// Has no effect if scope is unbuffered.
     ///
     /// ```rust
-    /// let ref mut scope = dipstick::to_log().open_scope(true);
+    /// let scope = dipstick::to_log().open_scope();
     /// scope.flush();
     /// ```
     ///

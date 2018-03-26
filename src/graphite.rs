@@ -22,6 +22,21 @@ app_metrics!{
     }
 }
 
+// TODO enable fine config
+//struct GraphiteConfig<ADDR = ToSocketAddrs + Debug + Clone> {
+//    to_socket_address: ADDR,
+//    buffer_bytes: Option<usize>,
+//}
+//
+//impl From<ToSocketAddrs> for GraphiteConfig {
+//    fn from<ADDR: ToSocketAddrs + Debug + Clone>(addr: ADDR) -> GraphiteConfig {
+//        GraphiteConfig {
+//            to_socket_address: addr,
+//            buffer_bytes: None,
+//        }
+//    }
+//}
+
 /// Send metrics to a graphite server at the address and port provided.
 pub fn to_graphite<ADDR>(address: ADDR) -> error::Result<LocalMetrics<Graphite>>
 where
@@ -29,43 +44,62 @@ where
 {
     debug!("Connecting to graphite {:?}", address);
     let socket = Arc::new(RwLock::new(RetrySocket::new(address.clone())?));
-    Ok(LocalMetrics::new(
-        move |kind, name, rate| {
-            let mut prefix = String::with_capacity(32);
-            prefix.push_str(name);
-            prefix.push(' ');
 
-            let mut scale = match kind {
-                // timers are in µs, lets give graphite milliseconds for consistency with statsd
-                Kind::Timer => 1000,
-                _ => 1,
-            };
-
-            if rate < FULL_SAMPLING_RATE {
-                // graphite does not do sampling, so we'll upsample before sending
-                let upsample = (1.0 / rate).round() as u64;
-                warn!(
-                    "Metric {:?} '{}' being sampled at rate {} will be upsampled \
-                     by a factor of {} when sent to graphite.",
-                    kind, name, rate, upsample
-                );
-                scale *= upsample;
-            }
-
-            Graphite { prefix, scale }
-        },
-        move |buffered| {
-            let buf = ScopeBuffer {
-                buffer: Arc::new(RwLock::new(String::new())),
-                socket: socket.clone(),
-                buffered,
-            };
-            control_scope(move |cmd| match cmd {
-                ScopeCmd::Write(metric, value) => buf.write(metric, value),
-                ScopeCmd::Flush => buf.flush(),
-            })
-        },
+    Ok(metrics_context(
+        move |kind, name, rate| graphite_metric(kind, name, rate),
+        move || graphite_scope(&socket, false),
     ))
+}
+
+/// Send metrics to a graphite server at the address and port provided.
+pub fn to_buffered_graphite<ADDR>(address: ADDR) -> error::Result<LocalMetrics<Graphite>>
+    where
+        ADDR: ToSocketAddrs + Debug + Clone,
+{
+    debug!("Connecting to graphite {:?}", address);
+    let socket = Arc::new(RwLock::new(RetrySocket::new(address.clone())?));
+
+    Ok(metrics_context(
+        move |kind, name, rate| graphite_metric(kind, name, rate),
+        move || graphite_scope(&socket, true),
+    ))
+}
+
+fn graphite_metric(kind: Kind, name: &str, rate: Rate) -> Graphite {
+    let mut prefix = String::with_capacity(32);
+    prefix.push_str(name);
+    prefix.push(' ');
+
+    let mut scale = match kind {
+        // timers are in µs, lets give graphite milliseconds for consistency with statsd
+        Kind::Timer => 1000,
+        _ => 1,
+    };
+
+    if rate < FULL_SAMPLING_RATE {
+        // graphite does not do sampling, so we'll upsample before sending
+        let upsample = (1.0 / rate).round() as u64;
+        warn!(
+            "Metric {:?} '{}' being sampled at rate {} will be upsampled \
+                     by a factor of {} when sent to graphite.",
+            kind, name, rate, upsample
+        );
+        scale *= upsample;
+    }
+
+    Graphite { prefix, scale }
+}
+
+fn graphite_scope(socket: &Arc<RwLock<RetrySocket>>, buffered: bool) -> ControlScopeFn<Graphite> {
+    let buf = ScopeBuffer {
+        buffer: Arc::new(RwLock::new(String::new())),
+        socket: socket.clone(),
+        buffered,
+    };
+    control_scope(move |cmd| match cmd {
+        ScopeCmd::Write(metric, value) => buf.write(metric, value),
+        ScopeCmd::Flush => buf.flush(),
+    })
 }
 
 /// Its hard to see how a single scope could get more metrics than this.
@@ -161,11 +195,10 @@ mod bench {
 
     #[bench]
     pub fn timer_graphite(b: &mut test::Bencher) {
-        let sd = to_graphite("localhost:8125").unwrap();
+        let sd = to_graphite("localhost:8125").unwrap().open_scope();
         let timer = sd.define_metric(Kind::Timer, "timer", 1000000.0);
-        let scope = sd.open_scope(false);
 
-        b.iter(|| test::black_box(scope.write(&timer, 2000)));
+        b.iter(|| test::black_box(sd.write(&timer, 2000)));
     }
 
 }

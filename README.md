@@ -113,7 +113,7 @@ Metric definition macros are just `lazy_static!` wrappers.
 Where necessary, metrics can be defined _ad-hoc_:
 ```rust,skt-run
 let user_name = "john_day";
-let app_metrics = app_metrics(to_log().with_cache(512));
+let app_metrics = app_metrics(to_log()).with_cache(512);
 app_metrics.gauge(format!("gauge_for_user_{}", user_name)).value(44);
 ```
 Defining a cache is optional but will speed up re-definition of common ad-hoc metrics.
