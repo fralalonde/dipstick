@@ -19,25 +19,24 @@ macro_rules! time {
 
 /// Metrics can be used from anywhere (public), does not need to declare metrics in this block.
 #[macro_export]
-#[doc(hidden)]
 macro_rules! metrics {
     // TYPED
     // typed, public, no metrics
-    (<$METRIC_TYPE:ty> pub $METRIC_ID:ident = $e:expr;) => {
-        lazy_static! { pub static ref $METRIC_ID: Metrics<$METRIC_TYPE> = $e.into(); }
+    (<$METRIC_TYPE:ty> pub $METRIC_ID:ident = $e:expr $(;)*) => {
+        lazy_static! { pub static ref $METRIC_ID: MetricScope<$METRIC_TYPE> = $e.into(); }
     };
     // typed, public, some metrics
     (<$METRIC_TYPE:ty> pub $METRIC_ID:ident = $e:expr => { $($REMAINING:tt)+ }) => {
-        lazy_static! { pub static ref $METRIC_ID: Metrics<$METRIC_TYPE> = $e.into(); }
+        lazy_static! { pub static ref $METRIC_ID: MetricScope<$METRIC_TYPE> = $e.into(); }
         __metrics_block!($METRIC_ID: $METRIC_TYPE; $($REMAINING)*);
     };
     // typed, module, no metrics
-    (<$METRIC_TYPE:ty> $METRIC_ID:ident = $e:expr;) => {
-        lazy_static! { pub static ref $METRIC_ID: Metrics<$METRIC_TYPE> = $e.into(); }
+    (<$METRIC_TYPE:ty> $METRIC_ID:ident = $e:expr $(;)*) => {
+        lazy_static! { static ref $METRIC_ID: MetricScope<$METRIC_TYPE> = $e.into(); }
     };
     // typed, module, some metrics
     (<$METRIC_TYPE:ty> $METRIC_ID:ident = $e:expr => { $($REMAINING:tt)+ }) => {
-        lazy_static! { pub static ref $METRIC_ID: Metrics<$METRIC_TYPE> = $e.into(); }
+        lazy_static! { static ref $METRIC_ID: MetricScope<$METRIC_TYPE> = $e.into(); }
         __metrics_block!($METRIC_ID: $METRIC_TYPE; $($REMAINING)*);
     };
     // typed, reuse predeclared
@@ -46,47 +45,13 @@ macro_rules! metrics {
     };
     // typed, unidentified, some metrics
     (<$METRIC_TYPE:ty> $e:expr => { $($REMAINING:tt)+ }) => {
-        lazy_static! { pub static ref UNIDENT_METRIC: Metrics<$METRIC_TYPE> = $e.into(); }
+        lazy_static! { static ref UNIDENT_METRIC: MetricScope<$METRIC_TYPE> = $e.into(); }
         __metrics_block!(UNIDENT_METRIC: $METRIC_TYPE; $($REMAINING)*);
     };
     // typed, root, some metrics
     (<$METRIC_TYPE:ty> { $($REMAINING:tt)+ }) => {
-        lazy_static! { pub static ref ROOT_METRICS: Metrics<$METRIC_TYPE> = "".into(); }
+        lazy_static! { static ref ROOT_METRICS: MetricScope<$METRIC_TYPE> = ().into(); }
         __metrics_block!(ROOT_METRICS: $METRIC_TYPE; $($REMAINING)*);
-    };
-
-    // DELEGATED
-    // delegated, public, no metrics
-    (pub $METRIC_ID:ident = $e:expr;) => {
-        lazy_static! { pub static ref $METRIC_ID: Metrics<Delegate> = $e.into(); }
-    };
-    // delegated, public, some metrics
-    (pub $METRIC_ID:ident = $e:expr => { $($REMAINING:tt)+ }) => {
-        lazy_static! { pub static ref $METRIC_ID: Metrics<Delegate> = $e.into(); }
-        __metrics_block!($METRIC_ID: Delegate; $($REMAINING)*);
-    };
-    // delegated, module, no metrics
-    ($METRIC_ID:ident = $e:expr;) => {
-        lazy_static! { pub static ref $METRIC_ID: Metrics<Delegate> = $e.into(); }
-    };
-    // delegated, module, some metrics
-    ($METRIC_ID:ident = $e:expr => { $($REMAINING:tt)+ }) => {
-        lazy_static! { pub static ref $METRIC_ID: Metrics<Delegate> = $e.into(); }
-        __metrics_block!($METRIC_ID: Delegate; $($REMAINING)*);
-    };
-    // delegated,reuse predeclared
-    ($METRIC_ID:ident => { $($REMAINING:tt)+ }) => {
-        __metrics_block!($METRIC_ID: Delegate; $($REMAINING)*);
-    };
-    // delegated, unidentified, some metrics
-    ($e:expr => { $($REMAINING:tt)+ }) => {
-        lazy_static! { pub static ref UNIDENT_METRIC: Metrics<Delegate> = $e.into(); }
-        __metrics_block!(UNIDENT_METRIC: Delegate; $($REMAINING)*);
-    };
-    // delegated, root, some metrics
-    ( => { $($REMAINING:tt)+ }) => {
-        lazy_static! { pub static ref ROOT_METRICS: Metrics<Delegate> = ().into(); }
-        __metrics_block!(ROOT_METRICS: Delegate; $($REMAINING)*);
     };
 }
 
@@ -150,13 +115,13 @@ macro_rules! __metrics_block {
 #[deprecated(since="0.7.0", note="Use metrics!() instead")]
 macro_rules! app_metrics {
     ($type_param: ty, $metric_id: ident = ($($app_metrics: expr),+ $(,)*)) => {
-        lazy_static! { pub static ref $metric_id: Metrics<$type_param> = metrics(($($app_metrics),*)); }
+        lazy_static! { pub static ref $metric_id: MetricScope<$type_param> = metrics(($($app_metrics),*)); }
     };
     ($type_param: ty, $metric_id: ident = [$($app_metrics: expr),+ $(,)*]) => {
-        lazy_static! { pub static ref $metric_id: Metrics<$type_param> = metrics(&[$($app_metrics),*][..],); }
+        lazy_static! { pub static ref $metric_id: MetricScope<$type_param> = metrics(&[$($app_metrics),*][..],); }
     };
     ($type_param: ty, $metric_id: ident = $app_metrics: expr) => {
-        lazy_static! { pub static ref $metric_id: Metrics<$type_param> = $app_metrics.into(); }
+        lazy_static! { pub static ref $metric_id: MetricScope<$type_param> = $app_metrics.into(); }
     };
 }
 
@@ -213,13 +178,13 @@ macro_rules! app_timer {
 #[deprecated(since="0.7.0", note="Use metrics!() instead")]
 macro_rules! mod_metrics {
     ($type_param: ty, $metric_id: ident = ($($app_metrics: expr),+ $(,)*)) => {
-        lazy_static! { static ref $metric_id: Metrics<$type_param> = metrics(($($app_metrics),*)); }
+        lazy_static! { static ref $metric_id: MetricScope<$type_param> = metrics(($($app_metrics),*)); }
     };
     ($type_param: ty, $metric_id: ident = [$($app_metrics: expr),+ $(,)*]) => {
-        lazy_static! { static ref $metric_id: Metrics<$type_param> = metrics(&[$($app_metrics),*][..],); }
+        lazy_static! { static ref $metric_id: MetricScope<$type_param> = metrics(&[$($app_metrics),*][..],); }
     };
     ($type_param: ty, $metric_id: ident = $mod_metrics: expr) => {
-        lazy_static! { static ref $metric_id: Metrics<$type_param> = $mod_metrics.into(); }
+        lazy_static! { static ref $metric_id: MetricScope<$type_param> = $mod_metrics.into(); }
     };
 }
 

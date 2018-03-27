@@ -57,7 +57,8 @@ Aggregate metrics and schedule to be periodical publication in the background:
 ```rust,skt-run
 use std::time::Duration;
 
-let app_metrics = metrics(aggregate(all_stats, to_stdout()));
+let app_metrics = metrics(aggregate());
+route_aggregate_metrics(to_stdout());
 app_metrics.flush_every(Duration::from_secs(3));
 ```
 
@@ -68,14 +69,13 @@ Published statistics can be selected with presets such as `all_stats` (see previ
 
 For more control over published statistics, provide your own strategy:
 ```rust,skt-run
-metrics(aggregate(
-    |_kind, name, score|
-        match score {
-            ScoreType::Count(count) => 
-                Some((Kind::Counter, vec![name, ".per_thousand"], count / 1000)),
-            _ => None
-        },
-    to_log()));
+metrics(aggregate());
+set_default_aggregate_fn(|_kind, name, score|
+    match score {
+        ScoreType::Count(count) => 
+            Some((Kind::Counter, vec![name, ".per_thousand"], count / 1000)),
+        _ => None
+    });
 ```
 
 Apply statistical sampling to metrics:
@@ -98,12 +98,12 @@ For speed and easier maintenance, metrics are usually defined statically:
 #[macro_use] extern crate lazy_static;
 use dipstick::*;
 
-metrics!("my_app" => {
+delegate_metrics!("my_app" => {
     @Counter COUNTER_A: "counter_a";
 });
 
 fn main() {
-    send_metrics(to_stdout());
+    route_aggregate_metrics(to_stdout());
     COUNTER_A.count(11);
 }
 ```

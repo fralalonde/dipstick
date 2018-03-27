@@ -65,7 +65,7 @@ pub fn to_buffered_graphite<ADDR>(address: ADDR) -> error::Result<MetricContext<
     ))
 }
 
-fn graphite_metric(kind: Kind, name: &str, rate: Rate) -> Graphite {
+fn graphite_metric(kind: Kind, name: &str, rate: Sampling) -> Graphite {
     let mut prefix = String::with_capacity(32);
     prefix.push_str(name);
     prefix.push(' ');

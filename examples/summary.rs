@@ -7,7 +7,9 @@ use std::time::Duration;
 use dipstick::*;
 
 fn main() {
-    let to_aggregate = aggregate(summary, to_stdout());
+    let to_aggregate = aggregate();
+
+    route_aggregate_metrics(to_stdout());
 
     let app_metrics = metrics(to_aggregate);
 

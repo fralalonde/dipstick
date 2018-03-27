@@ -1,15 +1,38 @@
 //! Decouple metric definition from configuration with trait objects.
 
 use core::*;
-use metrics::*;
+use metrics::{MetricScope, DefineMetric, WriteMetric, NO_RECV_METRICS};
 use namespace::*;
-use registry;
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock, Weak};
 
 use atomic_refcell::*;
 
+/// Define delegate metrics.
+#[macro_export]
+macro_rules! delegate_metrics {
+    (pub $METRIC_ID:ident = $e:expr $(;)*) => { metrics! {<Delegate> pub $METRIC_ID = $e; } };
+    (pub $METRIC_ID:ident = $e:expr => { $($REMAINING:tt)+ }) => { metrics! {<Delegate> pub $METRIC_ID = $e => { $($REMAINING)* } } };
+    ($METRIC_ID:ident = $e:expr $(;)*) => { metrics! {<Delegate> $METRIC_ID = $e; } };
+    ($METRIC_ID:ident = $e:expr => { $($REMAINING:tt)+ }) => { metrics! {<Delegate> $METRIC_ID = $e => { $($REMAINING)* } } };
+    ($METRIC_ID:ident => { $($REMAINING:tt)+ }) => { metrics! {<Delegate> $METRIC_ID => { $($REMAINING)* } } };
+    ($e:expr => { $($REMAINING:tt)+ }) => { metrics! {<Delegate> $e => { $($REMAINING)* } } };
+}
+
+lazy_static! {
+    pub static ref DELEGATE_REGISTRY: RwLock<Vec<MetricsSend>> = RwLock::new(vec![]);
+    pub static ref DEFAULT_METRICS: RwLock<Arc<DefineMetric + Sync + Send>> = RwLock::new(NO_RECV_METRICS.clone());
+}
+
+/// Install a new receiver for all dispatched metrics, replacing any previous receiver.
+pub fn set_default_metric_scope<IS: Into<MetricScope<T>>, T: Send + Sync + Clone + 'static>(into_recv: IS) {
+    let recv = Arc::new(into_recv.into());
+    for d in DELEGATE_REGISTRY.read().unwrap().iter() {
+        d.set_receiver(recv.clone());
+    }
+    *DEFAULT_METRICS.write().unwrap() = recv;
+}
 
 /// Create a new dispatch point for metrics.
 /// All dispatch points are automatically entered in the dispatch registry.
@@ -17,31 +40,11 @@ pub fn delegate_metrics() -> MetricsSend {
     let send = MetricsSend {
         inner: Arc::new(RwLock::new(InnerMetricsSend {
             metrics: HashMap::new(),
-            recv: registry::get_default_metrics_recv(),
+            recv: DEFAULT_METRICS.read().unwrap().clone(),
         })),
     };
-    registry::add_metrics_send(send.clone());
+    DELEGATE_REGISTRY.write().unwrap().push(send.clone());
     send
-}
-
-/// Dynamic counterpart of a `Dispatcher`.
-/// Adapter to AppMetrics<_> of unknown type.
-pub trait MetricsRecv {
-    /// Register a new metric.
-    /// Only one metric of a certain name will be defined.
-    /// Observer must return a MetricHandle that uniquely identifies the metric.
-    fn define_metric(&self, kind: Kind, name: &str, rate: Rate) -> Box<RecvMetric + Send + Sync>;
-
-    /// Flush the receiver's scope.
-    fn flush(&self);
-}
-
-/// Dynamic counterpart of the `DispatcherMetric`.
-/// Adapter to a metric of unknown type.
-pub trait RecvMetric {
-    /// Write metric value to a scope.
-    /// Observers only receive previously registered handles.
-    fn write(&self, value: Value);
 }
 
 /// Shortcut name because `AppMetrics<Dispatch>`
@@ -54,9 +57,9 @@ pub type Delegate = Arc<SendMetric>;
 pub struct SendMetric {
     kind: Kind,
     name: String,
-    rate: Rate,
+    rate: Sampling,
     #[derivative(Debug = "ignore")]
-    recv_metric: AtomicRefCell<Box<RecvMetric + Send + Sync>>,
+    recv_metric: AtomicRefCell<Box<WriteMetric + Send + Sync>>,
     #[derivative(Debug = "ignore")]
     send: MetricsSend,
 }
@@ -79,30 +82,33 @@ pub struct MetricsSend {
 
 struct InnerMetricsSend {
     metrics: HashMap<String, Weak<SendMetric>>,
-    recv: Arc<MetricsRecv + Send + Sync>,
+    recv: Arc<DefineMetric + Send + Sync>,
 }
 
 /// Allow turning a 'static str into a Delegate, where str is the prefix.
-impl From<&'static str> for Metrics<Delegate> {
-    fn from(prefix: &'static str) -> Metrics<Delegate> {
-        let app_metrics: Metrics<Delegate> = delegate_metrics().into();
-        app_metrics.with_prefix(prefix)
+impl From<&'static str> for MetricScope<Delegate> {
+    fn from(prefix: &'static str) -> MetricScope<Delegate> {
+        let app_metrics: MetricScope<Delegate> = delegate_metrics().into();
+        if !prefix.is_empty() {
+            app_metrics.with_prefix(prefix)
+        } else {
+            app_metrics
+        }
     }
 }
 
 /// Allow turning a 'static str into a Delegate, where str is the prefix.
-impl From<()> for Metrics<Delegate> {
-    fn from(_: ()) -> Metrics<Delegate> {
-        let app_metrics: Metrics<Delegate> = delegate_metrics().into();
+impl From<()> for MetricScope<Delegate> {
+    fn from(_: ()) -> MetricScope<Delegate> {
+        let app_metrics: MetricScope<Delegate> = delegate_metrics().into();
         app_metrics
     }
 }
 
-
-impl From<MetricsSend> for Metrics<Delegate> {
-    fn from(send: MetricsSend) -> Metrics<Delegate> {
+impl From<MetricsSend> for MetricScope<Delegate> {
+    fn from(send: MetricsSend) -> MetricScope<Delegate> {
         let send_cmd = send.clone();
-        Metrics::new(
+        MetricScope::new(
             // define metric
             Arc::new(move |kind, name, rate| send.define_metric(kind, name, rate)),
 
@@ -120,7 +126,7 @@ impl From<MetricsSend> for Metrics<Delegate> {
 
 impl MetricsSend {
     /// Install a new metric receiver, replacing the previous one.
-    pub fn set_receiver<R: MetricsRecv + Send + Sync + 'static>(&self, recv: Arc<R>) {
+    pub fn set_receiver<R: DefineMetric + Send + Sync + 'static>(&self, recv: Arc<R>) {
         let inner = &mut self.inner.write().expect("Lock Metrics Send");
 
         for mut metric in inner.metrics.values() {
@@ -133,7 +139,7 @@ impl MetricsSend {
         inner.recv = recv.clone()
     }
 
-    fn define_metric(&self, kind: Kind, name: &str, rate: Rate) -> Delegate {
+    fn define_metric(&self, kind: Kind, name: &str, rate: Sampling) -> Delegate {
         let mut inner = self.inner.write().expect("Lock Metrics Send");
         inner.metrics.get(name)
             .and_then(|metric_ref| Weak::upgrade(metric_ref))
@@ -165,25 +171,23 @@ impl MetricsSend {
 #[cfg(feature = "bench")]
 mod bench {
 
-    use super::*;
+    use delegate::{delegate_metrics, set_default_metric_scope, Delegate};
     use test;
-    use aggregate::*;
-    use publish::*;
-    use output::*;
+    use metrics::MetricScope;
+    use aggregate::aggregate;
 
     #[bench]
     fn dispatch_marker_to_aggregate(b: &mut test::Bencher) {
-        let dispatch = delegate_metrics();
-        let sink: Metrics<Delegate> = dispatch.clone().into();
-        dispatch.set_receiver(aggregate(summary, to_void()));
+        set_default_metric_scope(aggregate());
+        let sink: MetricScope<Delegate> = delegate_metrics().into();
         let metric = sink.marker("event_a");
         b.iter(|| test::black_box(metric.mark()));
     }
 
     #[bench]
     fn dispatch_marker_to_void(b: &mut test::Bencher) {
-        let dispatch = delegate_metrics();
-        let sink: Metrics<Delegate> = dispatch.into();
+        let metrics = delegate_metrics();
+        let sink: MetricScope<Delegate> = metrics.into();
         let metric = sink.marker("event_a");
         b.iter(|| test::black_box(metric.mark()));
     }

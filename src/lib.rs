@@ -33,11 +33,13 @@ pub use core::*;
 pub mod context;
 pub use context::*;
 
-//pub mod local_delegate;
-//pub use local_delegate::*;
-
+#[macro_use]
 pub mod delegate;
 pub use delegate::*;
+
+#[macro_use]
+mod aggregate;
+pub use aggregate::*;
 
 mod output;
 pub use output::*;
@@ -51,11 +53,6 @@ pub use sample::*;
 mod scores;
 pub use scores::*;
 
-mod aggregate;
-pub use aggregate::*;
-
-mod publish;
-pub use publish::*;
 
 mod statsd;
 pub use statsd::*;
@@ -84,8 +81,4 @@ pub use async_queue::*;
 mod schedule;
 pub use schedule::*;
 
-mod registry;
-pub use registry::*;
-
 mod self_metrics;
-pub use self_metrics::snapshot;

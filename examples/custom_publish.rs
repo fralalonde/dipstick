@@ -35,7 +35,9 @@ fn main() {
     }
 
     // send application metrics to aggregator
-    let to_aggregate = aggregate(custom_statistics, to_stdout());
+    let to_aggregate = aggregate();
+
+    route_aggregate_metrics(to_stdout());
 
     let app_metrics = metrics(to_aggregate);
 
