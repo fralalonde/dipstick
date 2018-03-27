@@ -13,11 +13,11 @@ where
     Self: Sized,
 {
     /// Perform random sampling of values according to the specified rate.
-    fn with_sampling_rate(&self, sampling_rate: Rate) -> Self;
+    fn with_sampling_rate(&self, sampling_rate: Sampling) -> Self;
 }
 
 impl<M: Send + Sync + 'static + Clone> WithSamplingRate for MetricContext<M> {
-    fn with_sampling_rate(&self, sampling_rate: Rate) -> Self {
+    fn with_sampling_rate(&self, sampling_rate: Sampling) -> Self {
         let int_sampling_rate = pcg32::to_int_rate(sampling_rate);
 
         self.mod_both(|metric_fn, scope_fn| {
@@ -52,7 +52,7 @@ impl<M: Send + Sync + 'static + Clone> WithSamplingRate for MetricContext<M> {
 
 /// Perform random sampling of values according to the specified rate.
 #[deprecated(since = "0.5.0", note = "Use `with_sampling_rate` instead.")]
-pub fn sample<M, IC>(sampling_rate: Rate, chain: IC) -> MetricContext<M>
+pub fn sample<M, IC>(sampling_rate: Sampling, chain: IC) -> MetricContext<M>
 where
     M: Clone + Send + Sync + 'static,
     IC: Into<MetricContext<M>>,

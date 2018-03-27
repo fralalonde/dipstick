@@ -37,10 +37,10 @@ impl TimeHandle {
 /// - 0.5 records one of two values
 /// - 0.0 records nothing
 /// The actual distribution (random, fixed-cycled, etc) depends on selected sampling method.
-pub type Rate = f64;
+pub type Sampling = f64;
 
 /// Do not sample, use all data.
-pub const FULL_SAMPLING_RATE: Rate = 1.0;
+pub const FULL_SAMPLING_RATE: Sampling = 1.0;
 
 /// Used to differentiate between metric kinds in the backend.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
@@ -60,7 +60,7 @@ pub enum Kind {
 /// The resulting metrics themselves can be also be safely shared across threads (<M> is Send + Sync).
 /// Concurrent usage of a metric is done using threaded scopes.
 /// Shared concurrent scopes may be provided by some backends (aggregate).
-pub type DefineMetricFn<M> = Arc<Fn(Kind, &str, Rate) -> M + Send + Sync>;
+pub type DefineMetricFn<M> = Arc<Fn(Kind, &str, Sampling) -> M + Send + Sync>;
 
 /// A function trait that opens a new metric capture scope.
 pub type OpenScopeFn<M> = Arc<Fn() -> WriteFn<M> + Send + Sync>;
