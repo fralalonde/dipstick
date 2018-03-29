@@ -38,7 +38,7 @@ fn main() {
     let to_aggregate = aggregate();
 
     default_aggregate_config(to_stdout());
-    default_aggregate_stats(custom_statistics);
+    set_default_aggregate_statistics(custom_statistics);
 
     let app_metrics = metric_scope(to_aggregate);
 

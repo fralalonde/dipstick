@@ -9,19 +9,19 @@ use std::thread::sleep;
 use dipstick::*;
 
 fn main() {
-    let context = to_buffered_stdout();
+    let config = to_buffered_stdout();
 
     loop {
         // add counts forever, non-stop
         println!("\n------- open scope");
 
-        let metrics = context.open_scope();
+        let metrics = config.open_scope();
 
         let counter = metrics.counter("counter_a");
         let timer = metrics.timer("timer_a");
         let gauge = metrics.gauge("gauge_a");
         let marker = metrics.marker("marker_a");
-        
+
         counter.count(11);
         counter.count(12);
         counter.count(13);
