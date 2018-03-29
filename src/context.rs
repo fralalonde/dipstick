@@ -1,17 +1,20 @@
 //! Chain of command for unscoped metrics.
 
 use core::*;
-use metrics::MetricScope;
+use scope::MetricScope;
 
 use namespace::{WithNamespace, add_namespace, Namespace};
 use std::sync::{Arc, RwLock};
 
-use metrics::DefineMetric;
+use scope::DefineMetric;
 use output;
 
 lazy_static! {
-    pub static ref NO_RECV_CONTEXT: Arc<OpenScope + Send + Sync> = Arc::new(output::to_void());
-    pub static ref DEFAULT_CONTEXT: RwLock<Arc<OpenScope + Send + Sync>> = RwLock::new(NO_RECV_CONTEXT.clone());
+    /// The reference instance identifying an uninitialized metric config.
+    pub static ref NO_METRIC_CONTEXT: Arc<OpenScope + Send + Sync> = Arc::new(output::to_void());
+
+    /// The global instance to open scopes from if no other has been specified.
+    pub static ref DEFAULT_CONTEXT: RwLock<Arc<OpenScope + Send + Sync>> = RwLock::new(NO_METRIC_CONTEXT.clone());
 }
 
 /// Wrap a MetricContext in a non-generic trait.
@@ -21,7 +24,7 @@ pub trait OpenScope {
 }
 
 /// Install a new receiver for all dispatched metrics, replacing any previous receiver.
-pub fn route_aggregate_metrics<IS: Into<MetricContext<T>>, T: Send + Sync + Clone + 'static>(into_ctx: IS) {
+pub fn default_aggregate_config<IS: Into<MetricContext<T>>, T: Send + Sync + Clone + 'static>(into_ctx: IS) {
     let ctx = Arc::new(into_ctx.into());
     *DEFAULT_CONTEXT.write().unwrap() = ctx;
 }
@@ -33,7 +36,7 @@ pub fn route_aggregate_metrics<IS: Into<MetricContext<T>>, T: Send + Sync + Clon
 #[derivative(Debug)]
 pub struct MetricContext<M> {
     #[derivative(Debug = "ignore")]
-    prototype_metric_fn: DefineMetricFn<M>,
+    define_metric_fn: DefineMetricFn<M>,
 
     #[derivative(Debug = "ignore")]
     open_scope_fn: OpenScopeFn<M>,
@@ -54,19 +57,19 @@ impl<M> MetricContext<M> {
     /// ```
     ///
     pub fn open_scope(&self) -> MetricScope<M> {
-        MetricScope::new(self.prototype_metric_fn.clone(), (self.open_scope_fn)())
+        MetricScope::new(self.define_metric_fn.clone(), (self.open_scope_fn)())
     }
 
 }
 
 /// Create a new metric chain with the provided metric definition and scope creation functions.
-pub fn metrics_context<MF, WF, M>(define_fn: MF, open_scope_fn: WF) -> MetricContext<M>
+pub fn metric_context<MF, WF, M>(define_fn: MF, open_scope_fn: WF) -> MetricContext<M>
     where
         MF: Fn(Kind, &str, Sampling) -> M + Send + Sync + 'static,
         WF: Fn() -> WriteFn<M> + Send + Sync + 'static,
 {
     MetricContext {
-        prototype_metric_fn: Arc::new(define_fn),
+        define_metric_fn: Arc::new(define_fn),
         open_scope_fn: Arc::new(open_scope_fn),
     }
 }
@@ -74,30 +77,31 @@ pub fn metrics_context<MF, WF, M>(define_fn: MF, open_scope_fn: WF) -> MetricCon
 impl<M: Send + Sync + Clone + 'static> MetricContext<M> {
 
     /// Intercept both metric definition and scope creation, possibly changing the metric type.
-    pub fn mod_both<MF, N>(&self, mod_fn: MF) -> MetricContext<N>
+    pub fn wrap_all<MF, N>(&self, mod_fn: MF) -> MetricContext<N>
     where
         MF: Fn(DefineMetricFn<M>, OpenScopeFn<M>) -> (DefineMetricFn<N>, OpenScopeFn<N>),
         N: Clone + Send + Sync,
     {
-        let (metric_fn, scope_fn) =
-            mod_fn(self.prototype_metric_fn.clone(), self.open_scope_fn.clone());
+        let (define_metric_fn, open_scope_fn) = mod_fn(
+            self.define_metric_fn.clone(),
+            self.open_scope_fn.clone()
+        );
         MetricContext {
-            prototype_metric_fn: metric_fn,
-            open_scope_fn: scope_fn,
+            define_metric_fn,
+            open_scope_fn,
         }
     }
 
     /// Intercept scope creation.
-    pub fn mod_scope<MF>(&self, mod_fn: MF) -> Self
+    pub fn wrap_scope<MF>(&self, mod_fn: MF) -> Self
     where
         MF: Fn(OpenScopeFn<M>) -> OpenScopeFn<M>,
     {
         MetricContext {
-            prototype_metric_fn: self.prototype_metric_fn.clone(),
+            define_metric_fn: self.define_metric_fn.clone(),
             open_scope_fn: mod_fn(self.open_scope_fn.clone()),
         }
     }
-
 }
 
 impl<M: Send + Sync + Clone + 'static> OpenScope for MetricContext<M> {
@@ -116,7 +120,7 @@ impl<M: Send + Sync + Clone + 'static> WithNamespace for MetricContext<M> {
     fn with_name<IN: Into<Namespace>>(&self, names: IN) -> Self {
         let ref ninto = names.into();
         MetricContext {
-            prototype_metric_fn: add_namespace(ninto, self.prototype_metric_fn.clone()),
+            define_metric_fn: add_namespace(ninto, self.define_metric_fn.clone()),
             open_scope_fn: self.open_scope_fn.clone(),
         }
     }

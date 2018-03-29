@@ -45,7 +45,7 @@ where
     debug!("Connecting to graphite {:?}", address);
     let socket = Arc::new(RwLock::new(RetrySocket::new(address.clone())?));
 
-    Ok(metrics_context(
+    Ok(metric_context(
         move |kind, name, rate| graphite_metric(kind, name, rate),
         move || graphite_scope(&socket, false),
     ))
@@ -59,7 +59,7 @@ pub fn to_buffered_graphite<ADDR>(address: ADDR) -> error::Result<MetricContext<
     debug!("Connecting to graphite {:?}", address);
     let socket = Arc::new(RwLock::new(RetrySocket::new(address.clone())?));
 
-    Ok(metrics_context(
+    Ok(metric_context(
         move |kind, name, rate| graphite_metric(kind, name, rate),
         move || graphite_scope(&socket, true),
     ))

@@ -2,7 +2,7 @@
 
 use core::*;
 use context::*;
-use metrics::*;
+use scope::*;
 
 use std::sync::Arc;
 

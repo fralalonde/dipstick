@@ -4,7 +4,7 @@
 
 pub use core::*;
 
-pub use metrics::*;
+pub use scope::*;
 pub use aggregate::*;
 pub use namespace::*;
 

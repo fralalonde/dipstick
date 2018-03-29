@@ -6,7 +6,7 @@ use std::sync::RwLock;
 
 /// Write metric values to stdout using `println!`.
 pub fn to_stdout() -> MetricContext<String> {
-    metrics_context(
+    metric_context(
         |_kind, name, _rate| String::from(name),
         || control_scope(|cmd|
             if let ScopeCmd::Write(m, v) = cmd {
@@ -20,7 +20,7 @@ pub fn to_stdout() -> MetricContext<String> {
 /// Buffered operation requires locking.
 /// If thread latency is a concern you may wish to also use #with_async_queue.
 pub fn to_buffered_stdout() -> MetricContext<String> {
-    metrics_context(
+    metric_context(
         |_kind, name, _rate| String::from(name),
         || {
             let buf = RwLock::new(String::new());
@@ -43,7 +43,7 @@ pub fn to_buffered_stdout() -> MetricContext<String> {
 /// Write metric values to the standard log using `info!`.
 // TODO parameterize log level
 pub fn to_log() -> MetricContext<String> {
-    metrics_context(
+    metric_context(
         |_kind, name, _rate| String::from(name),
         || control_scope(|cmd|
             if let ScopeCmd::Write(m, v) = cmd {
@@ -58,7 +58,7 @@ pub fn to_log() -> MetricContext<String> {
 /// If thread latency is a concern you may wish to also use #with_async_queue.
 // TODO parameterize log level
 pub fn to_buffered_log() -> MetricContext<String> {
-    metrics_context(
+    metric_context(
         |_kind, name, _rate| String::from(name),
         || {
             let buf = RwLock::new(String::new());
@@ -81,7 +81,7 @@ pub fn to_buffered_log() -> MetricContext<String> {
 
 /// Discard all metric values sent to it.
 pub fn to_void() -> MetricContext<()> {
-    metrics_context(
+    metric_context(
         move |_kind, _name, _rate| (),
         || control_scope(|_cmd| {}),
     )

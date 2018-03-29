@@ -27,7 +27,7 @@ where
 
 impl<M: Send + Sync + Clone + 'static> WithAsyncQueue for MetricContext<M> {
     fn with_async_queue(&self, queue_size: usize) -> Self {
-        self.mod_scope(|next| {
+        self.wrap_scope(|next| {
             // setup channel
             let (sender, receiver) = mpsc::sync_channel::<QueueCommand<M>>(queue_size);
 

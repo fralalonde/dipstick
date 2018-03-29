@@ -9,7 +9,7 @@ use std::time::Duration;
 fn main() {
     //    badlog::init(Some("info"));
 
-    let metrics = metrics(
+    let metrics = metric_scope(
         to_graphite("localhost:2003")
             .expect("Connecting")
             .with_namespace(&["my", "app"][..]),
