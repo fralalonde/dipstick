@@ -1,7 +1,7 @@
 //! Send metrics to a graphite server.
 
 use core::*;
-use context::*;
+use config::*;
 use error;
 use self_metrics::*;
 
@@ -38,28 +38,28 @@ metrics!{
 //}
 
 /// Send metrics to a graphite server at the address and port provided.
-pub fn to_graphite<ADDR>(address: ADDR) -> error::Result<MetricContext<Graphite>>
+pub fn to_graphite<ADDR>(address: ADDR) -> error::Result<MetricConfig<Graphite>>
 where
     ADDR: ToSocketAddrs + Debug + Clone,
 {
     debug!("Connecting to graphite {:?}", address);
     let socket = Arc::new(RwLock::new(RetrySocket::new(address.clone())?));
 
-    Ok(metric_context(
+    Ok(metric_config(
         move |kind, name, rate| graphite_metric(kind, name, rate),
         move || graphite_scope(&socket, false),
     ))
 }
 
 /// Send metrics to a graphite server at the address and port provided.
-pub fn to_buffered_graphite<ADDR>(address: ADDR) -> error::Result<MetricContext<Graphite>>
-    where
-        ADDR: ToSocketAddrs + Debug + Clone,
+pub fn to_buffered_graphite<ADDR>(address: ADDR) -> error::Result<MetricConfig<Graphite>>
+where
+    ADDR: ToSocketAddrs + Debug + Clone,
 {
     debug!("Connecting to graphite {:?}", address);
     let socket = Arc::new(RwLock::new(RetrySocket::new(address.clone())?));
 
-    Ok(metric_context(
+    Ok(metric_config(
         move |kind, name, rate| graphite_metric(kind, name, rate),
         move || graphite_scope(&socket, true),
     ))
@@ -81,7 +81,7 @@ fn graphite_metric(kind: Kind, name: &str, rate: Sampling) -> Graphite {
         let upsample = (1.0 / rate).round() as u64;
         warn!(
             "Metric {:?} '{}' being sampled at rate {} will be upsampled \
-                     by a factor of {} when sent to graphite.",
+             by a factor of {} when sent to graphite.",
             kind, name, rate, upsample
         );
         scale *= upsample;

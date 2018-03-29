@@ -1,17 +1,20 @@
 //! Standard stateless metric outputs.
 // TODO parameterize templates
 use core::*;
-use context::*;
+use config::*;
 use std::sync::RwLock;
 
 /// Write metric values to stdout using `println!`.
-pub fn to_stdout() -> MetricContext<String> {
-    metric_context(
+pub fn to_stdout() -> MetricConfig<String> {
+    metric_config(
         |_kind, name, _rate| String::from(name),
-        || control_scope(|cmd|
-            if let ScopeCmd::Write(m, v) = cmd {
-                println!("{}: {}", m, v)
+        || {
+            control_scope(|cmd| {
+                if let ScopeCmd::Write(m, v) = cmd {
+                    println!("{}: {}", m, v)
+                }
             })
+        },
     )
 }
 
@@ -19,8 +22,8 @@ pub fn to_stdout() -> MetricContext<String> {
 /// Values are buffered until #flush is called
 /// Buffered operation requires locking.
 /// If thread latency is a concern you may wish to also use #with_async_queue.
-pub fn to_buffered_stdout() -> MetricContext<String> {
-    metric_context(
+pub fn to_buffered_stdout() -> MetricConfig<String> {
+    metric_config(
         |_kind, name, _rate| String::from(name),
         || {
             let buf = RwLock::new(String::new());
@@ -42,13 +45,16 @@ pub fn to_buffered_stdout() -> MetricContext<String> {
 
 /// Write metric values to the standard log using `info!`.
 // TODO parameterize log level
-pub fn to_log() -> MetricContext<String> {
-    metric_context(
+pub fn to_log() -> MetricConfig<String> {
+    metric_config(
         |_kind, name, _rate| String::from(name),
-        || control_scope(|cmd|
-            if let ScopeCmd::Write(m, v) = cmd {
-                info!("{}: {}", m, v)
+        || {
+            control_scope(|cmd| {
+                if let ScopeCmd::Write(m, v) = cmd {
+                    info!("{}: {}", m, v)
+                }
             })
+        },
     )
 }
 
@@ -57,8 +63,8 @@ pub fn to_log() -> MetricContext<String> {
 /// Buffered operation requires locking.
 /// If thread latency is a concern you may wish to also use #with_async_queue.
 // TODO parameterize log level
-pub fn to_buffered_log() -> MetricContext<String> {
-    metric_context(
+pub fn to_buffered_log() -> MetricConfig<String> {
+    metric_config(
         |_kind, name, _rate| String::from(name),
         || {
             let buf = RwLock::new(String::new());
@@ -78,13 +84,9 @@ pub fn to_buffered_log() -> MetricContext<String> {
     )
 }
 
-
 /// Discard all metric values sent to it.
-pub fn to_void() -> MetricContext<()> {
-    metric_context(
-        move |_kind, _name, _rate| (),
-        || control_scope(|_cmd| {}),
-    )
+pub fn to_void() -> MetricConfig<()> {
+    metric_config(move |_kind, _name, _rate| (), || control_scope(|_cmd| {}))
 }
 
 #[cfg(test)]

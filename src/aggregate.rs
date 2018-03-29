@@ -1,8 +1,8 @@
 //! Maintain aggregated metrics for deferred reporting,
 //!
-use core::{Value, Kind, control_scope, ScopeCmd, Sampling};
+use core::{control_scope, Kind, Sampling, ScopeCmd, Value};
 use core::Kind::*;
-use context::DEFAULT_CONTEXT;
+use config::{OpenScope, DEFAULT_CONFIG, NO_METRIC_CONFIG};
 use scope::MetricScope;
 use namespace::WithNamespace;
 
@@ -15,50 +15,74 @@ use std::sync::{Arc, RwLock};
 /// Define aggregate metrics.
 #[macro_export]
 macro_rules! aggregate_metrics {
-    (pub $METRIC_ID:ident = $e:expr $(;)*) => { metrics! {<Aggregate> pub $METRIC_ID = $e } };
-    (pub $METRIC_ID:ident = $e:expr => { $($REMAINING:tt)+ }) => { metrics! {<Aggregate> pub $METRIC_ID = $e => { $($REMAINING)* } } };
-    ($METRIC_ID:ident = $e:expr $(;)*) => { metrics! {<Aggregate> $METRIC_ID = $e } };
-    ($METRIC_ID:ident = $e:expr => { $($REMAINING:tt)+ }) => { metrics! {<Aggregate> $METRIC_ID = $e => { $($REMAINING)* } } };
-    ($METRIC_ID:ident => { $($REMAINING:tt)+ }) => { metrics! {<Aggregate> $METRIC_ID => { $($REMAINING)* } } };
-    ($e:expr => { $($REMAINING:tt)+ }) => { metrics! {<Aggregate> $e => { $($REMAINING)* } } };
+    (pub $METRIC_ID:ident = $e:expr $(;)*) => {
+        metrics! {<Aggregate> pub $METRIC_ID = $e }
+    };
+    (pub $METRIC_ID:ident = $e:expr => { $($REMAINING:tt)+ }) => {
+        metrics! {<Aggregate> pub $METRIC_ID = $e => { $($REMAINING)* } }
+    };
+    ($METRIC_ID:ident = $e:expr $(;)*) => {
+        metrics! {<Aggregate> $METRIC_ID = $e }
+    };
+    ($METRIC_ID:ident = $e:expr => { $($REMAINING:tt)+ }) => {
+        metrics! {<Aggregate> $METRIC_ID = $e => { $($REMAINING)* } }
+    };
+    ($METRIC_ID:ident => { $($REMAINING:tt)+ }) => {
+        metrics! {<Aggregate> $METRIC_ID => { $($REMAINING)* } }
+    };
+    ($e:expr => { $($REMAINING:tt)+ }) => {
+        metrics! {<Aggregate> $e => { $($REMAINING)* } }
+    };
 }
 
 lazy_static! {
-    static ref DEFAULT_AGGREGATE_STATS: RwLock<Arc<Fn(Kind, &str, ScoreType) ->
-        Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static>> =
-        RwLock::new(Arc::new(summary));
+    static ref DEFAULT_AGGREGATE_STATS:
+        RwLock<Arc<Fn(Kind, &str, ScoreType) ->
+                Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static>> =
+            RwLock::new(Arc::new(summary));
 
-//    static ref AGGREGATE_REGISTRY: RwLock<Vec<Aggregator>> = RwLock::new(vec![]);
+    static ref AGGREGATE_REGISTRY:
+        RwLock<HashMap<String, Arc<RwLock<HashMap<String, Arc<Scoreboard>>>>>> =
+            RwLock::new(HashMap::new());
+
+    static ref DEFAULT_AGGREGATE_SCOPE: RwLock<Arc<OpenScope + Sync + Send>> =
+        RwLock::new(NO_METRIC_CONFIG.clone());
 }
 
 /// Set the default aggregated metrics statistics generator.
-pub fn default_aggregate_stats<F>(func: F)
+pub fn set_default_aggregate_statistics<F>(func: F)
 where
-    F: Fn(Kind, &str, ScoreType) -> Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static
+    F: Fn(Kind, &str, ScoreType) -> Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static,
 {
     *DEFAULT_AGGREGATE_STATS.write().unwrap() = Arc::new(func)
 }
 
-/// Get the default metrics summary.
-fn get_default_publish_fn() -> Arc<Fn(Kind, &str, ScoreType) ->
-Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static> {
-    DEFAULT_AGGREGATE_STATS.read().unwrap().clone()
+/// Install a new receiver for all aggregateed metrics, replacing any previous receiver.
+pub fn set_aggregate_default<
+    IS: Into<Arc<OpenScope + Sync + Send>>,
+    T: Send + Sync + Clone + 'static,
+>(
+    new_config: IS,
+) {
+    *DEFAULT_AGGREGATE_SCOPE.write().unwrap() = new_config.into();
 }
 
+/// Get the named aggregate point.
+/// Uses the stored instance if it already exists, otherwise creates it.
+/// All aggregate points are automatically entered in the aggregate registry and kept FOREVER.
+fn aggregate_name(name: &str) -> MetricScope<Aggregate> {
+    let metrics = AGGREGATE_REGISTRY
+        .write()
+        .expect("Aggregate Registry")
+        .entry(name.into())
+        .or_insert_with(|| Arc::new(RwLock::new(HashMap::new())))
+        .clone();
+    MetricAggregate { metrics }.into()
+}
 
-/// Aggregate metrics in memory.
-/// Depending on the type of metric, count, sum, minimum and maximum of values will be tracked.
-/// Needs to be connected to a publish to be useful.
-/// ```
-/// use dipstick;
-/// let metrics: AppMetrics<_> = aggregate(summary, to_stdout()).into();
-/// metrics.marker("my_event").mark();
-/// metrics.marker("my_event").mark();
-/// ```
+/// Get the default aggregate point.
 pub fn aggregate() -> MetricScope<Aggregate> {
-    MetricAggregate {
-        metrics: Arc::new(RwLock::new(HashMap::new())),
-    }.into()
+    aggregate_name("_DEFAULT")
 }
 
 impl From<MetricAggregate> for MetricScope<Aggregate> {
@@ -72,7 +96,8 @@ impl From<MetricAggregate> for MetricScope<Aggregate> {
                     metric.update(value)
                 }
                 ScopeCmd::Flush => agg_1.flush(),
-            }))
+            }),
+        )
     }
 }
 
@@ -102,7 +127,7 @@ pub struct MetricAggregate {
 }
 
 impl MetricAggregate {
-    /// Build a new metric aggregation point with specified initial capacity of metrics to aggregate.
+    /// Build a new metric aggregation point with initial capacity of metrics to aggregate.
     pub fn with_capacity(size: usize) -> MetricAggregate {
         MetricAggregate {
             metrics: Arc::new(RwLock::new(HashMap::with_capacity(size))),
@@ -139,11 +164,13 @@ impl MetricAggregate {
     /// Publish statistics
     pub fn flush(&self) {
         let snapshot: Vec<ScoreSnapshot> = {
-            let metrics = self.metrics.read().expect("Locking metrics scoreboards");
+            let metrics = self.metrics.read().expect("Aggregate Lock");
             metrics.values().flat_map(|score| score.reset()).collect()
         };
 
-        let publish_scope = DEFAULT_CONTEXT.read().unwrap().open_scope();
+        let default_publish_fn = DEFAULT_AGGREGATE_STATS.read().unwrap().clone();
+
+        let publish_scope = DEFAULT_CONFIG.read().unwrap().open_scope();
         if snapshot.is_empty() {
             // no data was collected for this period
             // TODO repeat previous frame min/max ?
@@ -151,8 +178,10 @@ impl MetricAggregate {
         } else {
             for metric in snapshot {
                 for score in metric.2 {
-                    if let Some(ex) = get_default_publish_fn()(metric.0, metric.1.as_ref(), score) {
-                        publish_scope.define_metric(ex.0, &ex.1.concat(), 1.0).write(ex.2);
+                    if let Some(ex) = (default_publish_fn)(metric.0, metric.1.as_ref(), score) {
+                        publish_scope
+                            .define_metric(ex.0, &ex.1.concat(), 1.0)
+                            .write(ex.2);
                     }
                 }
             }
@@ -162,7 +191,6 @@ impl MetricAggregate {
         // source.cleanup();
         publish_scope.flush()
     }
-
 }
 
 /// The type of metric created by the Aggregator.
@@ -221,12 +249,11 @@ pub fn summary(kind: Kind, name: &str, score: ScoreType) -> Option<(Kind, Vec<&s
     }
 }
 
-
 #[cfg(feature = "bench")]
 mod bench {
 
     use test;
-    use core::Kind::{Marker, Counter};
+    use core::Kind::{Counter, Marker};
     use aggregate::aggregate;
 
     #[bench]
@@ -245,15 +272,15 @@ mod bench {
 
     #[bench]
     fn reset_marker(b: &mut test::Bencher) {
-        let sink = aggregate();
-        let metric = sink.define_metric(Marker, "marker_a", 1.0);
+        let agg = aggregate();
+        let metric = agg.define_metric(Marker, "marker", 1.0);
         b.iter(|| test::black_box(metric.reset()));
     }
 
     #[bench]
     fn reset_counter(b: &mut test::Bencher) {
-        let sink = aggregate();
-        let metric = sink.define_metric(Counter, "count_a", 1.0);
+        let agg = aggregate();
+        let metric = agg.define_metric(Counter, "count_a", 1.0);
         b.iter(|| test::black_box(metric.reset()));
     }
 

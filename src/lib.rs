@@ -27,8 +27,8 @@ pub mod macros;
 pub mod core;
 pub use core::*;
 
-pub mod context;
-pub use context::*;
+pub mod config;
+pub use config::*;
 
 #[macro_use]
 pub mod dispatch;

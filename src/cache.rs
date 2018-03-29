@@ -21,7 +21,8 @@ pub fn add_cache<M>(cache_size: usize, next: DefineMetricFn<M>) -> DefineMetricF
 where
     M: Clone + Send + Sync + 'static,
 {
-    let cache: RwLock<lru::LRUCache<String, M>> = RwLock::new(lru::LRUCache::with_capacity(cache_size));
+    let cache: RwLock<lru::LRUCache<String, M>> =
+        RwLock::new(lru::LRUCache::with_capacity(cache_size));
     Arc::new(move |kind, name, rate| {
         let mut cache = cache.write().expect("Locking metric cache");
         let name_str = String::from(name);
@@ -73,7 +74,6 @@ mod lru {
         next: Option<usize>,
         prev: Option<usize>,
     }
-
 
     /// A fixed-size cache.
     pub struct LRUCache<K, V> {

@@ -1,7 +1,7 @@
 //! Decouple metric definition from configuration with trait objects.
 
 use core::*;
-use scope::{MetricScope, DefineMetric, WriteMetric, NO_METRICS_SCOPE};
+use scope::{DefineMetric, MetricScope, WriteMetric, NO_METRIC_SCOPE};
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock, Weak};
@@ -32,15 +32,21 @@ macro_rules! dispatch_metrics {
 }
 
 lazy_static! {
-    static ref DISPATCHER_REGISTRY: RwLock<HashMap<String, Arc<RwLock<InnerDispatch>>>> = RwLock::new(HashMap::new());
-    static ref DEFAULT_DISPATCH_SCOPE: RwLock<Arc<DefineMetric + Sync + Send>> = RwLock::new(NO_METRICS_SCOPE.clone());
+    static ref DISPATCHER_REGISTRY: RwLock<HashMap<String, Arc<RwLock<InnerDispatch>>>> =
+        RwLock::new(HashMap::new());
+    static ref DEFAULT_DISPATCH_SCOPE: RwLock<Arc<DefineMetric + Sync + Send>> =
+        RwLock::new(NO_METRIC_SCOPE.clone());
 }
 
 /// Install a new receiver for all dispatched metrics, replacing any previous receiver.
-pub fn set_dispatch_default<IS: Into<MetricScope<T>>, T: Send + Sync + Clone + 'static>(into_scope: IS) {
+pub fn set_dispatch_default<IS: Into<MetricScope<T>>, T: Send + Sync + Clone + 'static>(
+    into_scope: IS,
+) {
     let new_scope = Arc::new(into_scope.into());
     for inner in DISPATCHER_REGISTRY.read().unwrap().values() {
-        MetricDispatch {inner: inner.clone()}.set_scope(new_scope.clone());
+        MetricDispatch {
+            inner: inner.clone(),
+        }.set_scope(new_scope.clone());
     }
     *DEFAULT_DISPATCH_SCOPE.write().unwrap() = new_scope;
 }
@@ -48,20 +54,23 @@ pub fn set_dispatch_default<IS: Into<MetricScope<T>>, T: Send + Sync + Clone + '
 /// Get the named dispatch point.
 /// Uses the stored instance if it already exists, otherwise creates it.
 /// All dispatch points are automatically entered in the dispatch registry and kept FOREVER.
-pub fn dispatch_name(name: &str) -> MetricScope<Dispatch> {
-    let inner = DISPATCHER_REGISTRY.write().expect("Dispatch Registry")
+fn dispatch_name(name: &str) -> MetricDispatch {
+    let inner = DISPATCHER_REGISTRY
+        .write()
+        .expect("Dispatch Registry")
         .entry(name.into())
         .or_insert_with(|| {
             Arc::new(RwLock::new(InnerDispatch {
                 metrics: HashMap::new(),
                 scope: DEFAULT_DISPATCH_SCOPE.read().unwrap().clone(),
-            }))})
+            }))
+        })
         .clone();
-    MetricDispatch { inner }.into()
+    MetricDispatch { inner }
 }
 
 /// Get the default dispatch point.
-pub fn dispatch() -> MetricScope<Dispatch> {
+pub fn dispatch() -> MetricDispatch {
     dispatch_name("_DEFAULT")
 }
 
@@ -124,14 +133,13 @@ impl From<MetricDispatch> for MetricScope<Dispatch> {
         MetricScope::new(
             // define metric
             Arc::new(move |kind, name, rate| send.define_metric(kind, name, rate)),
-
             // write / flush metric
             control_scope(move |cmd| match cmd {
                 ScopeCmd::Write(metric, value) => {
                     let dispatch: &Arc<DispatchMetric> = metric;
                     dispatch.write_metric.borrow().write(value);
                 }
-                ScopeCmd::Flush => send_cmd.inner.write().expect("Locking Delegate").scope.flush(),
+                ScopeCmd::Flush => send_cmd.inner.write().expect("Dispatch Lock").scope.flush(),
             }),
         )
     }
@@ -140,21 +148,23 @@ impl From<MetricDispatch> for MetricScope<Dispatch> {
 impl MetricDispatch {
     /// Install a new metric receiver, replacing the previous one.
     pub fn set_scope<R: DefineMetric + Send + Sync + 'static>(&self, recv: Arc<R>) {
-        let mut inner = self.inner.write().expect("Lock Metrics Send");
+        let mut inner = self.inner.write().expect("Dispatch Lock");
         for mut metric in inner.metrics.values() {
             if let Some(metric) = metric.upgrade() {
-                let recv_metric = recv.define_metric(metric.kind, metric.name.as_ref(), metric.rate);
+                let recv_metric =
+                    recv.define_metric(metric.kind, metric.name.as_ref(), metric.rate);
                 *metric.write_metric.borrow_mut() = recv_metric;
             }
         }
         // TODO return old receiver (swap, how?)
         inner.scope = recv.clone()
-        
     }
 
     fn define_metric(&self, kind: Kind, name: &str, rate: Sampling) -> Dispatch {
-        let mut inner = self.inner.write().expect("Lock Metrics Send");
-        inner.metrics.get(name)
+        let mut inner = self.inner.write().expect("Dispatch Lock");
+        inner
+            .metrics
+            .get(name)
             .and_then(|metric_ref| Weak::upgrade(metric_ref))
             .unwrap_or_else(|| {
                 let recv_metric = inner.scope.define_metric(kind, name, rate);
@@ -165,16 +175,15 @@ impl MetricDispatch {
                     write_metric: AtomicRefCell::new(recv_metric),
                     dispatch: self.clone(),
                 });
-                inner.metrics.insert(
-                    define_metric.name.clone(),
-                    Arc::downgrade(&define_metric),
-                );
+                inner
+                    .metrics
+                    .insert(define_metric.name.clone(), Arc::downgrade(&define_metric));
                 define_metric
             })
     }
 
     fn drop_metric(&self, metric: &DispatchMetric) {
-        let mut inner = self.inner.write().expect("Lock Metrics Send");
+        let mut inner = self.inner.write().expect("Dispatch Lock");
         if inner.metrics.remove(&metric.name).is_none() {
             panic!("Could not remove DelegatingMetric weak ref from delegation point")
         }
@@ -184,20 +193,23 @@ impl MetricDispatch {
 #[cfg(feature = "bench")]
 mod bench {
 
-    use dispatch;
+    use dispatch::{dispatch, set_dispatch_default};
     use test;
     use aggregate::aggregate;
+    use scope::MetricScope;
 
     #[bench]
     fn dispatch_marker_to_aggregate(b: &mut test::Bencher) {
-        dispatch::set_dispatch_default(aggregate());
-        let metric = super::dispatch().marker("event_a");
+        set_dispatch_default(aggregate());
+        let scope: MetricScope<_> = dispatch().into();
+        let metric = scope.marker("event_a");
         b.iter(|| test::black_box(metric.mark()));
     }
 
     #[bench]
     fn dispatch_marker_to_void(b: &mut test::Bencher) {
-        let metric = dispatch::dispatch().marker("event_a");
+        let scope: MetricScope<_> = dispatch().into();
+        let metric = scope.marker("event_a");
         b.iter(|| test::black_box(metric.mark()));
     }
 

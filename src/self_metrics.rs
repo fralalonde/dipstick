@@ -9,4 +9,3 @@ pub use aggregate::*;
 pub use namespace::*;
 
 aggregate_metrics!(pub DIPSTICK_METRICS = "dipstick");
-

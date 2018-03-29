@@ -1,7 +1,7 @@
 //! Reduce the amount of data to process or transfer by statistically dropping some of it.
 
 use core::*;
-use context::*;
+use config::*;
 
 use std::sync::Arc;
 
@@ -14,7 +14,7 @@ where
     fn with_sampling_rate(&self, sampling_rate: Sampling) -> Self;
 }
 
-impl<M: Send + Sync + 'static + Clone> WithSamplingRate for MetricContext<M> {
+impl<M: Send + Sync + 'static + Clone> WithSamplingRate for MetricConfig<M> {
     fn with_sampling_rate(&self, sampling_rate: Sampling) -> Self {
         let int_sampling_rate = pcg32::to_int_rate(sampling_rate);
 
@@ -50,10 +50,10 @@ impl<M: Send + Sync + 'static + Clone> WithSamplingRate for MetricContext<M> {
 
 /// Perform random sampling of values according to the specified rate.
 #[deprecated(since = "0.5.0", note = "Use `with_sampling_rate` instead.")]
-pub fn sample<M, IC>(sampling_rate: Sampling, chain: IC) -> MetricContext<M>
+pub fn sample<M, IC>(sampling_rate: Sampling, chain: IC) -> MetricConfig<M>
 where
     M: Clone + Send + Sync + 'static,
-    IC: Into<MetricContext<M>>,
+    IC: Into<MetricConfig<M>>,
 {
     let chain = chain.into();
     chain.with_sampling_rate(sampling_rate)
@@ -78,8 +78,8 @@ mod pcg32 {
     /// quickly return a random int
     fn pcg32_random() -> u32 {
         thread_local! {
-        static PCG32_STATE: RefCell<u64> = RefCell::new(seed());
-    }
+            static PCG32_STATE: RefCell<u64> = RefCell::new(seed());
+        }
 
         PCG32_STATE.with(|state| {
             let oldstate: u64 = *state.borrow();

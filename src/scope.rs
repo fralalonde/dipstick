@@ -12,7 +12,7 @@ use core::Kind::*;
 use namespace::*;
 use cache::*;
 use schedule::{schedule, CancelHandle};
-use context;
+use config;
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -22,7 +22,8 @@ pub use num::ToPrimitive;
 
 lazy_static! {
     /// The reference instance identifying an uninitialized metric scope.
-    pub static ref NO_METRICS_SCOPE: Arc<DefineMetric + Send + Sync> = context::NO_METRIC_CONTEXT.open_scope();
+    pub static ref NO_METRIC_SCOPE: Arc<DefineMetric + Send + Sync> =
+        config::NO_METRIC_CONFIG.open_scope();
 }
 
 /// A non-generic trait to hide MetricScope<M>
@@ -30,7 +31,12 @@ pub trait DefineMetric {
     /// Register a new metric.
     /// Only one metric of a certain name will be defined.
     /// Observer must return a MetricHandle that uniquely identifies the metric.
-    fn define_metric(&self, kind: Kind, name: &str, rate: Sampling) -> Box<WriteMetric + Send + Sync>;
+    fn define_metric(
+        &self,
+        kind: Kind,
+        name: &str,
+        rate: Sampling,
+    ) -> Box<WriteMetric + Send + Sync>;
 
     /// Flush the scope, if it is buffered.
     fn flush(&self);
@@ -46,7 +52,7 @@ pub trait WriteMetric {
 
 /// Wrap the metrics backend to provide an application-friendly interface.
 /// Open a metric scope to share across the application.
-#[deprecated(since="0.7.0", note="Use into() instead")]
+#[deprecated(since = "0.7.0", note = "Use into() instead")]
 pub fn app_metrics<M, AM>(scope: AM) -> MetricScope<M>
 where
     M: Clone + Send + Sync + 'static,
@@ -58,9 +64,9 @@ where
 /// Wrap the metrics backend to provide an application-friendly interface.
 /// Open a metric scope to share across the application.
 pub fn metric_scope<M, AM>(scope: AM) -> MetricScope<M>
-    where
-        M: Clone + Send + Sync + 'static,
-        AM: Into<MetricScope<M>>,
+where
+    M: Clone + Send + Sync + 'static,
+    AM: Into<MetricScope<M>>,
 {
     scope.into()
 }
@@ -132,8 +138,9 @@ pub struct Timer<M> {
 impl<M> Timer<M> {
     /// Record a microsecond interval for this timer
     /// Can be used in place of start()/stop() if an external time interval source is used
-    pub fn interval_us<V: ToPrimitive>(&self, interval_us: V) -> V  {
-        self.scope.write(&self.metric, interval_us.to_u64().unwrap());
+    pub fn interval_us<V: ToPrimitive>(&self, interval_us: V) -> V {
+        self.scope
+            .write(&self.metric, interval_us.to_u64().unwrap());
         interval_us
     }
 
@@ -169,25 +176,24 @@ impl<M> Timer<M> {
 }
 
 /// Help transition to new syntax
-#[deprecated(since="0.7.0", note="Use Metrics instead")]
+#[deprecated(since = "0.7.0", note = "Use Metrics instead")]
 pub type AppMetrics<M> = MetricScope<M>;
 
 /// Help transition to new syntax
-#[deprecated(since="0.7.0", note="Use Marker instead")]
+#[deprecated(since = "0.7.0", note = "Use Marker instead")]
 pub type AppMarker<M> = Marker<M>;
 
 /// Help transition to new syntax
-#[deprecated(since="0.7.0", note="Use Counter instead")]
+#[deprecated(since = "0.7.0", note = "Use Counter instead")]
 pub type AppCounter<M> = Counter<M>;
 
 /// Help transition to new syntax
-#[deprecated(since="0.7.0", note="Use Gauge instead")]
+#[deprecated(since = "0.7.0", note = "Use Gauge instead")]
 pub type AppGauge<M> = Gauge<M>;
 
 /// Help transition to new syntax
-#[deprecated(since="0.7.0", note="Use Timer instead")]
+#[deprecated(since = "0.7.0", note = "Use Timer instead")]
 pub type AppTimer<M> = Timer<M>;
-
 
 /// Variations of this should also provide control of the metric recording scope.
 #[derive(Derivative, Clone)]
@@ -271,7 +277,6 @@ where
     pub fn write(&self, metric: &M, value: Value) {
         self.write_fn.write(metric, value);
     }
-
 }
 
 //// Dispatch / Receiver impl
@@ -282,10 +287,15 @@ struct MetricWriter<M> {
 }
 
 impl<M: Send + Sync + Clone + 'static> DefineMetric for MetricScope<M> {
-    fn define_metric(&self, kind: Kind, name: &str, rate: Sampling) -> Box<WriteMetric + Send + Sync> {
+    fn define_metric(
+        &self,
+        kind: Kind,
+        name: &str,
+        rate: Sampling,
+    ) -> Box<WriteMetric + Send + Sync> {
         Box::new(MetricWriter {
             metric: self.define_metric(kind, name, rate),
-            write_fn: self.write_fn.clone()
+            write_fn: self.write_fn.clone(),
         })
     }
 
