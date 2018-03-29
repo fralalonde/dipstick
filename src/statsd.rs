@@ -29,7 +29,7 @@ where
     // TODO buffering toggle
     let buffered = false;
 
-    Ok(metrics_context(
+    Ok(metric_context(
         move |kind, name, rate| {
             let mut prefix = String::with_capacity(32);
             prefix.push_str(name);

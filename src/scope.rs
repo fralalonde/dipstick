@@ -21,18 +21,18 @@ use std::time::Duration;
 pub use num::ToPrimitive;
 
 lazy_static! {
-    pub static ref NO_RECV_METRICS: Arc<DefineMetric + Send + Sync> = context::NO_RECV_CONTEXT.open_scope();
+    /// The reference instance identifying an uninitialized metric scope.
+    pub static ref NO_METRICS_SCOPE: Arc<DefineMetric + Send + Sync> = context::NO_METRIC_CONTEXT.open_scope();
 }
 
-/// Dynamic counterpart of a `Dispatcher`.
-/// Adapter to AppMetrics<_> of unknown type.
+/// A non-generic trait to hide MetricScope<M>
 pub trait DefineMetric {
     /// Register a new metric.
     /// Only one metric of a certain name will be defined.
     /// Observer must return a MetricHandle that uniquely identifies the metric.
     fn define_metric(&self, kind: Kind, name: &str, rate: Sampling) -> Box<WriteMetric + Send + Sync>;
 
-    /// Flush the receiver's scope.
+    /// Flush the scope, if it is buffered.
     fn flush(&self);
 }
 
@@ -46,7 +46,7 @@ pub trait WriteMetric {
 
 /// Wrap the metrics backend to provide an application-friendly interface.
 /// Open a metric scope to share across the application.
-#[deprecated(since="0.7.0", note="Use metrics() instead")]
+#[deprecated(since="0.7.0", note="Use into() instead")]
 pub fn app_metrics<M, AM>(scope: AM) -> MetricScope<M>
 where
     M: Clone + Send + Sync + 'static,
@@ -57,7 +57,7 @@ where
 
 /// Wrap the metrics backend to provide an application-friendly interface.
 /// Open a metric scope to share across the application.
-pub fn metrics<M, AM>(scope: AM) -> MetricScope<M>
+pub fn metric_scope<M, AM>(scope: AM) -> MetricScope<M>
     where
         M: Clone + Send + Sync + 'static,
         AM: Into<MetricScope<M>>,
@@ -329,7 +329,7 @@ mod bench {
 
     #[bench]
     fn time_bench_direct_dispatch_event(b: &mut test::Bencher) {
-        let metrics = metrics(aggregate());
+        let metrics = aggregate();
         let marker = metrics.marker("aaa");
         b.iter(|| test::black_box(marker.mark()));
     }

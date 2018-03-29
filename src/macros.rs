@@ -115,10 +115,10 @@ macro_rules! __metrics_block {
 #[deprecated(since="0.7.0", note="Use metrics!() instead")]
 macro_rules! app_metrics {
     ($type_param: ty, $metric_id: ident = ($($app_metrics: expr),+ $(,)*)) => {
-        lazy_static! { pub static ref $metric_id: MetricScope<$type_param> = metrics(($($app_metrics),*)); }
+        lazy_static! { pub static ref $metric_id: MetricScope<$type_param> = metric_scope(($($app_metrics),*)); }
     };
     ($type_param: ty, $metric_id: ident = [$($app_metrics: expr),+ $(,)*]) => {
-        lazy_static! { pub static ref $metric_id: MetricScope<$type_param> = metrics(&[$($app_metrics),*][..],); }
+        lazy_static! { pub static ref $metric_id: MetricScope<$type_param> = metric_scope(&[$($app_metrics),*][..],); }
     };
     ($type_param: ty, $metric_id: ident = $app_metrics: expr) => {
         lazy_static! { pub static ref $metric_id: MetricScope<$type_param> = $app_metrics.into(); }
@@ -178,10 +178,10 @@ macro_rules! app_timer {
 #[deprecated(since="0.7.0", note="Use metrics!() instead")]
 macro_rules! mod_metrics {
     ($type_param: ty, $metric_id: ident = ($($app_metrics: expr),+ $(,)*)) => {
-        lazy_static! { static ref $metric_id: MetricScope<$type_param> = metrics(($($app_metrics),*)); }
+        lazy_static! { static ref $metric_id: MetricScope<$type_param> = metric_scope(($($app_metrics),*)); }
     };
     ($type_param: ty, $metric_id: ident = [$($app_metrics: expr),+ $(,)*]) => {
-        lazy_static! { static ref $metric_id: MetricScope<$type_param> = metrics(&[$($app_metrics),*][..],); }
+        lazy_static! { static ref $metric_id: MetricScope<$type_param> = metric_scope(&[$($app_metrics),*][..],); }
     };
     ($type_param: ty, $metric_id: ident = $mod_metrics: expr) => {
         lazy_static! { static ref $metric_id: MetricScope<$type_param> = $mod_metrics.into(); }

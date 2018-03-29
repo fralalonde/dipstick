@@ -42,7 +42,7 @@ aggregate_metrics!(LIB_METRICS => {
 });
 
 fn main() {
-    route_aggregate_metrics(to_stdout());
+    default_aggregate_config(to_stdout());
 
     loop {
         PUB_COUNTER.count(978);

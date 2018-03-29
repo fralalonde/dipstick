@@ -37,9 +37,10 @@ fn main() {
     // send application metrics to aggregator
     let to_aggregate = aggregate();
 
-    route_aggregate_metrics(to_stdout());
+    default_aggregate_config(to_stdout());
+    default_aggregate_stats(custom_statistics);
 
-    let app_metrics = metrics(to_aggregate);
+    let app_metrics = metric_scope(to_aggregate);
 
     // schedule aggregated metrics to be printed every 3 seconds
     app_metrics.flush_every(Duration::from_secs(3));

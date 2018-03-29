@@ -18,9 +18,6 @@ extern crate atomic_refcell;
 extern crate num;
 extern crate time;
 
-mod pcg32;
-mod lru_cache;
-
 pub mod error;
 pub use error::*;
 
@@ -34,8 +31,8 @@ pub mod context;
 pub use context::*;
 
 #[macro_use]
-pub mod delegate;
-pub use delegate::*;
+pub mod dispatch;
+pub use dispatch::*;
 
 #[macro_use]
 mod aggregate;
@@ -44,15 +41,14 @@ pub use aggregate::*;
 mod output;
 pub use output::*;
 
-mod metrics;
-pub use metrics::*;
+mod scope;
+pub use scope::*;
 
 mod sample;
 pub use sample::*;
 
 mod scores;
 pub use scores::*;
-
 
 mod statsd;
 pub use statsd::*;
@@ -62,9 +58,6 @@ pub use namespace::*;
 
 mod graphite;
 pub use graphite::*;
-
-mod http;
-pub use http::*;
 
 mod socket;
 pub use socket::*;

@@ -3,7 +3,7 @@
 use core::{Value, Kind, control_scope, ScopeCmd, Sampling};
 use core::Kind::*;
 use context::DEFAULT_CONTEXT;
-use metrics::MetricScope;
+use scope::MetricScope;
 use namespace::WithNamespace;
 
 use scores::{ScoreSnapshot, ScoreType, Scoreboard};
@@ -24,24 +24,25 @@ macro_rules! aggregate_metrics {
 }
 
 lazy_static! {
-    static ref DEFAULT_PUBLISH_FN: RwLock<Arc<Fn(Kind, &str, ScoreType) ->
+    static ref DEFAULT_AGGREGATE_STATS: RwLock<Arc<Fn(Kind, &str, ScoreType) ->
         Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static>> =
         RwLock::new(Arc::new(summary));
 
-    static ref AGGREGATE_REGISTRY: RwLock<Vec<Aggregator>> = RwLock::new(vec![]);
+//    static ref AGGREGATE_REGISTRY: RwLock<Vec<Aggregator>> = RwLock::new(vec![]);
 }
 
-pub fn set_default_aggregate_fn<F>(func: F)
+/// Set the default aggregated metrics statistics generator.
+pub fn default_aggregate_stats<F>(func: F)
 where
     F: Fn(Kind, &str, ScoreType) -> Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static
 {
-    *DEFAULT_PUBLISH_FN.write().unwrap() = Arc::new(func)
+    *DEFAULT_AGGREGATE_STATS.write().unwrap() = Arc::new(func)
 }
 
 /// Get the default metrics summary.
-pub fn get_default_publish_fn() -> Arc<Fn(Kind, &str, ScoreType) ->
+fn get_default_publish_fn() -> Arc<Fn(Kind, &str, ScoreType) ->
 Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static> {
-    DEFAULT_PUBLISH_FN.read().unwrap().clone()
+    DEFAULT_AGGREGATE_STATS.read().unwrap().clone()
 }
 
 
@@ -54,14 +55,14 @@ Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static> {
 /// metrics.marker("my_event").mark();
 /// metrics.marker("my_event").mark();
 /// ```
-pub fn aggregate() -> Aggregator {
-    Aggregator {
+pub fn aggregate() -> MetricScope<Aggregate> {
+    MetricAggregate {
         metrics: Arc::new(RwLock::new(HashMap::new())),
-    }
+    }.into()
 }
 
-impl From<Aggregator> for MetricScope<Aggregate> {
-    fn from(agg: Aggregator) -> MetricScope<Aggregate> {
+impl From<MetricAggregate> for MetricScope<Aggregate> {
+    fn from(agg: MetricAggregate) -> MetricScope<Aggregate> {
         let agg_1 = agg.clone();
         MetricScope::new(
             Arc::new(move |kind, name, rate| agg.define_metric(kind, name, rate)),
@@ -77,7 +78,7 @@ impl From<Aggregator> for MetricScope<Aggregate> {
 
 impl From<&'static str> for MetricScope<Aggregate> {
     fn from(prefix: &'static str) -> MetricScope<Aggregate> {
-        let app_metrics: MetricScope<Aggregate> = aggregate().into();
+        let app_metrics: MetricScope<Aggregate> = aggregate();
         if !prefix.is_empty() {
             app_metrics.with_prefix(prefix)
         } else {
@@ -88,7 +89,7 @@ impl From<&'static str> for MetricScope<Aggregate> {
 
 impl From<()> for MetricScope<Aggregate> {
     fn from(_: ()) -> MetricScope<Aggregate> {
-        let scope: MetricScope<Aggregate> = aggregate().into();
+        let scope: MetricScope<Aggregate> = aggregate();
         scope
     }
 }
@@ -96,14 +97,14 @@ impl From<()> for MetricScope<Aggregate> {
 /// Central aggregation structure.
 /// Maintains a list of metrics for enumeration when used as source.
 #[derive(Debug, Clone)]
-pub struct Aggregator {
+pub struct MetricAggregate {
     metrics: Arc<RwLock<HashMap<String, Arc<Scoreboard>>>>,
 }
 
-impl Aggregator {
+impl MetricAggregate {
     /// Build a new metric aggregation point with specified initial capacity of metrics to aggregate.
-    pub fn with_capacity(size: usize) -> Aggregator {
-        Aggregator {
+    pub fn with_capacity(size: usize) -> MetricAggregate {
+        MetricAggregate {
             metrics: Arc::new(RwLock::new(HashMap::with_capacity(size))),
         }
     }
@@ -150,7 +151,7 @@ impl Aggregator {
         } else {
             for metric in snapshot {
                 for score in metric.2 {
-                    if let Some(ex) = (get_default_publish_fn())(metric.0, metric.1.as_ref(), score) {
+                    if let Some(ex) = get_default_publish_fn()(metric.0, metric.1.as_ref(), score) {
                         publish_scope.define_metric(ex.0, &ex.1.concat(), 1.0).write(ex.2);
                     }
                 }
@@ -226,33 +227,32 @@ mod bench {
 
     use test;
     use core::Kind::{Marker, Counter};
-    use metrics::MetricScope;
-    use aggregate::{Aggregate, aggregate};
+    use aggregate::aggregate;
 
     #[bench]
     fn aggregate_marker(b: &mut test::Bencher) {
-        let sink: MetricScope<Aggregate> = aggregate().into();
+        let sink = aggregate();
         let metric = sink.define_metric(Marker, "event_a", 1.0);
         b.iter(|| test::black_box(sink.write(&metric, 1)));
     }
 
     #[bench]
     fn aggregate_counter(b: &mut test::Bencher) {
-        let sink: MetricScope<Aggregate> = aggregate().into();
+        let sink = aggregate();
         let metric = sink.define_metric(Counter, "count_a", 1.0);
         b.iter(|| test::black_box(sink.write(&metric, 1)));
     }
 
     #[bench]
     fn reset_marker(b: &mut test::Bencher) {
-        let sink: MetricScope<Aggregate> = aggregate().into();
+        let sink = aggregate();
         let metric = sink.define_metric(Marker, "marker_a", 1.0);
         b.iter(|| test::black_box(metric.reset()));
     }
 
     #[bench]
     fn reset_counter(b: &mut test::Bencher) {
-        let sink: MetricScope<Aggregate> = aggregate().into();
+        let sink = aggregate();
         let metric = sink.define_metric(Counter, "count_a", 1.0);
         b.iter(|| test::black_box(metric.reset()));
     }
