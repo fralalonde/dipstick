@@ -69,8 +69,8 @@ impl Scoreboard {
             _ => {
                 // optimization - these fields are unused for Marker stats
                 self.scores[2].fetch_add(value, Acquire);
-                swap_if_more(&self.scores[3], value);
-                swap_if_less(&self.scores[4], value);
+                swap_if(&self.scores[3], value, |new, current| new > current);
+                swap_if(&self.scores[4], value, |new, current| new < current);
             }
         }
     }
@@ -137,24 +137,14 @@ fn average(count: usize, time: f64, scores: &[usize], now: usize) -> f64 {
 
 /// Spinlock until success or clear loss to concurrent update.
 #[inline]
-fn swap_if_more(counter: &AtomicUsize, new_value: usize) {
+fn swap_if(counter: &AtomicUsize, new_value: usize, compare: fn(usize, usize) -> bool) {
     let mut current = counter.load(Acquire);
-    while current < new_value {
+    while compare(new_value, current) {
         if counter.compare_and_swap(current, new_value, Release) == new_value {
+            // update successful
             break;
         }
-        current = counter.load(Acquire);
-    }
-}
-
-/// Spinlock until success or clear loss to concurrent update.
-#[inline]
-fn swap_if_less(counter: &AtomicUsize, new_value: usize) {
-    let mut current = counter.load(Acquire);
-    while current > new_value {
-        if counter.compare_and_swap(current, new_value, Release) == new_value {
-            break;
-        }
+        // race detected, retry
         current = counter.load(Acquire);
     }
 }
