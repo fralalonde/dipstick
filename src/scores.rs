@@ -103,7 +103,7 @@ impl Scoreboard {
             match self.kind {
                 Marker => {
                     snapshot.push(Count(scores[1] as u64));
-                    snapshot.push(Rate(average(scores[1], duration_seconds)))
+                    snapshot.push(Rate(average(scores[1], duration_seconds, &scores, now)))
                 }
                 Gauge => {
                     snapshot.push(Max(scores[3] as u64));
@@ -117,7 +117,7 @@ impl Scoreboard {
                     snapshot.push(Max(scores[3] as u64));
                     snapshot.push(Min(scores[4] as u64));
                     snapshot.push(Mean(scores[2] as f64 / scores[1] as f64));
-                    snapshot.push(Rate(average(scores[2], duration_seconds)))
+                    snapshot.push(Rate(average(scores[2], duration_seconds, &scores, now)))
                 }
             }
             Some((self.kind, self.name.clone(), snapshot))
@@ -127,10 +127,10 @@ impl Scoreboard {
     }
 }
 
-fn average(count: usize, time: f64) -> f64 {
+fn average(count: usize, time: f64, scores: &[usize], now: usize) -> f64 {
     let avg = count as f64 / time;
     if avg > 10_000_000.0 {
-        eprintln!("Computed anomalous rate of '{}'/s, count '{}'  / time '{}'s", avg, count, time);
+        eprintln!("Computed anomalous rate of '{}'/s, count '{}'  / time '{}'s, start {}, stop {}", avg, count, time, scores[0], now);
     }
     avg
 }
