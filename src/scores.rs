@@ -63,12 +63,12 @@ impl Scoreboard {
     pub fn update(&self, value: Value) -> () {
         // TODO report any concurrent updates / resets for measurement of contention
         let value = value as usize;
-        self.scores[1].fetch_add(1, Acquire);
+        self.scores[1].fetch_add(1, AcqRel);
         match self.kind {
             Marker => {}
             _ => {
                 // optimization - these fields are unused for Marker stats
-                self.scores[2].fetch_add(value, Acquire);
+                self.scores[2].fetch_add(value, AcqRel);
                 swap_if(&self.scores[3], value, |new, current| new > current);
                 swap_if(&self.scores[4], value, |new, current| new < current);
             }
@@ -78,17 +78,17 @@ impl Scoreboard {
     /// Reset scores to zero, return previous values
     fn snapshot(&self, now: usize, scores: &mut [usize; 5]) -> bool {
         // NOTE copy timestamp, count AND sum _before_ testing for data to reduce concurrent discrepancies
-        scores[0] = self.scores[0].swap(now, Release);
-        scores[1] = self.scores[1].swap(0, Release);
-        scores[2] = self.scores[2].swap(0, Release);
+        scores[0] = self.scores[0].swap(now, AcqRel);
+        scores[1] = self.scores[1].swap(0, AcqRel);
+        scores[2] = self.scores[2].swap(0, AcqRel);
 
         // if hit count is zero, then no values were recorded.
         if scores[1] == 0 {
             return false;
         }
 
-        scores[3] = self.scores[3].swap(usize::MIN, Release);
-        scores[4] = self.scores[4].swap(usize::MAX, Release);
+        scores[3] = self.scores[3].swap(usize::MIN, AcqRel);
+        scores[4] = self.scores[4].swap(usize::MAX, AcqRel);
         true
     }
 
