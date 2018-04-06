@@ -2,10 +2,11 @@
 //! This is mostly centered around the backend.
 //! Application-facing types are in the `app` module.
 
-use self::ScopeCmd::*;
+use self::Command::*;
 
-use time;
 use std::sync::Arc;
+
+use chrono::{Local, DateTime};
 
 // TODO define an 'AsValue' trait + impl for supported number types, then drop 'num' crate
 pub use num::ToPrimitive;
@@ -17,18 +18,43 @@ pub type Value = u64;
 #[derive(Debug, Copy, Clone)]
 /// A handle to the start time of a counter.
 /// Wrapped so it may be changed safely later.
-pub struct TimeHandle(u64);
+pub struct TimeHandle(i64);
+
+fn now_micros() -> i64 {
+    let local: DateTime<Local> = Local::now();
+    let mut micros = local.timestamp() * 1_000_000;
+    micros += local.timestamp_subsec_micros() as i64;
+    micros
+}
 
 impl TimeHandle {
+
     /// Get a handle on current time.
     /// Used by the TimerMetric start_time() method.
     pub fn now() -> TimeHandle {
-        TimeHandle(time::precise_time_ns())
+        TimeHandle(now_micros())
     }
 
     /// Get the elapsed time in microseconds since TimeHandle was obtained.
     pub fn elapsed_us(self) -> Value {
-        (TimeHandle::now().0 - self.0) / 1_000
+        (TimeHandle::now().0 - self.0) as Value
+    }
+
+    /// Get the elapsed time in microseconds since TimeHandle was obtained.
+    pub fn elapsed_ms(self) -> Value {
+        self.elapsed_us() / 1_000
+    }
+}
+
+impl From<usize> for TimeHandle {
+    fn from(s: usize) -> TimeHandle {
+        TimeHandle(s as i64)
+    }
+}
+
+impl From<TimeHandle> for usize {
+    fn from(s: TimeHandle) -> usize {
+        s.0 as usize
     }
 }
 
@@ -63,32 +89,21 @@ pub enum Kind {
 pub type DefineMetricFn<M> = Arc<Fn(Kind, &str, Sampling) -> M + Send + Sync>;
 
 /// A function trait that opens a new metric capture scope.
-pub type OpenScopeFn<M> = Arc<Fn() -> WriteFn<M> + Send + Sync>;
+pub type OpenScopeFn<M> = Arc<Fn() -> CommandFn<M> + Send + Sync>;
 
 /// A function trait that writes to or flushes a certain scope.
-pub type WriteFn<M> = Arc<InnerControlScopeFn<M>>;
+pub type WriteFn = Arc<Fn(Value) + Send + Sync + 'static>;
 
-/// Returns a callback function to send commands to the metric scope.
-/// Writes can be performed by passing Some((&Metric, Value))
-/// Flushes can be performed by passing None
-/// Used to write values to the scope or flush the scope buffer (if applicable).
-/// Simple applications may use only one scope.
-/// Complex applications may define a new scope fo each operation or request.
-/// Scopes can be moved acrossed threads (Send) but are not required to be thread-safe (Sync).
-/// Some implementations _may_ be 'Sync', otherwise queue()ing or threadlocal() can be used.
-pub struct InnerControlScopeFn<M> {
-    flush_on_drop: bool,
-    scope_fn: Box<Fn(ScopeCmd<M>)>,
+/// A function trait that writes to or flushes a certain scope.
+#[derive(Clone)]
+pub struct CommandFn<M> {
+    inner: Arc<Fn(Command<M>) + Send + Sync + 'static>
 }
-
-// TODO why is this necessary?
-unsafe impl<M> Sync for InnerControlScopeFn<M> {}
-unsafe impl<M> Send for InnerControlScopeFn<M> {}
 
 /// An method dispatching command enum to manipulate metric scopes.
 /// Replaces a potential `Writer` trait that would have methods `write` and `flush`.
 /// Using a command pattern allows buffering, async queuing and inline definition of writers.
-pub enum ScopeCmd<'a, M: 'a> {
+pub enum Command<'a, M: 'a> {
     /// Write the value for the metric.
     /// Takes a reference to minimize overhead in single-threaded scenarios.
     Write(&'a M, Value),
@@ -98,47 +113,26 @@ pub enum ScopeCmd<'a, M: 'a> {
 }
 
 /// Create a new metric scope based on the provided scope function.
-pub fn control_scope<M, F>(scope_fn: F) -> WriteFn<M>
+pub fn command_fn<M, F>(scope_fn: F) -> CommandFn<M>
 where
-    F: Fn(ScopeCmd<M>) + 'static,
+    F: Fn(Command<M>) + Send + Sync + 'static,
 {
-    Arc::new(InnerControlScopeFn {
-        flush_on_drop: true,
-        scope_fn: Box::new(scope_fn),
-    })
+    CommandFn {
+        inner: Arc::new(scope_fn)
+    }
 }
 
-impl<M> InnerControlScopeFn<M> {
+impl<M> CommandFn<M> {
     /// Write a value to this scope.
-    ///
-    /// ```rust
-    /// let scope = dipstick::to_log().open_scope();
-    /// scope.write(&"counter".to_string(), 6);
-    /// ```
-    ///
     #[inline]
     pub fn write(&self, metric: &M, value: Value) {
-        (self.scope_fn)(Write(metric, value))
+        (self.inner)(Write(metric, value))
     }
 
     /// Flush this scope.
     /// Has no effect if scope is unbuffered.
-    ///
-    /// ```rust
-    /// let scope = dipstick::to_log().open_scope();
-    /// scope.flush();
-    /// ```
-    ///
     #[inline]
     pub fn flush(&self) {
-        (self.scope_fn)(Flush)
-    }
-}
-
-impl<M> Drop for InnerControlScopeFn<M> {
-    fn drop(&mut self) {
-        if self.flush_on_drop {
-            self.flush()
-        }
+        (self.inner)(Flush)
     }
 }

@@ -3,6 +3,8 @@
 
 extern crate dipstick;
 
+use dipstick::MetricInput;
+
 fn main() {
     raw_write()
 }

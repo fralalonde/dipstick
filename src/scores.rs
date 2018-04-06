@@ -1,4 +1,3 @@
-use time;
 use std::mem;
 
 use core::*;
@@ -46,11 +45,10 @@ pub struct Scoreboard {
 impl Scoreboard {
     /// Create a new Scoreboard to track summary values of a metric
     pub fn new(kind: Kind, name: String) -> Self {
-        let now = time::precise_time_ns() as usize;
         Scoreboard {
             kind,
             name,
-            scores: unsafe { mem::transmute(Scoreboard::blank(now)) },
+            scores: unsafe { mem::transmute(Scoreboard::blank(TimeHandle::now().into())) },
         }
     }
 
@@ -63,14 +61,14 @@ impl Scoreboard {
     pub fn update(&self, value: Value) -> () {
         // TODO report any concurrent updates / resets for measurement of contention
         let value = value as usize;
-        self.scores[1].fetch_add(1, Acquire);
+        self.scores[1].fetch_add(1, AcqRel);
         match self.kind {
             Marker => {}
             _ => {
                 // optimization - these fields are unused for Marker stats
-                self.scores[2].fetch_add(value, Acquire);
-                swap_if_more(&self.scores[3], value);
-                swap_if_less(&self.scores[4], value);
+                self.scores[2].fetch_add(value, AcqRel);
+                swap_if(&self.scores[3], value, |new, current| new > current);
+                swap_if(&self.scores[4], value, |new, current| new < current);
             }
         }
     }
@@ -78,26 +76,26 @@ impl Scoreboard {
     /// Reset scores to zero, return previous values
     fn snapshot(&self, now: usize, scores: &mut [usize; 5]) -> bool {
         // NOTE copy timestamp, count AND sum _before_ testing for data to reduce concurrent discrepancies
-        scores[0] = self.scores[0].swap(now, Release);
-        scores[1] = self.scores[1].swap(0, Release);
-        scores[2] = self.scores[2].swap(0, Release);
+        scores[0] = self.scores[0].swap(now, AcqRel);
+        scores[1] = self.scores[1].swap(0, AcqRel);
+        scores[2] = self.scores[2].swap(0, AcqRel);
 
         // if hit count is zero, then no values were recorded.
         if scores[1] == 0 {
             return false;
         }
 
-        scores[3] = self.scores[3].swap(usize::MIN, Release);
-        scores[4] = self.scores[4].swap(usize::MAX, Release);
+        scores[3] = self.scores[3].swap(usize::MIN, AcqRel);
+        scores[4] = self.scores[4].swap(usize::MAX, AcqRel);
         true
     }
 
     /// Map raw scores (if any) to applicable statistics
     pub fn reset(&self) -> Option<ScoreSnapshot> {
-        let now = time::precise_time_ns() as usize;
+        let now: usize = TimeHandle::now().into();
         let mut scores = Scoreboard::blank(now);
         if self.snapshot(now, &mut scores) {
-            let duration_seconds = (now - scores[0]) as f64 / 1_000_000_000.0;
+            let duration_seconds = (now - scores[0]) as f64 / 1_000.0;
 
             let mut snapshot = Vec::new();
             match self.kind {
@@ -129,24 +127,14 @@ impl Scoreboard {
 
 /// Spinlock until success or clear loss to concurrent update.
 #[inline]
-fn swap_if_more(counter: &AtomicUsize, new_value: usize) {
+fn swap_if(counter: &AtomicUsize, new_value: usize, compare: fn(usize, usize) -> bool) {
     let mut current = counter.load(Acquire);
-    while current < new_value {
+    while compare(new_value, current) {
         if counter.compare_and_swap(current, new_value, Release) == new_value {
+            // update successful
             break;
         }
-        current = counter.load(Acquire);
-    }
-}
-
-/// Spinlock until success or clear loss to concurrent update.
-#[inline]
-fn swap_if_less(counter: &AtomicUsize, new_value: usize) {
-    let mut current = counter.load(Acquire);
-    while current > new_value {
-        if counter.compare_and_swap(current, new_value, Release) == new_value {
-            break;
-        }
+        // race detected, retry
         current = counter.load(Acquire);
     }
 }
@@ -170,11 +158,10 @@ mod bench {
     }
 
     #[bench]
-    fn bench_score_snapshot(b: &mut test::Bencher) {
+    fn bench_score_empty_snapshot(b: &mut test::Bencher) {
         let metric = Scoreboard::new(Counter, "event_a".to_string());
-        let now = time::precise_time_ns() as usize;
-        let mut scores = Scoreboard::blank(now);
-        b.iter(|| test::black_box(metric.snapshot(now, &mut scores)));
+        let mut scores = Scoreboard::blank(0);
+        b.iter(|| test::black_box(metric.snapshot(0, &mut scores)));
     }
 
 }

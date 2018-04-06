@@ -3,7 +3,7 @@ UNUSED FOR THE MOMENT
 archived code
 */
 use core::*;
-use core::ScopeCmd::*;
+use core::Command::*;
 use std::sync::{Arc, RwLock};
 
 pub trait WithBuffer {
@@ -18,7 +18,7 @@ impl<M: Send + Sync + Clone + 'static> WithBuffer for Chain<M> {
                 buffer: Vec::new(),
                 scope: self.open_scope(false),
             });
-            Arc::new(move |cmd: ScopeCmd<M>| {
+            Arc::new(move |cmd: Command<M>| {
                 let mut buf = scope_buffer.write().expect("Lock metric scope");
                 match cmd {
                     Write(metric, value) => buf.buffer.push(ScopeCommand {

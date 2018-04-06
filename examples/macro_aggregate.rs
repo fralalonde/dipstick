@@ -42,7 +42,7 @@ aggregate_metrics!(LIB_METRICS => {
 });
 
 fn main() {
-    default_aggregate_config(to_stdout());
+    set_aggregate_default(to_stdout());
 
     loop {
         PUB_COUNTER.count(978);

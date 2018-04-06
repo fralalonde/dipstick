@@ -17,6 +17,7 @@ extern crate lazy_static;
 extern crate atomic_refcell;
 extern crate num;
 extern crate time;
+extern crate chrono;
 
 pub mod error;
 pub use error::*;
@@ -27,8 +28,8 @@ pub mod macros;
 pub mod core;
 pub use core::*;
 
-pub mod config;
-pub use config::*;
+pub mod output;
+pub use output::*;
 
 #[macro_use]
 pub mod dispatch;
@@ -38,8 +39,8 @@ pub use dispatch::*;
 mod aggregate;
 pub use aggregate::*;
 
-mod output;
-pub use output::*;
+mod local;
+pub use local::*;
 
 mod scope;
 pub use scope::*;

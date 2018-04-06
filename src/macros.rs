@@ -62,49 +62,49 @@ macro_rules! __metrics_block {
     ($APP_METRICS:ident : $METRIC_TYPE:ty;
     $(#[$attr:meta])* pub @Counter $METRIC_ID:ident : $METRIC_NAME:expr; $($REMAINING:tt)*) => {
         lazy_static! { $(#[$attr])* pub static ref $METRIC_ID:
-        Counter<$METRIC_TYPE> = $APP_METRICS.counter($METRIC_NAME); }
+        Counter = $APP_METRICS.counter($METRIC_NAME); }
         __metrics_block!($APP_METRICS: $METRIC_TYPE; $($REMAINING)*);
     };
     ($APP_METRICS:ident : $METRIC_TYPE:ty;
     $(#[$attr:meta])* @Counter $METRIC_ID:ident : $METRIC_NAME:expr; $($REMAINING:tt)*) => {
         lazy_static! { $(#[$attr])* static ref $METRIC_ID:
-        Counter<$METRIC_TYPE> = $APP_METRICS.counter($METRIC_NAME); }
+        Counter = $APP_METRICS.counter($METRIC_NAME); }
         __metrics_block!($APP_METRICS: $METRIC_TYPE; $($REMAINING)*);
     };
     ($APP_METRICS:ident : $METRIC_TYPE:ty;
     $(#[$attr:meta])* pub @Marker $METRIC_ID:ident : $METRIC_NAME:expr; $($REMAINING:tt)*) => {
         lazy_static! { $(#[$attr])* pub static ref $METRIC_ID:
-        Marker<$METRIC_TYPE> = $APP_METRICS.marker($METRIC_NAME); }
+        Marker = $APP_METRICS.marker($METRIC_NAME); }
         __metrics_block!($APP_METRICS: $METRIC_TYPE; $($REMAINING)*);
     };
     ($APP_METRICS:ident : $METRIC_TYPE:ty;
     $(#[$attr:meta])* @Marker $METRIC_ID:ident : $METRIC_NAME:expr; $($REMAINING:tt)*) => {
         lazy_static! { $(#[$attr])* static ref $METRIC_ID:
-            Marker<$METRIC_TYPE> = $APP_METRICS.marker($METRIC_NAME); }
+            Marker = $APP_METRICS.marker($METRIC_NAME); }
         __metrics_block!($APP_METRICS: $METRIC_TYPE; $($REMAINING)*);
     };
     ($APP_METRICS:ident : $METRIC_TYPE:ty;
     $(#[$attr:meta])* pub @Gauge $METRIC_ID:ident : $METRIC_NAME:expr; $($REMAINING:tt)*) => {
         lazy_static! { $(#[$attr])* pub static ref $METRIC_ID:
-        Gauge<$METRIC_TYPE> = $APP_METRICS.gauge($METRIC_NAME); }
+        Gauge = $APP_METRICS.gauge($METRIC_NAME); }
         __metrics_block!($APP_METRICS: $METRIC_TYPE; $($REMAINING)*);
     };
     ($APP_METRICS:ident : $METRIC_TYPE:ty;
     $(#[$attr:meta])* @Gauge $METRIC_ID:ident : $METRIC_NAME:expr; $($REMAINING:tt)*) => {
         lazy_static! { $(#[$attr])* static ref $METRIC_ID:
-        Gauge<$METRIC_TYPE> = $APP_METRICS.gauge($METRIC_NAME); }
+        Gauge = $APP_METRICS.gauge($METRIC_NAME); }
         __metrics_block!($APP_METRICS: $METRIC_TYPE; $($REMAINING)*);
     };
     ($APP_METRICS:ident : $METRIC_TYPE:ty;
     $(#[$attr:meta])* pub @Timer $METRIC_ID:ident : $METRIC_NAME:expr; $($REMAINING:tt)*) => {
         lazy_static! { $(#[$attr])* pub static ref $METRIC_ID:
-        Timer<$METRIC_TYPE> = $APP_METRICS.timer($METRIC_NAME); }
+        Timer = $APP_METRICS.timer($METRIC_NAME); }
         __metrics_block!($APP_METRICS: $METRIC_TYPE; $($REMAINING)*);
     };
     ($APP_METRICS:ident : $METRIC_TYPE:ty;
     $(#[$attr:meta])* @Timer $METRIC_ID:ident : $METRIC_NAME:expr; $($REMAINING:tt)*) => {
         lazy_static! { $(#[$attr])* static ref $METRIC_ID:
-        Timer<$METRIC_TYPE> = $APP_METRICS.timer($METRIC_NAME); }
+        Timer = $APP_METRICS.timer($METRIC_NAME); }
         __metrics_block!($APP_METRICS: $METRIC_TYPE; $($REMAINING)*);
     };
     ($METRIC_ID:ident : $METRIC_TYPE:ty;) => ()
@@ -135,7 +135,7 @@ macro_rules! app_marker {
     (<$type_param: ty> $app_metrics: expr =>
     { $($metric_id: ident: $m_exp: expr),* $(,)* } ) => {
         lazy_static! { $(pub static ref $metric_id:
-        Marker<$type_param> = $app_metrics.marker( $m_exp );)* }
+        Marker = $app_metrics.marker( $m_exp );)* }
     };
 }
 
@@ -146,7 +146,7 @@ macro_rules! app_counter {
     (<$type_param: ty> $app_metrics: expr =>
     { $($metric_id: ident: $m_exp: expr),* $(,)* } ) => {
         lazy_static! { $(pub static ref $metric_id:
-        Counter<$type_param> = $app_metrics.counter( $m_exp );)* }
+        Counter = $app_metrics.counter( $m_exp );)* }
     };
 }
 
@@ -157,7 +157,7 @@ macro_rules! app_gauge {
     (<$type_param: ty> $app_metrics: expr =>
     { $($metric_id: ident: $m_exp: expr),* $(,)* } ) => {
         lazy_static! { $(pub static ref $metric_id:
-        Gauge<$type_param> = $app_metrics.gauge( $m_exp );)* }
+        Gauge = $app_metrics.gauge( $m_exp );)* }
     };
 }
 
@@ -168,7 +168,7 @@ macro_rules! app_timer {
     (<$type_param: ty> $app_metrics: expr =>
     { $($metric_id: ident: $m_exp: expr),* $(,)* } ) => {
         lazy_static! { $(pub static ref $metric_id:
-        Timer<$type_param> = $app_metrics.timer( $m_exp );)* }
+        Timer = $app_metrics.timer( $m_exp );)* }
     };
 }
 
@@ -198,7 +198,7 @@ macro_rules! mod_metrics {
 #[deprecated(since = "0.7.0", note = "Use metrics!() instead")]
 macro_rules! mod_marker {
     ($type_param: ty, $mod_metrics: expr, { $($metric_id: ident: $m_exp: expr),* $(,)* } ) => {
-        lazy_static! { $(static ref $metric_id: Marker<$type_param> =
+        lazy_static! { $(static ref $metric_id: Marker =
             $mod_metrics.marker( $m_exp );)* }
     };
 }
@@ -208,7 +208,7 @@ macro_rules! mod_marker {
 #[deprecated(since = "0.7.0", note = "Use metrics!() instead")]
 macro_rules! mod_counter {
     ($type_param: ty, $mod_metrics: expr, { $($metric_id: ident: $m_exp: expr),* $(,)* } ) => {
-        lazy_static! { $(static ref $metric_id: Counter<$type_param> =
+        lazy_static! { $(static ref $metric_id: Counter =
             $mod_metrics.counter( $m_exp );)* }
     };
 }
@@ -218,11 +218,11 @@ macro_rules! mod_counter {
 #[deprecated(since = "0.7.0", note = "Use metrics!() instead")]
 macro_rules! mod_gauge {
     ($type_param: ty, $mod_metrics: expr, { $($metric_id: ident: $m_exp: expr),* $(,)* } ) => {
-        lazy_static! { $(static ref $metric_id: Gauge<$type_param> =
+        lazy_static! { $(static ref $metric_id: Gauge =
             $mod_metrics.gauge( $m_exp );)* }
     };
     ($type_param: ty, $mod_metrics: expr, $metric_id: ident: $m_exp: expr) => {
-        lazy_static! { static ref $metric_id: Gauge<$type_param> =
+        lazy_static! { static ref $metric_id: Gauge =
             $mod_metrics.gauge( $m_exp ); }
     }
 }
@@ -232,7 +232,7 @@ macro_rules! mod_gauge {
 #[deprecated(since = "0.7.0", note = "Use metrics!() instead")]
 macro_rules! mod_timer {
     ($type_param: ty, $mod_metrics: expr, { $($metric_id: ident: $m_exp: expr),* $(,)* } ) => {
-        lazy_static! { $(static ref $metric_id: Timer<$type_param> =
+        lazy_static! { $(static ref $metric_id: Timer =
             $mod_metrics.timer( $m_exp );)* }
     };
 }
