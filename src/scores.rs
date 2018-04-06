@@ -1,5 +1,5 @@
-use time;
 use std::mem;
+use chrono::{Local, DateTime};
 
 use core::*;
 use core::Kind::*;
@@ -43,14 +43,20 @@ pub struct Scoreboard {
     scores: [AtomicUsize; 5],
 }
 
+fn now() -> usize {
+    let local: DateTime<Local> = Local::now();
+    let mut millis = local.timestamp() as usize * 1000;
+    millis += local.timestamp_subsec_millis() as usize;
+    millis
+}
+
 impl Scoreboard {
     /// Create a new Scoreboard to track summary values of a metric
     pub fn new(kind: Kind, name: String) -> Self {
-        let now = time::precise_time_ns() as usize;
         Scoreboard {
             kind,
             name,
-            scores: unsafe { mem::transmute(Scoreboard::blank(now)) },
+            scores: unsafe { mem::transmute(Scoreboard::blank(now())) },
         }
     }
 
@@ -94,16 +100,16 @@ impl Scoreboard {
 
     /// Map raw scores (if any) to applicable statistics
     pub fn reset(&self) -> Option<ScoreSnapshot> {
-        let now = time::precise_time_ns() as usize;
+        let now = now();
         let mut scores = Scoreboard::blank(now);
         if self.snapshot(now, &mut scores) {
-            let duration_seconds = (now - scores[0]) as f64 / 1_000_000_000.0;
+            let duration_seconds = (now - scores[0]) as f64 / 1_000.0;
 
             let mut snapshot = Vec::new();
             match self.kind {
                 Marker => {
                     snapshot.push(Count(scores[1] as u64));
-                    snapshot.push(Rate(average(scores[1], duration_seconds, &scores, now)))
+                    snapshot.push(Rate(average_rate(scores[1], duration_seconds, &scores, now)))
                 }
                 Gauge => {
                     snapshot.push(Max(scores[3] as u64));
@@ -117,7 +123,7 @@ impl Scoreboard {
                     snapshot.push(Max(scores[3] as u64));
                     snapshot.push(Min(scores[4] as u64));
                     snapshot.push(Mean(scores[2] as f64 / scores[1] as f64));
-                    snapshot.push(Rate(average(scores[2], duration_seconds, &scores, now)))
+                    snapshot.push(Rate(average_rate(scores[2], duration_seconds, &scores, now)))
                 }
             }
             Some((self.kind, self.name.clone(), snapshot))
@@ -127,10 +133,11 @@ impl Scoreboard {
     }
 }
 
-fn average(count: usize, time: f64, scores: &[usize], now: usize) -> f64 {
+fn average_rate(count: usize, time: f64, scores: &[usize], now: usize) -> f64 {
     let avg = count as f64 / time;
     if avg > 10_000_000.0 {
         eprintln!("Computed anomalous rate of '{}'/s, count '{}'  / time '{}'s, start {}, stop {}", avg, count, time, scores[0], now);
+        return 0.0
     }
     avg
 }
