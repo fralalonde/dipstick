@@ -37,8 +37,9 @@ travis-ci = { repository = "fralalonde/dipstick", branch = "master" }
 
 [dependencies]
 log = { version = "0.3" }
-time = "0.1"
 lazy_static = "0.2"
+time = "0.1"
+chrono = "^0.3"
 derivative = "1.0"
 
 [build-dependencies]
