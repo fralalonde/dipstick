@@ -46,8 +46,8 @@ where
 {
     /// Insert prefix in newly defined metrics.
     //    #[deprecated(since = "0.6.3", note = "Use `with_name` instead.")]
-    fn with_prefix<AS: AsRef<str>>(&self, prefix: AS) -> Self {
-        self.with_namespace(&[prefix.as_ref()])
+    fn with_prefix(&self, prefix: &str) -> Self {
+        self.with_namespace(&[prefix])
     }
 
     /// Join namespace and prepend in newly defined metrics.

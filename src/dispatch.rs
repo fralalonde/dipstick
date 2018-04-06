@@ -1,7 +1,8 @@
 //! Decouple metric definition from configuration with trait objects.
 
 use core::*;
-use scope::{DefineMetric, MetricScope, WriteMetric, NO_METRIC_SCOPE};
+use scope::{self, DefineMetric, MetricScope, WriteMetric,
+            NO_METRIC_SCOPE, MetricInput, Flush, ScheduleFlush};
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock, Weak};
@@ -54,7 +55,7 @@ pub fn set_dispatch_default<IS: Into<MetricScope<T>>, T: Send + Sync + Clone + '
 /// Get the named dispatch point.
 /// Uses the stored instance if it already exists, otherwise creates it.
 /// All dispatch points are automatically entered in the dispatch registry and kept FOREVER.
-fn dispatch_name(name: &str) -> MetricDispatch {
+pub fn dispatch(name: &str) -> MetricDispatch {
     let inner = DISPATCHER_REGISTRY
         .write()
         .expect("Dispatch Registry")
@@ -70,8 +71,8 @@ fn dispatch_name(name: &str) -> MetricDispatch {
 }
 
 /// Get the default dispatch point.
-pub fn dispatch() -> MetricDispatch {
-    dispatch_name("_DEFAULT")
+pub fn default_dispatch() -> MetricDispatch {
+    dispatch("_DEFAULT")
 }
 
 /// Shortcut name because `AppMetrics<Dispatch>`
@@ -115,33 +116,20 @@ struct InnerDispatch {
 /// Allow turning a 'static str into a Delegate, where str is the prefix.
 impl From<&'static str> for MetricScope<Dispatch> {
     fn from(prefix: &'static str) -> MetricScope<Dispatch> {
-        dispatch_name(prefix).into()
+        dispatch(prefix).into()
     }
 }
 
 /// Allow turning a 'static str into a Delegate, where str is the prefix.
 impl From<()> for MetricScope<Dispatch> {
     fn from(_: ()) -> MetricScope<Dispatch> {
-        let app_metrics: MetricScope<Dispatch> = dispatch_name("").into();
-        app_metrics
+        default_dispatch().into()
     }
 }
 
 impl From<MetricDispatch> for MetricScope<Dispatch> {
     fn from(send: MetricDispatch) -> MetricScope<Dispatch> {
-        let send_cmd = send.clone();
-        MetricScope::new(
-            // define metric
-            Arc::new(move |kind, name, rate| send.define_metric(kind, name, rate)),
-            // write / flush metric
-            control_scope(move |cmd| match cmd {
-                ScopeCmd::Write(metric, value) => {
-                    let dispatch: &Arc<DispatchMetric> = metric;
-                    dispatch.write_metric.borrow().write(value);
-                }
-                ScopeCmd::Flush => send_cmd.inner.write().expect("Dispatch Lock").scope.flush(),
-            }),
-        )
+        send.into_scope()
     }
 }
 
@@ -152,7 +140,7 @@ impl MetricDispatch {
         for mut metric in inner.metrics.values() {
             if let Some(metric) = metric.upgrade() {
                 let recv_metric =
-                    recv.define_metric(metric.kind, metric.name.as_ref(), metric.rate);
+                    recv.define_metric_object(metric.kind, metric.name.as_ref(), metric.rate);
                 *metric.write_metric.borrow_mut() = recv_metric;
             }
         }
@@ -160,26 +148,21 @@ impl MetricDispatch {
         inner.scope = recv.clone()
     }
 
-    fn define_metric(&self, kind: Kind, name: &str, rate: Sampling) -> Dispatch {
-        let mut inner = self.inner.write().expect("Dispatch Lock");
-        inner
-            .metrics
-            .get(name)
-            .and_then(|metric_ref| Weak::upgrade(metric_ref))
-            .unwrap_or_else(|| {
-                let recv_metric = inner.scope.define_metric(kind, name, rate);
-                let define_metric = Arc::new(DispatchMetric {
-                    kind,
-                    name: name.to_string(),
-                    rate,
-                    write_metric: AtomicRefCell::new(recv_metric),
-                    dispatch: self.clone(),
-                });
-                inner
-                    .metrics
-                    .insert(define_metric.name.clone(), Arc::downgrade(&define_metric));
-                define_metric
-            })
+    fn into_scope(&self) -> MetricScope<Dispatch> {
+        let disp_0 = self.clone();
+        let disp_1 = self.clone();
+        MetricScope::new(
+            // define metric
+            Arc::new(move |kind, name, rate| disp_0.define_metric(kind, name, rate)),
+            // write / flush metric
+            command_fn(move |cmd| match cmd {
+                Command::Write(metric, value) => {
+                    let dispatch: &Arc<DispatchMetric> = metric;
+                    dispatch.write_metric.borrow().write(value);
+                }
+                Command::Flush => disp_1.inner.write().expect("Dispatch Lock").scope.flush_object(),
+            }),
+        )
     }
 
     fn drop_metric(&self, metric: &DispatchMetric) {
@@ -190,26 +173,83 @@ impl MetricDispatch {
     }
 }
 
+impl MetricInput<Dispatch> for MetricDispatch {
+    /// Define an event counter of the provided name.
+    fn marker(&self, name: &str) -> scope::Marker {
+        self.into_scope().marker(name)
+    }
+
+    /// Define a counter of the provided name.
+    fn counter(&self, name: &str) -> scope::Counter {
+        self.into_scope().counter(name)
+    }
+
+    /// Define a timer of the provided name.
+    fn timer(&self, name: &str) -> scope::Timer {
+        self.into_scope().timer(name)
+    }
+
+    /// Define a gauge of the provided name.
+    fn gauge(&self, name: &str) -> scope::Gauge {
+        self.into_scope().gauge(name)
+    }
+
+    /// Lookup or create a scoreboard for the requested metric.
+    fn define_metric(&self, kind: Kind, name: &str, rate: Sampling) -> Dispatch {
+        let mut inner = self.inner.write().expect("Dispatch Lock");
+        inner
+            .metrics
+            .get(name)
+            .and_then(|metric_ref| Weak::upgrade(metric_ref))
+            .unwrap_or_else(|| {
+                let metric_object = inner.scope.define_metric_object(kind, name, rate);
+                let define_metric = Arc::new(DispatchMetric {
+                    kind,
+                    name: name.to_string(),
+                    rate,
+                    write_metric: AtomicRefCell::new(metric_object),
+                    dispatch: self.clone(),
+                });
+                inner
+                    .metrics
+                    .insert(define_metric.name.clone(), Arc::downgrade(&define_metric));
+                define_metric
+            })
+    }
+
+    #[inline]
+    fn write(&self, metric: &Dispatch, value: Value) {
+        metric.write_metric.borrow().write(value);
+    }
+}
+
+impl Flush for MetricDispatch {
+    fn flush(&self) {
+        self.inner.write().expect("Dispatch Lock").scope.flush_object()
+    }
+}
+
+impl ScheduleFlush for MetricDispatch {}
+
 #[cfg(feature = "bench")]
 mod bench {
 
-    use dispatch::{dispatch, set_dispatch_default};
+    use dispatch::{default_dispatch, set_dispatch_default};
     use test;
-    use aggregate::aggregate;
-    use scope::MetricScope;
+    use aggregate::default_aggregate;
+    use scope::MetricInput;
+
 
     #[bench]
     fn dispatch_marker_to_aggregate(b: &mut test::Bencher) {
-        set_dispatch_default(aggregate());
-        let scope: MetricScope<_> = dispatch().into();
-        let metric = scope.marker("event_a");
+        set_dispatch_default(default_aggregate());
+        let metric = default_dispatch().marker("event_a");
         b.iter(|| test::black_box(metric.mark()));
     }
 
     #[bench]
     fn dispatch_marker_to_void(b: &mut test::Bencher) {
-        let scope: MetricScope<_> = dispatch().into();
-        let metric = scope.marker("event_a");
+        let metric = default_dispatch().marker("event_a");
         b.iter(|| test::black_box(metric.mark()));
     }
 

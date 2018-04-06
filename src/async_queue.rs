@@ -3,7 +3,7 @@
 //! If queue size is exceeded, calling code reverts to blocking.
 //!
 use core::*;
-use config::*;
+use output::*;
 use self_metrics::*;
 
 use std::sync::Arc;
@@ -25,7 +25,7 @@ where
     fn with_async_queue(&self, queue_size: usize) -> Self;
 }
 
-impl<M: Send + Sync + Clone + 'static> WithAsyncQueue for MetricConfig<M> {
+impl<M: Send + Sync + Clone + 'static> WithAsyncQueue for MetricOutput<M> {
     fn with_async_queue(&self, queue_size: usize) -> Self {
         self.wrap_scope(|next| {
             // setup channel
@@ -49,17 +49,17 @@ impl<M: Send + Sync + Clone + 'static> WithAsyncQueue for MetricConfig<M> {
 
             Arc::new(move || {
                 // open next scope, make it Arc to move across queue
-                let next_scope: WriteFn<M> = next();
+                let next_scope: CommandFn<M> = next();
                 let sender = sender.clone();
 
                 // forward any scope command through the channel
-                control_scope(move |cmd| {
+                command_fn(move |cmd| {
                     let send_cmd = match cmd {
-                        ScopeCmd::Write(metric, value) => {
+                        Command::Write(metric, value) => {
                             let metric: &M = metric;
                             Some((metric.clone(), value))
                         }
-                        ScopeCmd::Flush => None,
+                        Command::Flush => None,
                     };
                     sender
                         .send(QueueCommand {
@@ -78,10 +78,10 @@ impl<M: Send + Sync + Clone + 'static> WithAsyncQueue for MetricConfig<M> {
 
 /// Enqueue collected metrics for dispatch on background thread.
 #[deprecated(since = "0.5.0", note = "Use `with_async_queue` instead.")]
-pub fn async<M, IC>(queue_size: usize, chain: IC) -> MetricConfig<M>
+pub fn async<M, IC>(queue_size: usize, chain: IC) -> MetricOutput<M>
 where
     M: Clone + Send + Sync + 'static,
-    IC: Into<MetricConfig<M>>,
+    IC: Into<MetricOutput<M>>,
 {
     let chain = chain.into();
     chain.with_async_queue(queue_size)
@@ -96,5 +96,5 @@ pub struct QueueCommand<M> {
     cmd: Option<(M, Value)>,
     /// The scope to write the metric to
     #[derivative(Debug = "ignore")]
-    next_scope: WriteFn<M>,
+    next_scope: CommandFn<M>,
 }

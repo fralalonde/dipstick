@@ -1,117 +1,110 @@
-//! Standard stateless metric outputs.
-// TODO parameterize templates
+//! Chain of command for unscoped metrics.
+
 use core::*;
-use config::*;
-use std::sync::RwLock;
+use scope::MetricScope;
 
-/// Write metric values to stdout using `println!`.
-pub fn to_stdout() -> MetricConfig<String> {
-    metric_config(
-        |_kind, name, _rate| String::from(name),
-        || {
-            control_scope(|cmd| {
-                if let ScopeCmd::Write(m, v) = cmd {
-                    println!("{}: {}", m, v)
-                }
-            })
-        },
-    )
+use namespace::{add_namespace, Namespace, WithNamespace};
+use std::sync::Arc;
+
+use scope::DefineMetric;
+use local;
+
+lazy_static! {
+    /// The reference instance identifying an uninitialized metric config.
+    pub static ref NO_METRIC_OUTPUT: Arc<OpenScope + Send + Sync> = Arc::new(local::to_void());
 }
 
-/// Record metric values to stdout using `println!`.
-/// Values are buffered until #flush is called
-/// Buffered operation requires locking.
-/// If thread latency is a concern you may wish to also use #with_async_queue.
-pub fn to_buffered_stdout() -> MetricConfig<String> {
-    metric_config(
-        |_kind, name, _rate| String::from(name),
-        || {
-            let buf = RwLock::new(String::new());
-            control_scope(move |cmd| {
-                let mut buf = buf.write().expect("Locking stdout buffer");
-                match cmd {
-                    ScopeCmd::Write(metric, value) => {
-                        buf.push_str(format!("{}: {}\n", metric, value).as_ref())
-                    }
-                    ScopeCmd::Flush => {
-                        println!("{}", buf);
-                        buf.clear();
-                    }
-                }
-            })
-        },
-    )
+/// Wrap a MetricConfig in a non-generic trait.
+pub trait OpenScope {
+    /// Open a new metrics scope
+    fn open_scope_object(&self) -> Arc<DefineMetric + Send + Sync>;
 }
 
-/// Write metric values to the standard log using `info!`.
-// TODO parameterize log level
-pub fn to_log() -> MetricConfig<String> {
-    metric_config(
-        |_kind, name, _rate| String::from(name),
-        || {
-            control_scope(|cmd| {
-                if let ScopeCmd::Write(m, v) = cmd {
-                    info!("{}: {}", m, v)
-                }
-            })
-        },
-    )
+/// A pair of functions composing a twin "chain of command".
+/// This is the building block for the metrics backend.
+#[derive(Derivative, Clone)]
+#[derivative(Debug)]
+pub struct MetricOutput<M> {
+    #[derivative(Debug = "ignore")]
+    define_metric_fn: DefineMetricFn<M>,
+
+    #[derivative(Debug = "ignore")]
+    open_scope_fn: OpenScopeFn<M>,
 }
 
-/// Record metric values to the standard log using `info!`.
-/// Values are buffered until #flush is called
-/// Buffered operation requires locking.
-/// If thread latency is a concern you may wish to also use #with_async_queue.
-// TODO parameterize log level
-pub fn to_buffered_log() -> MetricConfig<String> {
-    metric_config(
-        |_kind, name, _rate| String::from(name),
-        || {
-            let buf = RwLock::new(String::new());
-            control_scope(move |cmd| {
-                let mut buf = buf.write().expect("Locking string buffer");
-                match cmd {
-                    ScopeCmd::Write(metric, value) => {
-                        buf.push_str(format!("{}: {}\n", metric, value).as_ref())
-                    }
-                    ScopeCmd::Flush => {
-                        info!("{}", buf);
-                        buf.clear();
-                    }
-                }
-            })
-        },
-    )
+impl<M> MetricOutput<M> {
+    /// Open a new metric scope.
+    /// Scope metrics allow an application to emit per-operation statistics,
+    /// For example, producing a per-request performance log.
+    ///
+    /// ```rust
+    /// use dipstick::*;
+    /// let scope_metrics = to_log().open_scope();
+    /// let request_counter = scope_metrics.counter("scope_counter");
+    /// ```
+    ///
+    pub fn open_scope(&self) -> MetricScope<M> {
+        MetricScope::new(self.define_metric_fn.clone(), (self.open_scope_fn)())
+    }
 }
 
-/// Discard all metric values sent to it.
-pub fn to_void() -> MetricConfig<()> {
-    metric_config(move |_kind, _name, _rate| (), || control_scope(|_cmd| {}))
+/// Create a new metric chain with the provided metric definition and scope creation functions.
+pub fn metric_output<MF, WF, M>(define_fn: MF, open_scope_fn: WF) -> MetricOutput<M>
+where
+    MF: Fn(Kind, &str, Sampling) -> M + Send + Sync + 'static,
+    WF: Fn() -> CommandFn<M> + Send + Sync + 'static,
+{
+    MetricOutput {
+        define_metric_fn: Arc::new(define_fn),
+        open_scope_fn: Arc::new(open_scope_fn),
+    }
 }
 
-#[cfg(test)]
-mod test {
-    use core::*;
-
-    #[test]
-    fn sink_print() {
-        let c = super::to_stdout().open_scope();
-        let m = c.define_metric(Kind::Marker, "test", 1.0);
-        c.write(&m, 33);
+impl<M: Send + Sync + Clone + 'static> MetricOutput<M> {
+    /// Intercept both metric definition and scope creation, possibly changing the metric type.
+    pub fn wrap_all<MF, N>(&self, mod_fn: MF) -> MetricOutput<N>
+    where
+        MF: Fn(DefineMetricFn<M>, OpenScopeFn<M>) -> (DefineMetricFn<N>, OpenScopeFn<N>),
+        N: Clone + Send + Sync,
+    {
+        let (define_metric_fn, open_scope_fn) =
+            mod_fn(self.define_metric_fn.clone(), self.open_scope_fn.clone());
+        MetricOutput {
+            define_metric_fn,
+            open_scope_fn,
+        }
     }
 
-    #[test]
-    fn test_to_log() {
-        let c = super::to_log().open_scope();
-        let m = c.define_metric(Kind::Marker, "test", 1.0);
-        c.write(&m, 33);
+    /// Intercept scope creation.
+    pub fn wrap_scope<MF>(&self, mod_fn: MF) -> Self
+    where
+        MF: Fn(OpenScopeFn<M>) -> OpenScopeFn<M>,
+    {
+        MetricOutput {
+            define_metric_fn: self.define_metric_fn.clone(),
+            open_scope_fn: mod_fn(self.open_scope_fn.clone()),
+        }
     }
+}
 
-    #[test]
-    fn test_to_void() {
-        let c = super::to_void().open_scope();
-        let m = c.define_metric(Kind::Marker, "test", 1.0);
-        c.write(&m, 33);
+impl<M: Send + Sync + Clone + 'static> OpenScope for MetricOutput<M> {
+    fn open_scope_object(&self) -> Arc<DefineMetric + Send + Sync> {
+        Arc::new(self.open_scope())
     }
+}
 
+impl<M> From<MetricOutput<M>> for MetricScope<M> {
+    fn from(metrics: MetricOutput<M>) -> MetricScope<M> {
+        metrics.open_scope()
+    }
+}
+
+impl<M: Send + Sync + Clone + 'static> WithNamespace for MetricOutput<M> {
+    fn with_name<IN: Into<Namespace>>(&self, names: IN) -> Self {
+        let ref ninto = names.into();
+        MetricOutput {
+            define_metric_fn: add_namespace(ninto, self.define_metric_fn.clone()),
+            open_scope_fn: self.open_scope_fn.clone(),
+        }
+    }
 }

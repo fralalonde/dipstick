@@ -1,7 +1,7 @@
 //! Send metrics to a statsd server.
 
 use core::*;
-use config::*;
+use output::*;
 use error;
 use self_metrics::*;
 
@@ -18,7 +18,7 @@ metrics! {
 }
 
 /// Send metrics to a statsd server at the address and port provided.
-pub fn to_statsd<ADDR>(address: ADDR) -> error::Result<MetricConfig<Statsd>>
+pub fn to_statsd<ADDR>(address: ADDR) -> error::Result<MetricOutput<Statsd>>
 where
     ADDR: ToSocketAddrs,
 {
@@ -29,7 +29,7 @@ where
     // TODO buffering toggle
     let buffered = false;
 
-    Ok(metric_config(
+    Ok(metric_output(
         move |kind, name, rate| {
             let mut prefix = String::with_capacity(32);
             prefix.push_str(name);
@@ -66,11 +66,11 @@ where
                 socket: socket.clone(),
                 buffered,
             });
-            control_scope(move |cmd| {
+            command_fn(move |cmd| {
                 if let Ok(mut buf) = buf.write() {
                     match cmd {
-                        ScopeCmd::Write(metric, value) => buf.write(metric, value),
-                        ScopeCmd::Flush => buf.flush(),
+                        Command::Write(metric, value) => buf.write(metric, value),
+                        Command::Flush => buf.flush(),
                     }
                 }
             })

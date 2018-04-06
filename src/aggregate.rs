@@ -1,9 +1,9 @@
 //! Maintain aggregated metrics for deferred reporting,
 //!
-use core::{control_scope, Kind, Sampling, ScopeCmd, Value};
+use core::{command_fn, Kind, Sampling, Command, Value};
 use core::Kind::*;
-use config::{OpenScope, DEFAULT_CONFIG, NO_METRIC_CONFIG};
-use scope::MetricScope;
+use output::{OpenScope, NO_METRIC_OUTPUT, MetricOutput};
+use scope::{self, MetricScope, MetricInput, Flush, ScheduleFlush};
 use namespace::WithNamespace;
 
 use scores::{ScoreSnapshot, ScoreType, Scoreboard};
@@ -46,7 +46,7 @@ lazy_static! {
             RwLock::new(HashMap::new());
 
     static ref DEFAULT_AGGREGATE_SCOPE: RwLock<Arc<OpenScope + Sync + Send>> =
-        RwLock::new(NO_METRIC_CONFIG.clone());
+        RwLock::new(NO_METRIC_OUTPUT.clone());
 }
 
 /// Set the default aggregated metrics statistics generator.
@@ -59,63 +59,56 @@ where
 
 /// Install a new receiver for all aggregateed metrics, replacing any previous receiver.
 pub fn set_aggregate_default<
-    IS: Into<Arc<OpenScope + Sync + Send>>,
+    IS: Into<MetricOutput<T>>,
     T: Send + Sync + Clone + 'static,
 >(
     new_config: IS,
 ) {
-    *DEFAULT_AGGREGATE_SCOPE.write().unwrap() = new_config.into();
+    *DEFAULT_AGGREGATE_SCOPE.write().unwrap() = Arc::new(new_config.into());
+}
+
+fn get_aggregate_default() -> Arc<OpenScope> {
+    DEFAULT_AGGREGATE_SCOPE.read().unwrap().clone()
 }
 
 /// Get the named aggregate point.
 /// Uses the stored instance if it already exists, otherwise creates it.
 /// All aggregate points are automatically entered in the aggregate registry and kept FOREVER.
-fn aggregate_name(name: &str) -> MetricScope<Aggregate> {
+pub fn aggregate(name: &str) -> MetricAggregate {
     let metrics = AGGREGATE_REGISTRY
         .write()
         .expect("Aggregate Registry")
         .entry(name.into())
         .or_insert_with(|| Arc::new(RwLock::new(HashMap::new())))
         .clone();
-    MetricAggregate { metrics }.into()
+    MetricAggregate { metrics }
 }
 
 /// Get the default aggregate point.
-pub fn aggregate() -> MetricScope<Aggregate> {
-    aggregate_name("_DEFAULT")
+pub fn default_aggregate() -> MetricAggregate {
+    aggregate("_DEFAULT")
 }
 
 impl From<MetricAggregate> for MetricScope<Aggregate> {
     fn from(agg: MetricAggregate) -> MetricScope<Aggregate> {
-        let agg_1 = agg.clone();
-        MetricScope::new(
-            Arc::new(move |kind, name, rate| agg.define_metric(kind, name, rate)),
-            control_scope(move |cmd| match cmd {
-                ScopeCmd::Write(metric, value) => {
-                    let metric: &Aggregate = metric;
-                    metric.update(value)
-                }
-                ScopeCmd::Flush => agg_1.flush(),
-            }),
-        )
+        agg.into_scope()
     }
 }
 
 impl From<&'static str> for MetricScope<Aggregate> {
     fn from(prefix: &'static str) -> MetricScope<Aggregate> {
-        let app_metrics: MetricScope<Aggregate> = aggregate();
+        let scope: MetricScope<Aggregate> = default_aggregate().into();
         if !prefix.is_empty() {
-            app_metrics.with_prefix(prefix)
+            scope.with_prefix(prefix)
         } else {
-            app_metrics
+            scope
         }
     }
 }
 
 impl From<()> for MetricScope<Aggregate> {
     fn from(_: ()) -> MetricScope<Aggregate> {
-        let scope: MetricScope<Aggregate> = aggregate();
-        scope
+        default_aggregate().into_scope()
     }
 }
 
@@ -134,6 +127,21 @@ impl MetricAggregate {
         }
     }
 
+    fn into_scope(&self) -> MetricScope<Aggregate> {
+        let agg_0 = self.clone();
+        let agg_1 = self.clone();
+        MetricScope::new(
+            Arc::new(move |kind, name, rate| agg_0.define_metric(kind, name, rate)),
+            command_fn(move |cmd| match cmd {
+                Command::Write(metric, value) => {
+                    let metric: &Aggregate = metric;
+                    metric.update(value)
+                }
+                Command::Flush => agg_1.flush(),
+            })
+        )
+    }
+
     /// Discard scores for ad-hoc metrics.
     pub fn cleanup(&self) {
         let orphans: Vec<String> = self.metrics.read().unwrap().iter()
@@ -149,9 +157,31 @@ impl MetricAggregate {
             });
         }
     }
+}
+
+impl MetricInput<Aggregate> for MetricAggregate {
+    /// Define an event counter of the provided name.
+    fn marker(&self, name: &str) -> scope::Marker {
+        self.into_scope().marker(name)
+    }
+
+    /// Define a counter of the provided name.
+    fn counter(&self, name: &str) -> scope::Counter {
+        self.into_scope().counter(name)
+    }
+
+    /// Define a timer of the provided name.
+    fn timer(&self, name: &str) -> scope::Timer {
+        self.into_scope().timer(name)
+    }
+
+    /// Define a gauge of the provided name.
+    fn gauge(&self, name: &str) -> scope::Gauge {
+        self.into_scope().gauge(name)
+    }
 
     /// Lookup or create a scoreboard for the requested metric.
-    pub fn define_metric(&self, kind: Kind, name: &str, _rate: Sampling) -> Aggregate {
+    fn define_metric(&self, kind: Kind, name: &str, _rate: Sampling) -> Aggregate {
         self.metrics
             .write()
             .expect("Locking aggregator")
@@ -160,17 +190,24 @@ impl MetricAggregate {
             .clone()
     }
 
+    #[inline]
+    fn write(&self, metric: &Aggregate, value: Value) {
+        metric.update(value)
+    }
+}
+
+impl Flush for MetricAggregate {
     /// Collect and reset aggregated data.
     /// Publish statistics
-    pub fn flush(&self) {
+    fn flush(&self) {
         let snapshot: Vec<ScoreSnapshot> = {
             let metrics = self.metrics.read().expect("Aggregate Lock");
             metrics.values().flat_map(|score| score.reset()).collect()
         };
 
         let default_publish_fn = DEFAULT_AGGREGATE_STATS.read().unwrap().clone();
+        let publish_scope = get_aggregate_default().open_scope_object();
 
-        let publish_scope = DEFAULT_CONFIG.read().unwrap().open_scope();
         if snapshot.is_empty() {
             // no data was collected for this period
             // TODO repeat previous frame min/max ?
@@ -180,7 +217,7 @@ impl MetricAggregate {
                 for score in metric.2 {
                     if let Some(ex) = (default_publish_fn)(metric.0, metric.1.as_ref(), score) {
                         publish_scope
-                            .define_metric(ex.0, &ex.1.concat(), 1.0)
+                            .define_metric_object(ex.0, &ex.1.concat(), 1.0)
                             .write(ex.2);
                     }
                 }
@@ -189,9 +226,11 @@ impl MetricAggregate {
 
         // TODO parameterize whether to keep ad-hoc metrics after publish
         // source.cleanup();
-        publish_scope.flush()
+        publish_scope.flush_object()
     }
 }
+
+impl ScheduleFlush for MetricAggregate {}
 
 /// The type of metric created by the Aggregator.
 pub type Aggregate = Arc<Scoreboard>;
@@ -254,33 +293,32 @@ mod bench {
 
     use test;
     use core::Kind::{Counter, Marker};
-    use aggregate::aggregate;
+    use aggregate::default_aggregate;
+    use scope::MetricInput;
 
     #[bench]
     fn aggregate_marker(b: &mut test::Bencher) {
-        let sink = aggregate();
+        let sink = default_aggregate();
         let metric = sink.define_metric(Marker, "event_a", 1.0);
         b.iter(|| test::black_box(sink.write(&metric, 1)));
     }
 
     #[bench]
     fn aggregate_counter(b: &mut test::Bencher) {
-        let sink = aggregate();
+        let sink = default_aggregate();
         let metric = sink.define_metric(Counter, "count_a", 1.0);
         b.iter(|| test::black_box(sink.write(&metric, 1)));
     }
 
     #[bench]
     fn reset_marker(b: &mut test::Bencher) {
-        let agg = aggregate();
-        let metric = agg.define_metric(Marker, "marker", 1.0);
+        let metric = default_aggregate().define_metric(Marker, "marker", 1.0);
         b.iter(|| test::black_box(metric.reset()));
     }
 
     #[bench]
     fn reset_counter(b: &mut test::Bencher) {
-        let agg = aggregate();
-        let metric = agg.define_metric(Counter, "count_a", 1.0);
+        let metric = default_aggregate().define_metric(Counter, "count_a", 1.0);
         b.iter(|| test::black_box(metric.reset()));
     }
 

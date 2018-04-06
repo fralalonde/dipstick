@@ -1,7 +1,7 @@
 //! Send metrics to a graphite server.
 
 use core::*;
-use config::*;
+use output::*;
 use error;
 use self_metrics::*;
 
@@ -38,28 +38,28 @@ metrics!{
 //}
 
 /// Send metrics to a graphite server at the address and port provided.
-pub fn to_graphite<ADDR>(address: ADDR) -> error::Result<MetricConfig<Graphite>>
+pub fn to_graphite<ADDR>(address: ADDR) -> error::Result<MetricOutput<Graphite>>
 where
     ADDR: ToSocketAddrs + Debug + Clone,
 {
     debug!("Connecting to graphite {:?}", address);
     let socket = Arc::new(RwLock::new(RetrySocket::new(address.clone())?));
 
-    Ok(metric_config(
+    Ok(metric_output(
         move |kind, name, rate| graphite_metric(kind, name, rate),
         move || graphite_scope(&socket, false),
     ))
 }
 
 /// Send metrics to a graphite server at the address and port provided.
-pub fn to_buffered_graphite<ADDR>(address: ADDR) -> error::Result<MetricConfig<Graphite>>
+pub fn to_buffered_graphite<ADDR>(address: ADDR) -> error::Result<MetricOutput<Graphite>>
 where
     ADDR: ToSocketAddrs + Debug + Clone,
 {
     debug!("Connecting to graphite {:?}", address);
     let socket = Arc::new(RwLock::new(RetrySocket::new(address.clone())?));
 
-    Ok(metric_config(
+    Ok(metric_output(
         move |kind, name, rate| graphite_metric(kind, name, rate),
         move || graphite_scope(&socket, true),
     ))
@@ -90,15 +90,15 @@ fn graphite_metric(kind: Kind, name: &str, rate: Sampling) -> Graphite {
     Graphite { prefix, scale }
 }
 
-fn graphite_scope(socket: &Arc<RwLock<RetrySocket>>, buffered: bool) -> WriteFn<Graphite> {
+fn graphite_scope(socket: &Arc<RwLock<RetrySocket>>, buffered: bool) -> CommandFn<Graphite> {
     let buf = ScopeBuffer {
         buffer: Arc::new(RwLock::new(String::new())),
         socket: socket.clone(),
         buffered,
     };
-    control_scope(move |cmd| match cmd {
-        ScopeCmd::Write(metric, value) => buf.write(metric, value),
-        ScopeCmd::Flush => buf.flush(),
+    command_fn(move |cmd| match cmd {
+        Command::Write(metric, value) => buf.write(metric, value),
+        Command::Flush => buf.flush(),
     })
 }
 
