@@ -7,16 +7,16 @@ use std::time::Duration;
 use dipstick::*;
 
 fn main() {
-    let app_metrics = aggregate("my_app");
+    let metrics = aggregate("my_app");
 
     set_aggregate_default(to_stdout());
 
-    app_metrics.flush_every(Duration::from_secs(3));
+    metrics.flush_every(Duration::from_secs(3));
 
-    let counter = app_metrics.counter("counter_a");
-    let timer = app_metrics.timer("timer_a");
-    let gauge = app_metrics.gauge("gauge_a");
-    let marker = app_metrics.marker("marker_a");
+    let counter = metrics.counter("counter_a");
+    let timer = metrics.timer("timer_a");
+    let gauge = metrics.gauge("gauge_a");
+    let marker = metrics.marker("marker_a");
 
     loop {
         // add counts forever, non-stop

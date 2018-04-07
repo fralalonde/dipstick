@@ -12,8 +12,8 @@ pub use std::net::ToSocketAddrs;
 
 metrics! {
     <Aggregate> DIPSTICK_METRICS.with_prefix("statsd") => {
-        @Marker SEND_ERR: "send_failed";
-        @Counter SENT_BYTES: "sent_bytes";
+        Marker SEND_ERR: "send_failed";
+        Counter SENT_BYTES: "sent_bytes";
     }
 }
 
