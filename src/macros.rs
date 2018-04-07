@@ -28,7 +28,7 @@ macro_rules! metrics {
     // typed, public, some metrics
     (<$METRIC_TYPE:ty> pub $METRIC_ID:ident = $e:expr => { $($REMAINING:tt)+ }) => {
         lazy_static! { pub static ref $METRIC_ID: MetricScope<$METRIC_TYPE> = $e.into(); }
-        __metrics_block!($METRIC_ID: $METRIC_TYPE; $($REMAINING)*);
+        __metrics_block!($METRIC_ID; $($REMAINING)*);
     };
     // typed, module, no metrics
     (<$METRIC_TYPE:ty> $METRIC_ID:ident = $e:expr $(;)*) => {
@@ -37,21 +37,21 @@ macro_rules! metrics {
     // typed, module, some metrics
     (<$METRIC_TYPE:ty> $METRIC_ID:ident = $e:expr => { $($REMAINING:tt)+ }) => {
         lazy_static! { static ref $METRIC_ID: MetricScope<$METRIC_TYPE> = $e.into(); }
-        __metrics_block!($METRIC_ID: $METRIC_TYPE; $($REMAINING)*);
+        __metrics_block!($METRIC_ID; $($REMAINING)*);
     };
     // typed, reuse predeclared
     (<$METRIC_TYPE:ty> $METRIC_ID:ident => { $($REMAINING:tt)+ }) => {
-        __metrics_block!($METRIC_ID: $METRIC_TYPE; $($REMAINING)*);
+        __metrics_block!($METRIC_ID; $($REMAINING)*);
     };
     // typed, unidentified, some metrics
     (<$METRIC_TYPE:ty> $e:expr => { $($REMAINING:tt)+ }) => {
         lazy_static! { static ref UNIDENT_METRIC: MetricScope<$METRIC_TYPE> = $e.into(); }
-        __metrics_block!(UNIDENT_METRIC: $METRIC_TYPE; $($REMAINING)*);
+        __metrics_block!(UNIDENT_METRIC; $($REMAINING)*);
     };
     // typed, root, some metrics
     (<$METRIC_TYPE:ty> { $($REMAINING:tt)+ }) => {
         lazy_static! { static ref ROOT_METRICS: MetricScope<$METRIC_TYPE> = ().into(); }
-        __metrics_block!(ROOT_METRICS: $METRIC_TYPE; $($REMAINING)*);
+        __metrics_block!(ROOT_METRICS; $($REMAINING)*);
     };
 }
 
@@ -59,72 +59,72 @@ macro_rules! metrics {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __metrics_block {
-    ($APP_METRICS:ident : $METRIC_TYPE:ty;
-    $(#[$attr:meta])* pub @Counter $METRIC_ID:ident : $METRIC_NAME:expr; $($REMAINING:tt)*) => {
+    ($SCOPE:ident;
+    $(#[$attr:meta])* pub Counter $METRIC_ID:ident : $METRIC_NAME:expr; $($REMAINING:tt)*) => {
         lazy_static! { $(#[$attr])* pub static ref $METRIC_ID:
-        Counter = $APP_METRICS.counter($METRIC_NAME); }
-        __metrics_block!($APP_METRICS: $METRIC_TYPE; $($REMAINING)*);
+            Counter = $SCOPE.counter($METRIC_NAME); }
+        __metrics_block!($SCOPE; $($REMAINING)*);
     };
-    ($APP_METRICS:ident : $METRIC_TYPE:ty;
-    $(#[$attr:meta])* @Counter $METRIC_ID:ident : $METRIC_NAME:expr; $($REMAINING:tt)*) => {
+    ($SCOPE:ident;
+    $(#[$attr:meta])* Counter $METRIC_ID:ident : $METRIC_NAME:expr; $($REMAINING:tt)*) => {
         lazy_static! { $(#[$attr])* static ref $METRIC_ID:
-        Counter = $APP_METRICS.counter($METRIC_NAME); }
-        __metrics_block!($APP_METRICS: $METRIC_TYPE; $($REMAINING)*);
+            Counter = $SCOPE.counter($METRIC_NAME); }
+        __metrics_block!($SCOPE; $($REMAINING)*);
     };
-    ($APP_METRICS:ident : $METRIC_TYPE:ty;
-    $(#[$attr:meta])* pub @Marker $METRIC_ID:ident : $METRIC_NAME:expr; $($REMAINING:tt)*) => {
+    ($SCOPE:ident;
+    $(#[$attr:meta])* pub Marker $METRIC_ID:ident : $METRIC_NAME:expr; $($REMAINING:tt)*) => {
         lazy_static! { $(#[$attr])* pub static ref $METRIC_ID:
-        Marker = $APP_METRICS.marker($METRIC_NAME); }
-        __metrics_block!($APP_METRICS: $METRIC_TYPE; $($REMAINING)*);
+            Marker = $SCOPE.marker($METRIC_NAME); }
+        __metrics_block!($SCOPE; $($REMAINING)*);
     };
-    ($APP_METRICS:ident : $METRIC_TYPE:ty;
-    $(#[$attr:meta])* @Marker $METRIC_ID:ident : $METRIC_NAME:expr; $($REMAINING:tt)*) => {
+    ($SCOPE:ident;
+    $(#[$attr:meta])* Marker $METRIC_ID:ident : $METRIC_NAME:expr; $($REMAINING:tt)*) => {
         lazy_static! { $(#[$attr])* static ref $METRIC_ID:
-            Marker = $APP_METRICS.marker($METRIC_NAME); }
-        __metrics_block!($APP_METRICS: $METRIC_TYPE; $($REMAINING)*);
+            Marker = $SCOPE.marker($METRIC_NAME); }
+        __metrics_block!($SCOPE; $($REMAINING)*);
     };
-    ($APP_METRICS:ident : $METRIC_TYPE:ty;
-    $(#[$attr:meta])* pub @Gauge $METRIC_ID:ident : $METRIC_NAME:expr; $($REMAINING:tt)*) => {
+    ($SCOPE:ident;
+    $(#[$attr:meta])* pub Gauge $METRIC_ID:ident : $METRIC_NAME:expr; $($REMAINING:tt)*) => {
         lazy_static! { $(#[$attr])* pub static ref $METRIC_ID:
-        Gauge = $APP_METRICS.gauge($METRIC_NAME); }
-        __metrics_block!($APP_METRICS: $METRIC_TYPE; $($REMAINING)*);
+            Gauge = $SCOPE.gauge($METRIC_NAME); }
+        __metrics_block!($SCOPE; $($REMAINING)*);
     };
-    ($APP_METRICS:ident : $METRIC_TYPE:ty;
-    $(#[$attr:meta])* @Gauge $METRIC_ID:ident : $METRIC_NAME:expr; $($REMAINING:tt)*) => {
+    ($SCOPE:ident;
+    $(#[$attr:meta])* Gauge $METRIC_ID:ident : $METRIC_NAME:expr; $($REMAINING:tt)*) => {
         lazy_static! { $(#[$attr])* static ref $METRIC_ID:
-        Gauge = $APP_METRICS.gauge($METRIC_NAME); }
-        __metrics_block!($APP_METRICS: $METRIC_TYPE; $($REMAINING)*);
+            Gauge = $SCOPE.gauge($METRIC_NAME); }
+        __metrics_block!($SCOPE; $($REMAINING)*);
     };
-    ($APP_METRICS:ident : $METRIC_TYPE:ty;
-    $(#[$attr:meta])* pub @Timer $METRIC_ID:ident : $METRIC_NAME:expr; $($REMAINING:tt)*) => {
+    ($SCOPE:ident;
+    $(#[$attr:meta])* pub Timer $METRIC_ID:ident : $METRIC_NAME:expr; $($REMAINING:tt)*) => {
         lazy_static! { $(#[$attr])* pub static ref $METRIC_ID:
-        Timer = $APP_METRICS.timer($METRIC_NAME); }
-        __metrics_block!($APP_METRICS: $METRIC_TYPE; $($REMAINING)*);
+            Timer = $SCOPE.timer($METRIC_NAME); }
+        __metrics_block!($SCOPE; $($REMAINING)*);
     };
-    ($APP_METRICS:ident : $METRIC_TYPE:ty;
-    $(#[$attr:meta])* @Timer $METRIC_ID:ident : $METRIC_NAME:expr; $($REMAINING:tt)*) => {
+    ($SCOPE:ident;
+    $(#[$attr:meta])* Timer $METRIC_ID:ident : $METRIC_NAME:expr; $($REMAINING:tt)*) => {
         lazy_static! { $(#[$attr])* static ref $METRIC_ID:
-        Timer = $APP_METRICS.timer($METRIC_NAME); }
-        __metrics_block!($APP_METRICS: $METRIC_TYPE; $($REMAINING)*);
+            Timer = $SCOPE.timer($METRIC_NAME); }
+        __metrics_block!($SCOPE; $($REMAINING)*);
     };
-    ($METRIC_ID:ident : $METRIC_TYPE:ty;) => ()
+    ($METRIC_ID:ident;) => ()
 }
 
 /// Define application-scoped metrics.
 #[macro_export]
 #[deprecated(since = "0.7.0", note = "Use metrics!() instead")]
 macro_rules! app_metrics {
-    ($type_param: ty, $metric_id: ident = ($($app_metrics: expr),+ $(,)*)) => {
+    ($type_param: ty, $metric_id: ident = ($($SCOPE: expr),+ $(,)*)) => {
         lazy_static! { pub static ref $metric_id: MetricScope<$type_param> =
-            metric_scope(($($app_metrics),*)); }
+            metric_scope(($($SCOPE),*)); }
     };
-    ($type_param: ty, $metric_id: ident = [$($app_metrics: expr),+ $(,)*]) => {
+    ($type_param: ty, $metric_id: ident = [$($SCOPE: expr),+ $(,)*]) => {
         lazy_static! { pub static ref $metric_id: MetricScope<$type_param> =
-            metric_scope(&[$($app_metrics),*][..],); }
+            metric_scope(&[$($SCOPE),*][..],); }
     };
-    ($type_param: ty, $metric_id: ident = $app_metrics: expr) => {
+    ($type_param: ty, $metric_id: ident = $SCOPE: expr) => {
         lazy_static! { pub static ref $metric_id: MetricScope<$type_param> =
-            $app_metrics.into(); }
+            $SCOPE.into(); }
     };
 }
 
@@ -132,10 +132,10 @@ macro_rules! app_metrics {
 #[macro_export]
 #[deprecated(since = "0.7.0", note = "Use metrics!() instead")]
 macro_rules! app_marker {
-    (<$type_param: ty> $app_metrics: expr =>
+    (<$type_param: ty> $SCOPE: expr =>
     { $($metric_id: ident: $m_exp: expr),* $(,)* } ) => {
         lazy_static! { $(pub static ref $metric_id:
-        Marker = $app_metrics.marker( $m_exp );)* }
+        Marker = $SCOPE.marker( $m_exp );)* }
     };
 }
 
@@ -143,10 +143,10 @@ macro_rules! app_marker {
 #[macro_export]
 #[deprecated(since = "0.7.0", note = "Use metrics!() instead")]
 macro_rules! app_counter {
-    (<$type_param: ty> $app_metrics: expr =>
+    (<$type_param: ty> $SCOPE: expr =>
     { $($metric_id: ident: $m_exp: expr),* $(,)* } ) => {
         lazy_static! { $(pub static ref $metric_id:
-        Counter = $app_metrics.counter( $m_exp );)* }
+        Counter = $SCOPE.counter( $m_exp );)* }
     };
 }
 
@@ -154,10 +154,10 @@ macro_rules! app_counter {
 #[macro_export]
 #[deprecated(since = "0.7.0", note = "Use metrics!() instead")]
 macro_rules! app_gauge {
-    (<$type_param: ty> $app_metrics: expr =>
+    (<$type_param: ty> $SCOPE: expr =>
     { $($metric_id: ident: $m_exp: expr),* $(,)* } ) => {
         lazy_static! { $(pub static ref $metric_id:
-        Gauge = $app_metrics.gauge( $m_exp );)* }
+        Gauge = $SCOPE.gauge( $m_exp );)* }
     };
 }
 
@@ -165,10 +165,10 @@ macro_rules! app_gauge {
 #[macro_export]
 #[deprecated(since = "0.7.0", note = "Use metrics!() instead")]
 macro_rules! app_timer {
-    (<$type_param: ty> $app_metrics: expr =>
+    (<$type_param: ty> $SCOPE: expr =>
     { $($metric_id: ident: $m_exp: expr),* $(,)* } ) => {
         lazy_static! { $(pub static ref $metric_id:
-        Timer = $app_metrics.timer( $m_exp );)* }
+        Timer = $SCOPE.timer( $m_exp );)* }
     };
 }
 
@@ -179,13 +179,13 @@ macro_rules! app_timer {
 #[macro_export]
 #[deprecated(since = "0.7.0", note = "Use metrics!() instead")]
 macro_rules! mod_metrics {
-    ($type_param: ty, $metric_id: ident = ($($app_metrics: expr),+ $(,)*)) => {
+    ($type_param: ty, $metric_id: ident = ($($SCOPE: expr),+ $(,)*)) => {
         lazy_static! { static ref $metric_id: MetricScope<$type_param> =
-            metric_scope(($($app_metrics),*)); }
+            metric_scope(($($SCOPE),*)); }
     };
-    ($type_param: ty, $metric_id: ident = [$($app_metrics: expr),+ $(,)*]) => {
+    ($type_param: ty, $metric_id: ident = [$($SCOPE: expr),+ $(,)*]) => {
         lazy_static! { static ref $metric_id: MetricScope<$type_param> =
-            metric_scope(&[$($app_metrics),*][..],); }
+            metric_scope(&[$($SCOPE),*][..],); }
     };
     ($type_param: ty, $metric_id: ident = $mod_metrics: expr) => {
         lazy_static! { static ref $metric_id: MetricScope<$type_param> =

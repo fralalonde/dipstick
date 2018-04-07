@@ -10,9 +10,10 @@ use std::sync::Arc;
 use std::sync::mpsc;
 use std::thread;
 
-metrics!{
-    <Aggregate> DIPSTICK_METRICS.with_prefix("async_queue") => {
-        @Marker SEND_FAILED: "send_failed";
+aggregate_metrics!{
+    DIPSTICK_METRICS.with_prefix("async_queue") => {
+        /// Maybe queue was full?
+        Marker SEND_FAILED: "send_failed";
     }
 }
 

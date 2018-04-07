@@ -16,9 +16,9 @@ use socket::RetrySocket;
 
 metrics!{
     <Aggregate> DIPSTICK_METRICS.with_prefix("graphite") => {
-        @Marker SEND_ERR: "send_failed";
-        @Marker TRESHOLD_EXCEEDED: "bufsize_exceeded";
-        @Counter SENT_BYTES: "sent_bytes";
+        Marker SEND_ERR: "send_failed";
+        Marker TRESHOLD_EXCEEDED: "bufsize_exceeded";
+        Counter SENT_BYTES: "sent_bytes";
     }
 }
 
