@@ -53,6 +53,26 @@ macro_rules! metrics {
         lazy_static! { static ref ROOT_METRICS: MetricScope<$METRIC_TYPE> = ().into(); }
         __metrics_block!(ROOT_METRICS; $($REMAINING)*);
     };
+
+    (pub $METRIC_ID:ident = $e:expr $(;)*) => {
+        metrics! {<Dispatch> pub $METRIC_ID = $e; }
+    };
+    (pub $METRIC_ID:ident = $e:expr => { $($REMAINING:tt)+ }) => {
+        metrics! {<Dispatch> pub $METRIC_ID = $e => { $($REMAINING)* } }
+    };
+    ($METRIC_ID:ident = $e:expr $(;)*) => {
+        metrics! {<Dispatch> $METRIC_ID = $e; }
+    };
+    ($METRIC_ID:ident = $e:expr => { $($REMAINING:tt)+ }) => {
+        metrics! {<Dispatch> $METRIC_ID = $e => { $($REMAINING)* } }
+    };
+    ($METRIC_ID:ident => { $($REMAINING:tt)+ }) => {
+        metrics! {<Dispatch> $METRIC_ID => { $($REMAINING)* } }
+    };
+    ($e:expr => { $($REMAINING:tt)+ }) => {
+        metrics! {<Dispatch> $e => { $($REMAINING)* } }
+    };
+
 }
 
 /// Internal macro required to abstract over pub/non-pub versions of the macro

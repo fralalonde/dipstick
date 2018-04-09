@@ -8,4 +8,4 @@ pub use scope::*;
 pub use aggregate::*;
 pub use namespace::*;
 
-aggregate_metrics!(pub DIPSTICK_METRICS = "dipstick");
+metrics!(<Aggregate> pub DIPSTICK_METRICS = "dipstick");

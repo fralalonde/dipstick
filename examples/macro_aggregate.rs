@@ -8,7 +8,7 @@ use dipstick::*;
 use std::time::Duration;
 
 // undeclared root (un-prefixed) metrics
-aggregate_metrics!(() => {
+metrics!(<Aggregate> pub AGGREGATE = () => {
     // create counter "some_counter"
     pub Counter ROOT_COUNTER: "root_counter";
     // create counter "root_counter"
@@ -17,41 +17,28 @@ aggregate_metrics!(() => {
     pub Timer ROOT_TIMER: "root_timer";
 });
 
-// public source
-aggregate_metrics!(pub PUB_METRICS ="pub_lib_prefix" => {
-    // create counter "lib_prefix.some_counter"
-    pub Counter PUB_COUNTER: "some_counter";
-});
 
-// undeclared (private) prefixed metrics
-//app_metrics!("closed_lib_prefix" => {
-//    // create counter "lib_prefix.some_counter"
-//    pub @Counter MY_COUNTER: "some_counter";
-//});
-
-// declare mod source
-aggregate_metrics!(LIB_METRICS ="mod_lib_prefix" => {
-    // create counter "mod_lib_prefix.some_counter"
-    pub Counter SOME_COUNTER: "some_counter";
-});
-
-// reuse declared source
-aggregate_metrics!(LIB_METRICS => {
-    // create counter "mod_lib_prefix.another_counter"
-    Counter ANOTHER_COUNTER: "another_counter";
+metrics!(<Aggregate> AGGREGATE.with_prefix("module_prefix") => {
+    // create counter "module_prefix.module_counter"
+    Counter MOD_COUNTER: "module_counter";
 });
 
 fn main() {
-    set_aggregate_default(to_stdout());
+    // print aggregated metrics to the console
+    set_aggregate_default_output(to_stdout());
+
+    // enable autoflush...
+    AGGREGATE.flush_every(Duration::from_millis(4000));
 
     loop {
-        PUB_COUNTER.count(978);
         ROOT_COUNTER.count(123);
-        ANOTHER_COUNTER.count(456);
         ROOT_TIMER.interval_us(2000000);
         ROOT_GAUGE.value(34534);
+        MOD_COUNTER.count(978);
 
-        PUB_METRICS.flush();
+        // ...or flush manually
+        AGGREGATE.flush();
+
         std::thread::sleep(Duration::from_millis(40));
     }
 }
