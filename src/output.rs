@@ -17,7 +17,7 @@ lazy_static! {
 /// Wrap a MetricConfig in a non-generic trait.
 pub trait OpenScope {
     /// Open a new metrics scope
-    fn open_scope_object(&self) -> Arc<DefineMetric + Send + Sync>;
+    fn open_scope_object(&self) -> Arc<DefineMetric + Send + Sync + 'static>;
 }
 
 /// A pair of functions composing a twin "chain of command".
@@ -88,7 +88,7 @@ impl<M: Send + Sync + Clone + 'static> MetricOutput<M> {
 }
 
 impl<M: Send + Sync + Clone + 'static> OpenScope for MetricOutput<M> {
-    fn open_scope_object(&self) -> Arc<DefineMetric + Send + Sync> {
+    fn open_scope_object(&self) -> Arc<DefineMetric + Send + Sync + 'static> {
         Arc::new(self.open_scope())
     }
 }
@@ -96,6 +96,12 @@ impl<M: Send + Sync + Clone + 'static> OpenScope for MetricOutput<M> {
 impl<M> From<MetricOutput<M>> for MetricScope<M> {
     fn from(metrics: MetricOutput<M>) -> MetricScope<M> {
         metrics.open_scope()
+    }
+}
+
+impl<M: Send + Sync + Clone + 'static> From<MetricOutput<M>> for Arc<DefineMetric + Send + Sync + 'static> {
+    fn from(metrics: MetricOutput<M>) -> Arc<DefineMetric + Send + Sync + 'static> {
+        metrics.open_scope_object()
     }
 }
 

@@ -35,10 +35,10 @@ fn main() {
     }
 
     // send application metrics to aggregator
-    set_aggregate_default(to_stdout());
-    set_default_aggregate_statistics(custom_statistics);
+    set_aggregate_default_output(to_stdout());
+    set_aggregate_default_stats(custom_statistics);
 
-    let app_metrics = default_aggregate();
+    let app_metrics = new_aggregate();
 
     // schedule aggregated metrics to be printed every 3 seconds
     app_metrics.flush_every(Duration::from_secs(3));

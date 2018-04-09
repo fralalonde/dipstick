@@ -27,19 +27,12 @@ lazy_static! {
 }
 
 /// A non-generic trait to hide MetricScope<M>
-pub trait DefineMetric {
+pub trait DefineMetric: Flush {
     /// Register a new metric.
     /// Only one metric of a certain name will be defined.
     /// Observer must return a MetricHandle that uniquely identifies the metric.
-    fn define_metric_object(
-        &self,
-        kind: Kind,
-        name: &str,
-        rate: Sampling,
-    ) -> Box<WriteMetric + Send + Sync>;
-
-    /// Flush the scope, if it is buffered.
-    fn flush_object(&self);
+    fn define_metric_object(&self, kind: Kind, name: &str, rate: Sampling)
+        -> Box<WriteMetric + Send + Sync>;
 }
 
 /// Dynamic counterpart of the `DispatcherMetric`.
@@ -319,10 +312,6 @@ impl<M: Send + Sync + Clone + 'static> DefineMetric for MetricScope<M> {
             command_fn: self.command_fn.clone(),
         })
     }
-
-    fn flush_object(&self) {
-        self.flush();
-    }
 }
 
 impl<M> WriteMetric for MetricWriter<M> {
@@ -362,7 +351,7 @@ mod bench {
 
     #[bench]
     fn time_bench_direct_dispatch_event(b: &mut test::Bencher) {
-        let metrics = default_aggregate();
+        let metrics = new_aggregate();
         let marker = metrics.marker("aaa");
         b.iter(|| test::black_box(marker.mark()));
     }
