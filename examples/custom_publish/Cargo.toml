@@ -1,8 +1,0 @@
-[package]
-name = "custom_publish"
-version = "0.0.0"
-workspace = "../../"
-
-[dependencies]
-dipstick = { path = '../../' }
-

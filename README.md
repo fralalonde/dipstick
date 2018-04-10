@@ -98,7 +98,7 @@ For better performance and easy maintenance, metrics should usually be predefine
 #[macro_use] extern crate lazy_static;
 use dipstick::*;
 
-app_metric!(String, APP_METRICS, app_metrics(to_stdout()));
+app_metrics!(String, APP_METRICS = app_metrics(to_stdout()));
 app_counter!(String, APP_METRICS, {
     COUNTER_A: "counter_a",
 });

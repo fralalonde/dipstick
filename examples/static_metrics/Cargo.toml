@@ -1,8 +1,0 @@
-[package]
-name = "static_metrics"
-version = "0.0.0"
-workspace = "../../"
-
-[dependencies]
-dipstick = { path = '../../' }
-lazy_static = "0.2.9"

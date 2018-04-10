@@ -1,23 +1,6 @@
-[workspace]
-members = [
-  "./",
-  "examples/counter_timer_gauge/",
-  "examples/multi_outs/",
-  "examples/macro_outs/",
-  "examples/aggregate_print/",
-  "examples/summary_print/",
-  "examples/async_print/",
-  "examples/custom_publish/",
-  "examples/raw_log/",
-  "examples/graphite/",
-  "examples/static_metrics/",
-  "examples/scoped_print/",
-  "examples/sampling/",
-]
-
 [package]
 name = "dipstick"
-version = "0.6.5"
+version = "0.6.6"
 authors = ["Francis Lalonde <fralalonde@gmail.com>"]
 
 description = """A fast and modular metrics library decoupling app instrumentation from reporting backend.
