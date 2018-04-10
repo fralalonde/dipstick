@@ -18,7 +18,7 @@ fn main() {{
     run().ok();
 }}
 
-fn run() -> Result<(), Error> {{
+fn run() -> Result<(), dipstick::error::Error> {{
     {}
     Ok(())
 }}

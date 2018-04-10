@@ -1,5 +1,4 @@
 use std::mem;
-use chrono::{Local, DateTime};
 
 use core::*;
 use core::Kind::*;
@@ -43,20 +42,13 @@ pub struct Scoreboard {
     scores: [AtomicUsize; 5],
 }
 
-fn now() -> usize {
-    let local: DateTime<Local> = Local::now();
-    let mut millis = local.timestamp() as usize * 1000;
-    millis += local.timestamp_subsec_millis() as usize;
-    millis
-}
-
 impl Scoreboard {
     /// Create a new Scoreboard to track summary values of a metric
     pub fn new(kind: Kind, name: String) -> Self {
         Scoreboard {
             kind,
             name,
-            scores: unsafe { mem::transmute(Scoreboard::blank(now())) },
+            scores: unsafe { mem::transmute(Scoreboard::blank(slow_clock_micros() as usize)) },
         }
     }
 
@@ -100,10 +92,10 @@ impl Scoreboard {
 
     /// Map raw scores (if any) to applicable statistics
     pub fn reset(&self) -> Option<ScoreSnapshot> {
-        let now = now();
+        let now = slow_clock_micros() as usize;
         let mut scores = Scoreboard::blank(now);
         if self.snapshot(now, &mut scores) {
-            let duration_seconds = (now - scores[0]) as f64 / 1_000.0;
+            let duration_seconds = (now - scores[0]) as f64 / 1_000_000.0;
 
             let mut snapshot = Vec::new();
             match self.kind {
@@ -133,13 +125,8 @@ impl Scoreboard {
     }
 }
 
-fn average_rate(count: usize, time: f64, scores: &[usize], now: usize) -> f64 {
-    let avg = count as f64 / time;
-    if avg > 10_000_000.0 {
-        eprintln!("Computed anomalous rate of '{}'/s, count '{}'  / time '{}'s, start {}, stop {}", avg, count, time, scores[0], now);
-        return 0.0
-    }
-    avg
+fn average_rate(count: usize, time: f64, _scores: &[usize], _now: usize) -> f64 {
+    count as f64 / time
 }
 
 /// Spinlock until success or clear loss to concurrent update.
@@ -159,7 +146,8 @@ fn swap_if(counter: &AtomicUsize, new_value: usize, compare: fn(usize, usize) ->
 #[cfg(feature = "bench")]
 mod bench {
 
-    use super::*;
+    use scores::Scoreboard;
+    use core::Kind::*;
     use test;
 
     #[bench]
@@ -177,9 +165,8 @@ mod bench {
     #[bench]
     fn bench_score_snapshot(b: &mut test::Bencher) {
         let metric = Scoreboard::new(Counter, "event_a".to_string());
-        let now = time::precise_time_ns() as usize;
-        let mut scores = Scoreboard::blank(now);
-        b.iter(|| test::black_box(metric.snapshot(now, &mut scores)));
+        let mut scores = Scoreboard::blank(0);
+        b.iter(|| test::black_box(metric.snapshot(0, &mut scores)));
     }
 
 }

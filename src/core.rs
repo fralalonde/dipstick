@@ -5,8 +5,9 @@
 use self::Kind::*;
 use self::ScopeCmd::*;
 
-use time;
 use std::sync::Arc;
+use chrono::{Local, DateTime};
+use time;
 
 // TODO define an 'AsValue' trait + impl for supported number types, then drop 'num' crate
 pub use num::ToPrimitive;
@@ -18,18 +19,43 @@ pub type Value = u64;
 #[derive(Debug, Copy, Clone)]
 /// A handle to the start time of a counter.
 /// Wrapped so it may be changed safely later.
-pub struct TimeHandle(u64);
+pub struct TimeHandle(i64);
+
+/// takes 250ns but works every time
+pub fn slow_clock_micros() -> i64 {
+    let local: DateTime<Local> = Local::now();
+    let mut micros = local.timestamp() * 1_000_000;
+    micros += local.timestamp_subsec_micros() as i64;
+    micros
+}
+
+/// takes 25ns but fails to advance time on occasion
+pub fn imprecise_clock_micros() -> i64 {
+    (time::precise_time_ns() / 1000) as i64
+}
+
+// another quick way
+//fn now_micros() -> i64 {
+//    let t = time::get_time();
+//    (t.sec * 1_000_000) + (t.nsec as i64 / 1000)
+//}
 
 impl TimeHandle {
+
     /// Get a handle on current time.
     /// Used by the TimerMetric start_time() method.
     pub fn now() -> TimeHandle {
-        TimeHandle(time::precise_time_ns())
+        TimeHandle(imprecise_clock_micros())
     }
 
     /// Get the elapsed time in microseconds since TimeHandle was obtained.
     pub fn elapsed_us(self) -> Value {
-        (TimeHandle::now().0 - self.0) / 1_000
+        (TimeHandle::now().0 - self.0) as Value
+    }
+
+    /// Get the elapsed time in microseconds since TimeHandle was obtained.
+    pub fn elapsed_ms(self) -> Value {
+        self.elapsed_us() / 1_000
     }
 }
 
@@ -392,4 +418,80 @@ impl<M: Clone> ScopeTimer<M> {
         self.stop(scope, start_time);
         value
     }
+}
+
+//#[cfg(test)]
+//mod test {
+//    use core::*;
+//    use test;
+//    use std::f64;
+//
+//    const ITER: i64 = 5_000;
+//    const LOOP: i64 = 50000;
+//
+//    // a retarded, dirty and generally incorrect tentative at jitter measurement
+//    fn jitter(clock: fn() -> i64) {
+//        let mut first = 0;
+//        let mut last = 0;
+//        let mut min = 999_000_000;
+//        let mut max = -8888888;
+//        let mut delta_sum = 0;
+//        let mut dev2_sum = 0;
+//
+//        for i in 1..ITER {
+//            let ts = clock();
+//            test::black_box(for _j in 0..LOOP {});
+//            last = clock();
+//            let delta = last - ts;
+//
+//            delta_sum += delta;
+//            let mean = delta_sum / i;
+//
+//            let dev2 = (delta - mean) ^ 2;
+//            dev2_sum += dev2;
+//
+//            if delta > max {
+//                max = delta
+//            }
+//            if delta < min {
+//                min = delta
+//            }
+//        }
+//
+//        println!("runt {}", last - first);
+//        println!("mean {}", delta_sum / ITER);
+//        println!("dev2 {}", (dev2_sum as f64).sqrt() / ITER as f64);
+//        println!("min {}", min);
+//        println!("max {}", max);
+//    }
+//
+//
+//    #[test]
+//    fn jitter_local_now() {
+//        jitter(|| super::slow_clock_micros())
+//    }
+//
+//    #[test]
+//    fn jitter_precise_time_ns() {
+//        jitter(|| super::imprecise_clock_micros())
+//    }
+//
+//}
+
+#[cfg(feature = "bench")]
+mod bench {
+
+    use super::*;
+    use test;
+
+    #[bench]
+    fn get_slow_time(b: &mut test::Bencher) {
+        b.iter(|| test::black_box(slow_clock_micros()));
+    }
+
+    #[bench]
+    fn get_imprecise_time(b: &mut test::Bencher) {
+        b.iter(|| test::black_box(imprecise_clock_micros()));
+    }
+
 }

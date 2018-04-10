@@ -1,7 +1,0 @@
-[package]
-name = "multi_print"
-version = "0.0.0"
-workspace = "../../"
-
-[dependencies]
-dipstick = { path = '../../' }
