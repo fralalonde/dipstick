@@ -64,10 +64,12 @@ where
     fn publish(&self, snapshot: Vec<ScoreSnapshot>) {
         let publish_scope_fn = self.target_chain.open_scope(false);
         if snapshot.is_empty() {
-            // no data was collected for this period
+            debug!("No values were recorded for metrics in this period");
             // TODO repeat previous frame min/max ?
             // TODO update some canary metric ?
+
         } else {
+            debug!("Values were recorded for {} metrics in this period", snapshot.len());
             for metric in snapshot {
                 for score in metric.2 {
                     if let Some(ex) = (self.statistics)(metric.0, metric.1.as_ref(), score) {
