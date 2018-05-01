@@ -36,7 +36,7 @@ metrics!(LIB_METRICS => {
 });
 
 fn main() {
-    dispatch().set_target(to_stdout());
+    metric_dispatch().set_target(to_stdout());
 
     loop {
         ROOT_COUNTER.count(123);

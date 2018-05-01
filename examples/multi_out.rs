@@ -17,8 +17,8 @@ fn main() {
     let same_type_metrics = metric_scope(
         &[
             // use slices to combine multiple metrics of the same type
-            to_stdout().with_name("yeah"),
-            to_stdout().with_name("ouch"),
+            to_stdout().with_suffix("yeah"),
+            to_stdout().with_suffix("ouch"),
             to_stdout().with_sampling_rate(0.5),
         ][..],
     );

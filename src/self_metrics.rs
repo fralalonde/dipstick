@@ -6,6 +6,5 @@ pub use core::*;
 
 pub use scope::*;
 pub use aggregate::*;
-pub use namespace::*;
 
 metrics!(<Aggregate> pub DIPSTICK_METRICS = "dipstick");

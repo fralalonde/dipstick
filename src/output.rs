@@ -3,8 +3,8 @@
 use core::*;
 use scope::MetricScope;
 
-use namespace::{add_namespace, Namespace, WithNamespace};
 use std::sync::Arc;
+use std::fmt::Debug;
 
 use scope::DefineMetric;
 use local;
@@ -15,7 +15,7 @@ lazy_static! {
 }
 
 /// Wrap a MetricConfig in a non-generic trait.
-pub trait OpenScope {
+pub trait OpenScope: Debug {
     /// Open a new metrics scope
     fn open_scope_object(&self) -> Arc<DefineMetric + Send + Sync + 'static>;
 }
@@ -25,6 +25,8 @@ pub trait OpenScope {
 #[derive(Derivative, Clone)]
 #[derivative(Debug)]
 pub struct MetricOutput<M> {
+    namespace: Namespace,
+
     #[derivative(Debug = "ignore")]
     define_metric_fn: DefineMetricFn<M>,
 
@@ -44,17 +46,18 @@ impl<M> MetricOutput<M> {
     /// ```
     ///
     pub fn open_scope(&self) -> MetricScope<M> {
-        MetricScope::new(self.define_metric_fn.clone(), (self.open_scope_fn)())
+        MetricScope::new(self.namespace.clone(), self.define_metric_fn.clone(), (self.open_scope_fn)())
     }
 }
 
 /// Create a new metric chain with the provided metric definition and scope creation functions.
 pub fn metric_output<MF, WF, M>(define_fn: MF, open_scope_fn: WF) -> MetricOutput<M>
 where
-    MF: Fn(Kind, &str, Sampling) -> M + Send + Sync + 'static,
+    MF: Fn(&Namespace, Kind, &str, Sampling) -> M + Send + Sync + 'static,
     WF: Fn() -> CommandFn<M> + Send + Sync + 'static,
 {
     MetricOutput {
+        namespace: ().into(),
         define_metric_fn: Arc::new(define_fn),
         open_scope_fn: Arc::new(open_scope_fn),
     }
@@ -70,6 +73,7 @@ impl<M: Send + Sync + Clone + 'static> MetricOutput<M> {
         let (define_metric_fn, open_scope_fn) =
             mod_fn(self.define_metric_fn.clone(), self.open_scope_fn.clone());
         MetricOutput {
+            namespace: self.namespace.clone(),
             define_metric_fn,
             open_scope_fn,
         }
@@ -81,11 +85,30 @@ impl<M: Send + Sync + Clone + 'static> MetricOutput<M> {
         MF: Fn(OpenScopeFn<M>) -> OpenScopeFn<M>,
     {
         MetricOutput {
+            namespace: self.namespace.clone(),
             define_metric_fn: self.define_metric_fn.clone(),
             open_scope_fn: mod_fn(self.open_scope_fn.clone()),
         }
     }
+
+    /// Return a copy of this output with the specified name appended to the namespace.
+    pub fn with_suffix(&self, name: &str) -> Self {
+        MetricOutput {
+            namespace: self.namespace.with_suffix(name),
+            define_metric_fn: self.define_metric_fn.clone(),
+            open_scope_fn: self.open_scope_fn.clone(),
+        }
+    }
+
 }
+
+//impl<'a, M: Send + Sync + Clone + 'static> Index<&'a str> for MetricOutput<M> {
+//    type Output = Self;
+//
+//    fn index(&self, index: &'a str) -> &Self::Output {
+//        &self.push(index)
+//    }
+//}
 
 impl<M: Send + Sync + Clone + 'static> OpenScope for MetricOutput<M> {
     fn open_scope_object(&self) -> Arc<DefineMetric + Send + Sync + 'static> {
@@ -105,12 +128,3 @@ impl<M: Send + Sync + Clone + 'static> From<MetricOutput<M>> for Arc<DefineMetri
     }
 }
 
-impl<M: Send + Sync + Clone + 'static> WithNamespace for MetricOutput<M> {
-    fn with_name<IN: Into<Namespace>>(&self, names: IN) -> Self {
-        let ref ninto = names.into();
-        MetricOutput {
-            define_metric_fn: add_namespace(ninto, self.define_metric_fn.clone()),
-            open_scope_fn: self.open_scope_fn.clone(),
-        }
-    }
-}

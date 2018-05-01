@@ -20,24 +20,24 @@ extern crate time;
 extern crate chrono;
 
 pub mod error;
-pub use error::*;
+pub use error::{Error, Result};
 
 #[macro_use]
 pub mod macros;
 
 pub mod core;
-pub use core::*;
+pub use core::{Value, Sampling, FULL_SAMPLING_RATE, TimeHandle, Kind, ROOT_NS};
 
 pub mod output;
-pub use output::*;
+pub use output::{MetricOutput, NO_METRIC_OUTPUT, OpenScope};
 
 #[macro_use]
 pub mod dispatch;
-pub use dispatch::*;
+pub use dispatch::{MetricDispatch, Dispatch, metric_dispatch};
 
 #[macro_use]
 mod aggregate;
-pub use aggregate::*;
+pub use aggregate::{MetricAggregator, Aggregate};
 
 mod local;
 pub use local::*;
@@ -53,9 +53,6 @@ pub use scores::*;
 
 mod statsd;
 pub use statsd::*;
-
-mod namespace;
-pub use namespace::*;
 
 mod graphite;
 pub use graphite::*;

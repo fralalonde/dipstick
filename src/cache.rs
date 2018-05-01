@@ -23,7 +23,7 @@ where
 {
     let cache: RwLock<lru::LRUCache<String, M>> =
         RwLock::new(lru::LRUCache::with_capacity(cache_size));
-    Arc::new(move |kind, name, rate| {
+    Arc::new(move |ns, kind, name, rate| {
         let mut cache = cache.write().expect("Locking metric cache");
         let name_str = String::from(name);
 
@@ -32,7 +32,7 @@ where
             return value.clone();
         }
 
-        let new_value = (next)(kind, name, rate).clone();
+        let new_value = (next)(ns, kind, name, rate).clone();
         cache.insert(name_str, new_value.clone());
         new_value
     })

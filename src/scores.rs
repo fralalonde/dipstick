@@ -33,6 +33,8 @@ pub type ScoreSnapshot = (Kind, String, Vec<ScoreType>);
 /// Some fields are kept public to ease publishing.
 #[derive(Debug)]
 pub struct Scoreboard {
+    namespace: Namespace,
+
     /// The kind of metric.
     kind: Kind,
 
@@ -44,11 +46,12 @@ pub struct Scoreboard {
 
 impl Scoreboard {
     /// Create a new Scoreboard to track summary values of a metric
-    pub fn new(kind: Kind, name: String) -> Self {
+    pub fn new(namespace: Namespace, kind: Kind, name: String) -> Self {
         Scoreboard {
+            namespace,
             kind,
             name,
-            scores: unsafe { mem::transmute(Scoreboard::blank(TimeHandle::now().into())) },
+            scores: unsafe { mem::transmute(Scoreboard::blank(accurate_clock_micros() as usize)) },
         }
     }
 
@@ -92,7 +95,7 @@ impl Scoreboard {
 
     /// Map raw scores (if any) to applicable statistics
     pub fn reset(&self) -> Option<ScoreSnapshot> {
-        let now: usize = TimeHandle::now().into();
+        let now: usize = accurate_clock_micros() as usize;
         let mut scores = Scoreboard::blank(now);
         if self.snapshot(now, &mut scores) {
             let duration_seconds = (now - scores[0]) as f64 / 1_000.0;
@@ -108,13 +111,24 @@ impl Scoreboard {
                     snapshot.push(Min(scores[4] as u64));
                     snapshot.push(Mean(scores[2] as f64 / scores[1] as f64));
                 }
-                Timer | Counter => {
+                Timer => {
                     snapshot.push(Count(scores[1] as u64));
                     snapshot.push(Sum(scores[2] as u64));
 
                     snapshot.push(Max(scores[3] as u64));
                     snapshot.push(Min(scores[4] as u64));
                     snapshot.push(Mean(scores[2] as f64 / scores[1] as f64));
+                    // timer rate uses the COUNT of timer calls per second (not SUM)
+                    snapshot.push(Rate(scores[1] as f64 / duration_seconds))
+                }
+                Counter => {
+                    snapshot.push(Count(scores[1] as u64));
+                    snapshot.push(Sum(scores[2] as u64));
+
+                    snapshot.push(Max(scores[3] as u64));
+                    snapshot.push(Min(scores[4] as u64));
+                    snapshot.push(Mean(scores[2] as f64 / scores[1] as f64));
+                    // counter rate uses the SUM of values per second (e.g. to get bytes/s)
                     snapshot.push(Rate(scores[2] as f64 / duration_seconds))
                 }
             }
@@ -147,19 +161,19 @@ mod bench {
 
     #[bench]
     fn bench_score_update_marker(b: &mut test::Bencher) {
-        let metric = Scoreboard::new(Marker, "event_a".to_string());
+        let metric = Scoreboard::new(ROOT_NS.clone(), Marker, "event_a".to_string());
         b.iter(|| test::black_box(metric.update(1)));
     }
 
     #[bench]
     fn bench_score_update_count(b: &mut test::Bencher) {
-        let metric = Scoreboard::new(Counter, "event_a".to_string());
+        let metric = Scoreboard::new(ROOT_NS.clone(), Counter, "event_a".to_string());
         b.iter(|| test::black_box(metric.update(4)));
     }
 
     #[bench]
     fn bench_score_empty_snapshot(b: &mut test::Bencher) {
-        let metric = Scoreboard::new(Counter, "event_a".to_string());
+        let metric = Scoreboard::new(ROOT_NS.clone(), Counter, "event_a".to_string());
         let mut scores = Scoreboard::blank(0);
         b.iter(|| test::black_box(metric.snapshot(0, &mut scores)));
     }

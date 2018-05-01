@@ -18,14 +18,14 @@ metrics!(<Aggregate> pub AGGREGATE = () => {
 });
 
 
-metrics!(<Aggregate> AGGREGATE.with_prefix("module_prefix") => {
+metrics!(<Aggregate> AGGREGATE.with_suffix("module_prefix") => {
     // create counter "module_prefix.module_counter"
     Counter MOD_COUNTER: "module_counter";
 });
 
 fn main() {
     // print aggregated metrics to the console
-    set_aggregate_default_output(to_stdout());
+    MetricAggregator::set_default_output(to_stdout());
 
     // enable autoflush...
     AGGREGATE.flush_every(Duration::from_millis(4000));

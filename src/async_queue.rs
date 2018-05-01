@@ -11,7 +11,7 @@ use std::sync::mpsc;
 use std::thread;
 
 metrics!{
-    <Aggregate> DIPSTICK_METRICS.with_prefix("async_queue") => {
+    <Aggregate> DIPSTICK_METRICS.with_suffix("async_queue") => {
         /// Maybe queue was full?
         Marker SEND_FAILED: "send_failed";
     }
