@@ -79,17 +79,18 @@ impl RetrySocket {
             return Err(self.backoff(e));
         }
 
-        let opres = if let Some(ref mut socket) = self.socket {
+        let op_result = if let Some(ref mut socket) = self.socket {
             operation(socket)
         } else {
             // still none, quiescent
             return Err(io::Error::from(io::ErrorKind::NotConnected));
         };
 
-        match opres {
-            Ok(r) => Ok(r),
-            Err(e) => Err(self.backoff(e)),
+        if let Err(e) = op_result {
+            return Err(self.backoff(e))
         }
+
+        op_result
     }
 }
 

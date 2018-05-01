@@ -39,6 +39,7 @@ where
         if inner_handle.is_cancelled() {
             break;
         }
+        debug!("Running scheduled metrics operation");
         operation();
     });
     handle
