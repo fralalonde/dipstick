@@ -101,21 +101,32 @@ impl Scoreboard {
             match self.kind {
                 Marker => {
                     snapshot.push(Count(scores[1] as u64));
-                    snapshot.push(Rate(average_rate(scores[1], duration_seconds, &scores, now)))
+                    snapshot.push(Rate(scores[1] as f64 / duration_seconds))
                 }
                 Gauge => {
                     snapshot.push(Max(scores[3] as u64));
                     snapshot.push(Min(scores[4] as u64));
                     snapshot.push(Mean(scores[2] as f64 / scores[1] as f64));
                 }
-                Timer | Counter => {
+                Timer => {
                     snapshot.push(Count(scores[1] as u64));
                     snapshot.push(Sum(scores[2] as u64));
 
                     snapshot.push(Max(scores[3] as u64));
                     snapshot.push(Min(scores[4] as u64));
                     snapshot.push(Mean(scores[2] as f64 / scores[1] as f64));
-                    snapshot.push(Rate(average_rate(scores[2], duration_seconds, &scores, now)))
+                    // timer rate uses the COUNT of timer calls per second (not SUM)
+                    snapshot.push(Rate(scores[1] as f64 / duration_seconds))
+                }
+                Counter => {
+                    snapshot.push(Count(scores[1] as u64));
+                    snapshot.push(Sum(scores[2] as u64));
+
+                    snapshot.push(Max(scores[3] as u64));
+                    snapshot.push(Min(scores[4] as u64));
+                    snapshot.push(Mean(scores[2] as f64 / scores[1] as f64));
+                    // counter rate uses the SUM of values per second (e.g. to get bytes/s)
+                    snapshot.push(Rate(scores[2] as f64 / duration_seconds))
                 }
             }
             Some((self.kind, self.name.clone(), snapshot))
@@ -123,10 +134,6 @@ impl Scoreboard {
             None
         }
     }
-}
-
-fn average_rate(count: usize, time: f64, _scores: &[usize], _now: usize) -> f64 {
-    count as f64 / time
 }
 
 /// Spinlock until success or clear loss to concurrent update.
