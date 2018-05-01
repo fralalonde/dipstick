@@ -26,9 +26,6 @@ derivative = "1.0"
 atomic_refcell = "0.1"
 chrono = "^0.3"
 
-#[build-dependencies]
-#skeptic = "0.13"
-
 [dev-dependencies]
 skeptic = "0.13"
 

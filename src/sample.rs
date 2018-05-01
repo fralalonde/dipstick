@@ -20,7 +20,7 @@ impl<M: Send + Sync + 'static + Clone> WithSamplingRate for MetricOutput<M> {
 
         self.wrap_all(|metric_fn, scope_fn| {
             (
-                Arc::new(move |kind, name, rate| {
+                Arc::new(move |ns, kind, name, rate| {
                     // TODO override only if FULL_SAMPLING else warn!()
                     if rate != FULL_SAMPLING_RATE {
                         info!(
@@ -30,7 +30,7 @@ impl<M: Send + Sync + 'static + Clone> WithSamplingRate for MetricOutput<M> {
                     }
 
                     let new_rate = sampling_rate * rate;
-                    metric_fn(kind, name, new_rate)
+                    metric_fn(ns, kind, name, new_rate)
                 }),
                 Arc::new(move || {
                     let next_scope = scope_fn();

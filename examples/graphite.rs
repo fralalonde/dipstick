@@ -12,7 +12,7 @@ fn main() {
     let metrics = metric_scope(
         to_graphite("localhost:2003")
             .expect("Connecting")
-            .with_namespace(&["my", "app"][..]),
+            .with_suffix("my_app"),
     );
 
     loop {

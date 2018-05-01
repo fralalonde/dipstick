@@ -9,7 +9,6 @@
 //!
 use core::*;
 use core::Kind::*;
-use namespace::*;
 use cache::*;
 use schedule::{schedule, CancelHandle};
 use output;
@@ -31,7 +30,7 @@ pub trait DefineMetric: Flush {
     /// Register a new metric.
     /// Only one metric of a certain name will be defined.
     /// Observer must return a MetricHandle that uniquely identifies the metric.
-    fn define_metric_object(&self, kind: Kind, name: &str, rate: Sampling)
+    fn define_metric_object(&self, namespace: &Namespace, kind: Kind, name: &str, rate: Sampling)
         -> Box<WriteMetric + Send + Sync>;
 }
 
@@ -186,6 +185,7 @@ pub type AppTimer = Timer;
 /// Variations of this should also provide control of the metric recording scope.
 #[derive(Derivative, Clone)]
 pub struct MetricScope<M> {
+    namespace: Namespace,
     flush_on_drop: bool,
     #[derivative(Debug = "ignore")]
     define_fn: DefineMetricFn<M>,
@@ -195,8 +195,9 @@ pub struct MetricScope<M> {
 
 impl<M> MetricScope<M> {
     /// Create new application metrics instance.
-    pub fn new(define_metric_fn: DefineMetricFn<M>, scope: CommandFn<M>) -> Self {
+    pub fn new(namespace: Namespace, define_metric_fn: DefineMetricFn<M>, scope: CommandFn<M>) -> Self {
         MetricScope {
+            namespace,
             flush_on_drop: true,
             define_fn: define_metric_fn,
             command_fn: scope,
@@ -204,12 +205,12 @@ impl<M> MetricScope<M> {
     }
 }
 
-fn write_fn<M, D: MetricInput<M> + Clone + Send + Sync + 'static>(scope: &D, kind: Kind, name: &str) -> WriteFn
+fn scope_write_fn<M, D: MetricInput<M> + Clone + Send + Sync + 'static>(scope: &D, kind: Kind, name: &str) -> WriteFn
     where
         M: Clone + Send + Sync + 'static,
 {
     let scope = scope.clone();
-    let metric = scope.define_metric(kind, name, 1.0);
+    let metric = scope.define_metric(&ROOT_NS, kind, name, 1.0);
     Arc::new(move |value| scope.write(&metric, value))
 }
 
@@ -219,30 +220,32 @@ pub trait MetricInput<M>: Clone + Flush + Send + Sync + 'static
         M: Clone + Send + Sync + 'static,
 {
     /// Define an event counter of the provided name.
-    fn marker(&self, name: &str) -> Marker {
-        Marker { write: write_fn(self, Marker, name) }
-    }
+    fn marker(&self, name: &str) -> Marker;
 
     /// Define a counter of the provided name.
-    fn counter(&self, name: &str) -> Counter {
-        Counter { write: write_fn(self, Counter, name) }
-    }
+    fn counter(&self, name: &str) -> Counter;
 
     /// Define a timer of the provided name.
-    fn timer(&self, name: &str) -> Timer {
-        Timer { write: write_fn(self, Timer, name) }
-    }
+    fn timer(&self, name: &str) -> Timer;
 
     /// Define a gauge of the provided name.
-    fn gauge(&self, name: &str) -> Gauge {
-        Gauge { write: write_fn(self, Gauge, name) }
-    }
+    fn gauge(&self, name: &str) -> Gauge;
 
     /// Define a metric of the specified type.
-    fn define_metric(&self, kind: Kind, name: &str, rate: Sampling) -> M;
+    fn define_metric(&self, source_ns: &Namespace, kind: Kind, name: &str, rate: Sampling) -> M;
 
     /// Record or send a value for a previously defined metric.
     fn write(&self, metric: &M, value: Value);
+
+    /// Join namespace and prepend in newly defined metrics.
+    #[deprecated(since = "0.7.0", note = "Misleading terminology, use with_suffix() instead.")]
+    fn with_prefix(&self, name: &str) -> Self {
+        self.with_suffix(name)
+    }
+
+    /// Join namespace and prepend in newly defined metrics.
+    fn with_suffix(&self, name: &str) -> Self;
+
 }
 
 /// Scopes can implement buffering, requiring flush operations to commit metric values.
@@ -256,13 +259,44 @@ impl<M> MetricInput<M> for MetricScope<M>
 where
     M: Clone + Send + Sync + 'static,
 {
-    fn define_metric(&self, kind: Kind, name: &str, rate: Sampling) -> M {
-        (self.define_fn)(kind, name, rate)
+
+    /// Define an event counter of the provided name.
+    fn marker(&self, name: &str) -> Marker {
+        Marker { write: scope_write_fn(self, Marker, name) }
+    }
+
+    /// Define a counter of the provided name.
+    fn counter(&self, name: &str) -> Counter {
+        Counter { write: scope_write_fn(self, Counter, name) }
+    }
+
+    /// Define a timer of the provided name.
+    fn timer(&self, name: &str) -> Timer {
+        Timer { write: scope_write_fn(self, Timer, name) }
+    }
+
+    /// Define a gauge of the provided name.
+    fn gauge(&self, name: &str) -> Gauge {
+        Gauge { write: scope_write_fn(self, Gauge, name) }
+    }
+
+    fn define_metric(&self, source_ns: &Namespace, kind: Kind, name: &str, rate: Sampling) -> M {
+        (self.define_fn)(source_ns, kind, name, rate)
     }
 
     fn write(&self, metric: &M, value: Value) {
         self.command_fn.write(metric, value);
     }
+
+    fn with_suffix(&self, name: &str) -> Self {
+        MetricScope {
+            namespace: self.namespace.with_suffix(name),
+            flush_on_drop: self.flush_on_drop,
+            define_fn: self.define_fn.clone(),
+            command_fn: self.command_fn.clone(),
+        }
+    }
+
 }
 
 /// Scopes can implement buffering, in which case they can be flushed.
@@ -304,11 +338,11 @@ struct MetricWriter<M> {
 }
 
 impl<M: Send + Sync + Clone + 'static> DefineMetric for MetricScope<M> {
-    fn define_metric_object(&self, kind: Kind, name: &str, rate: Sampling)
+    fn define_metric_object(&self, namespace: &Namespace, kind: Kind, name: &str, rate: Sampling)
             -> Box<WriteMetric + Send + Sync>
     {
         Box::new(MetricWriter {
-            define_fn: self.define_metric(kind, name, rate),
+            define_fn: self.define_metric(namespace, kind, name, rate),
             command_fn: self.command_fn.clone(),
         })
     }
@@ -322,20 +356,10 @@ impl<M> WriteMetric for MetricWriter<M> {
 
 //// Mutators impl
 
-impl<M: Send + Sync + Clone + 'static> WithNamespace for MetricScope<M> {
-    fn with_name<IN: Into<Namespace>>(&self, names: IN) -> Self {
-        let ns = &names.into();
-        MetricScope {
-            flush_on_drop: self.flush_on_drop,
-            define_fn: add_namespace(ns, self.define_fn.clone()),
-            command_fn: self.command_fn.clone(),
-        }
-    }
-}
-
 impl<M: Send + Sync + Clone + 'static> WithCache for MetricScope<M> {
     fn with_cache(&self, cache_size: usize) -> Self {
         MetricScope {
+            namespace: self.namespace.clone(),
             flush_on_drop: self.flush_on_drop,
             define_fn: add_cache(cache_size, self.define_fn.clone()),
             command_fn: self.command_fn.clone(),
@@ -351,7 +375,7 @@ mod bench {
 
     #[bench]
     fn time_bench_direct_dispatch_event(b: &mut test::Bencher) {
-        let metrics = new_aggregate();
+        let metrics = MetricAggregator::new();
         let marker = metrics.marker("aaa");
         b.iter(|| test::black_box(marker.mark()));
     }

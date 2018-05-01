@@ -11,7 +11,7 @@ use std::sync::{Arc, RwLock};
 pub use std::net::ToSocketAddrs;
 
 metrics! {
-    <Aggregate> DIPSTICK_METRICS.with_prefix("statsd") => {
+    <Aggregate> DIPSTICK_METRICS.with_suffix("statsd") => {
         Marker SEND_ERR: "send_failed";
         Counter SENT_BYTES: "sent_bytes";
     }
@@ -30,9 +30,8 @@ where
     let buffered = false;
 
     Ok(metric_output(
-        move |kind, name, rate| {
-            let mut prefix = String::with_capacity(32);
-            prefix.push_str(name);
+        move |namespace, kind, name, rate| {
+            let mut prefix = namespace.join(name, ".");
             prefix.push(':');
 
             let mut suffix = String::with_capacity(16);
@@ -160,7 +159,7 @@ mod bench {
     #[bench]
     pub fn timer_statsd(b: &mut test::Bencher) {
         let sd = to_statsd("localhost:8125").unwrap().open_scope();
-        let timer = sd.define_metric(Kind::Timer, "timer", 1000000.0);
+        let timer = sd.define_metric(&ROOT_NS, Kind::Timer, "timer", 1000000.0);
 
         b.iter(|| test::black_box(sd.write(&timer, 2000)));
     }

@@ -19,7 +19,7 @@ fn main() {
     app_metrics.counter("just_once").count(4);
 
     // metric names can be prepended with a common prefix
-    let prefixed_metrics = app_metrics.with_name("subsystem".to_string());
+    let prefixed_metrics = app_metrics.with_suffix("subsystem");
     let event = prefixed_metrics.marker("event_c");
     let gauge = prefixed_metrics.gauge("gauge_d");
 

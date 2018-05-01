@@ -15,7 +15,7 @@ use std::fmt::Debug;
 use socket::RetrySocket;
 
 metrics!{
-    <Aggregate> DIPSTICK_METRICS.with_prefix("graphite") => {
+    <Aggregate> DIPSTICK_METRICS.with_suffix("graphite") => {
         Marker SEND_ERR: "send_failed";
         Marker TRESHOLD_EXCEEDED: "bufsize_exceeded";
         Counter SENT_BYTES: "sent_bytes";
@@ -46,7 +46,7 @@ where
     let socket = Arc::new(RwLock::new(RetrySocket::new(address.clone())?));
 
     Ok(metric_output(
-        move |kind, name, rate| graphite_metric(kind, name, rate),
+        move |ns, kind, name, rate| graphite_metric(ns, kind, name, rate),
         move || graphite_scope(&socket, false),
     ))
 }
@@ -60,14 +60,13 @@ where
     let socket = Arc::new(RwLock::new(RetrySocket::new(address.clone())?));
 
     Ok(metric_output(
-        move |kind, name, rate| graphite_metric(kind, name, rate),
+        move |ns, kind, name, rate| graphite_metric(ns, kind, name, rate),
         move || graphite_scope(&socket, true),
     ))
 }
 
-fn graphite_metric(kind: Kind, name: &str, rate: Sampling) -> Graphite {
-    let mut prefix = String::with_capacity(32);
-    prefix.push_str(name);
+fn graphite_metric(namespace: &Namespace, kind: Kind, name: &str, rate: Sampling) -> Graphite {
+    let mut prefix = namespace.join(name, ".");
     prefix.push(' ');
 
     let mut scale = match kind {
@@ -196,7 +195,7 @@ mod bench {
     #[bench]
     pub fn timer_graphite(b: &mut test::Bencher) {
         let sd = to_graphite("localhost:8125").unwrap().open_scope();
-        let timer = sd.define_metric(Kind::Timer, "timer", 1000000.0);
+        let timer = sd.define_metric(&ROOT_NS, Kind::Timer, "timer", 1000000.0);
 
         b.iter(|| test::black_box(sd.write(&timer, 2000)));
     }
