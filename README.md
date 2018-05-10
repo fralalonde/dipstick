@@ -32,7 +32,7 @@ To use Dipstick in your project, add the following line to your `Cargo.toml`
 in the `[dependencies]` section:
 
 ```toml
-dipstick = "0.4.18"
+dipstick = "0.6.8"
 ```
 
 Then add it to your code:
