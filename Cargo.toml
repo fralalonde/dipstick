@@ -1,6 +1,6 @@
 [package]
 name = "dipstick"
-version = "0.6.7"
+version = "0.6.8"
 authors = ["Francis Lalonde <fralalonde@gmail.com>"]
 
 description = """A fast and modular metrics library decoupling app instrumentation from reporting backend.
@@ -22,7 +22,7 @@ travis-ci = { repository = "fralalonde/dipstick", branch = "master" }
 log = { version = "0.3" }
 lazy_static = "0.2"
 time = "0.1"
-chrono = "^0.3"
+chrono = "^0.4"
 derivative = "1.0"
 
 [build-dependencies]
