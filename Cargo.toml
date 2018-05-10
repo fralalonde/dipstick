@@ -25,15 +25,17 @@ lazy_static = "1.0"
 derivative = "1.0"
 atomic_refcell = "0.1"
 chrono = "^0.3"
+skeptic = { version = "0.13", optional = true }
 
-[dev-dependencies]
-skeptic = "0.13"
+[build-dependencies]
+skeptic = { version = "0.13", optional = true }
 
 [dependencies.num]
 default-features = false
 version = "0.1"
 
 [features]
+default = []
 bench = []
 
 [package.metadata.release]
