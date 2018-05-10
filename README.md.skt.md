@@ -1,4 +1,6 @@
 Templates
+
+Use `cargo test --features="skeptic"` to run the examples in the README using the `skeptic` crate. 
  
 ```rust,skt-run
 extern crate dipstick;
