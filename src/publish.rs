@@ -1,23 +1,8 @@
 //! Publishes metrics values from a source to a sink.
 //!
-//! Publishing can be done on request:
-//! ```
-//! use dipstick::*;
-//!
-//! let (sink, source) = aggregate();
-//! publish(&source, &log("aggregated"), publish::all_stats);
-//! ```
-//!
+//! Publishing can be done on request.
 //! Publishing can be scheduled to run recurrently.
-//! ```
-//! use dipstick::*;
-//! use std::time::Duration;
-//!
-//! let (sink, source) = aggregate();
-//! let job = publish_every(Duration::from_millis(100), &source, &log("aggregated"), publish::all_stats);
-//! // publish will go on until cancelled
-//! job.cancel();
-//! ```
+//! Please see examples for how to do that.
 
 use core::*;
 use core::Kind::*;

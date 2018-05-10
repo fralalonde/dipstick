@@ -11,13 +11,6 @@ use std::sync::{Arc, RwLock};
 /// Aggregate metrics in memory.
 /// Depending on the type of metric, count, sum, minimum and maximum of values will be tracked.
 /// Needs to be connected to a publish to be useful.
-/// ```
-/// use dipstick::*;
-/// let sink = aggregate(4, summary, to_stdout());
-/// let metrics = global_metrics(sink);
-/// metrics.marker("my_event").mark();
-/// metrics.marker("my_event").mark();
-/// ```
 pub fn aggregate<E, M>(stat_fn: E, to_chain: Chain<M>) -> Chain<Aggregate>
 where
     E: Fn(Kind, &str, ScoreType) -> Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static,
