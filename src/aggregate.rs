@@ -7,6 +7,7 @@ use publish::*;
 use std::fmt::Debug;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
+use std::time::Instant;
 
 /// Aggregate metrics in memory.
 /// Depending on the type of metric, count, sum, minimum and maximum of values will be tracked.
@@ -16,33 +17,16 @@ where
     E: Fn(Kind, &str, ScoreType) -> Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static,
     M: Clone + Send + Sync + Debug + 'static,
 {
-    let metrics = Arc::new(RwLock::new(HashMap::new()));
-    let metrics0 = metrics.clone();
-
-    let publish = Arc::new(Publisher::new(stat_fn, to_chain));
+    let agg = Aggregator::with_capacity(1024, Arc::new(Publisher::new(stat_fn, to_chain)));
+    let agg0 = agg.clone();
 
     Chain::new(
-        move |kind, name, _rate| {
-            metrics
-                .write()
-                .unwrap()
-                .entry(name.to_string())
-                .or_insert_with(|| Arc::new(Scoreboard::new(kind, name.to_string())))
-                .clone()
-        },
+        move |kind, name, rate| agg.define_metric(kind, name, rate),
         move |_buffered| {
-            let metrics = metrics0.clone();
-            let publish = publish.clone();
+            let agg1 = agg0.clone();
             ControlScopeFn::new(move |cmd| match cmd {
-                ScopeCmd::Write(metric, value) => {
-                    let metric: &Aggregate = metric;
-                    metric.update(value)
-                },
-                ScopeCmd::Flush => {
-                    let metrics = metrics.read().expect("Locking metrics scoreboards");
-                    let snapshot = metrics.values().flat_map(|score| score.reset()).collect();
-                    publish.publish(snapshot);
-                }
+                ScopeCmd::Write(metric, value) => agg1.write(metric, value),
+                ScopeCmd::Flush => agg1.flush()
             })
         },
     )
@@ -53,32 +37,64 @@ where
 /// a shared list of metrics for enumeration when used as source.
 #[derive(Debug, Clone)]
 pub struct Aggregator {
-    metrics: Arc<RwLock<HashMap<String, Arc<Scoreboard>>>>,
+    inner: Arc<RwLock<InnerAggregator>>,
     publish: Arc<Publish>,
+}
+
+#[derive(Debug)]
+struct InnerAggregator {
+    metrics: HashMap<String, Arc<Scoreboard>>,
+    period_start: Instant,
 }
 
 impl Aggregator {
     /// Build a new metric aggregation point with specified initial capacity of metrics to aggregate.
     pub fn with_capacity(size: usize, publish: Arc<Publish>) -> Aggregator {
         Aggregator {
-            metrics: Arc::new(RwLock::new(HashMap::with_capacity(size))),
+            inner: Arc::new(RwLock::new(InnerAggregator {
+                metrics: HashMap::with_capacity(size),
+                period_start: Instant::now(),
+            })),
             publish: publish.clone(),
         }
     }
 
     /// Discard scores for ad-hoc metrics.
     pub fn cleanup(&self) {
-        let orphans: Vec<String> = self.metrics.read().unwrap().iter()
+        let orphans: Vec<String> = self.inner.read().expect("Scores").metrics.iter()
             // is aggregator now the sole owner?
             .filter(|&(_k, v)| Arc::strong_count(v) == 1)
             .map(|(k, _v)| k.to_string())
             .collect();
         if !orphans.is_empty() {
-            let mut remover = self.metrics.write().unwrap();
+            let remover = &mut self.inner.write().expect("Scores").metrics;
             orphans.iter().for_each(|k| {
                 remover.remove(k);
             });
         }
+    }
+
+    fn define_metric(&self, kind: Kind, name: &str, _sampling: Rate) -> Aggregate {
+        self.inner.write().expect("Scores").metrics
+            .entry(name.to_string())
+            .or_insert_with(|| Arc::new(Scoreboard::new(kind, name.to_string())))
+            .clone()
+    }
+
+    #[inline]
+    fn write(&self, metric: &Aggregate, value: Value) {
+        metric.update(value)
+    }
+
+    fn flush(&self) {
+        let mut inner = self.inner.write().expect("Scores");
+        let now = Instant::now();
+        let duration = now - inner.period_start;
+        let duration_seconds = (duration.subsec_nanos() / 1_000_000_000) as f64 + duration.as_secs() as f64;
+        let snapshot: Vec<ScoreSnapshot> = inner.metrics.values().flat_map(|score| score.reset(duration_seconds)).collect();
+//        snapshot.push((Kind::Counter, "_duration_ms".to_string(), vec![ScoreType::Sum((duration_seconds * 1000.0) as u64)]));
+        inner.period_start = now;
+        self.publish.publish(snapshot);
     }
 }
 
@@ -113,14 +129,14 @@ mod bench {
     fn time_bench_read_event(b: &mut test::Bencher) {
         let sink = aggregate(summary, to_void());
         let metric = sink.define_metric(Marker, "marker_a", 1.0);
-        b.iter(|| test::black_box(metric.reset()));
+        b.iter(|| test::black_box(metric.reset(1.0)));
     }
 
     #[bench]
     fn time_bench_read_count(b: &mut test::Bencher) {
         let sink = aggregate(summary, to_void());
         let metric = sink.define_metric(Counter, "count_a", 1.0);
-        b.iter(|| test::black_box(metric.reset()));
+        b.iter(|| test::black_box(metric.reset(1.0)));
     }
 
 }

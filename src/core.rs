@@ -6,8 +6,7 @@ use self::Kind::*;
 use self::ScopeCmd::*;
 
 use std::sync::Arc;
-use chrono::{Local, DateTime};
-use time;
+use std::time::Instant;
 
 // TODO define an 'AsValue' trait + impl for supported number types, then drop 'num' crate
 pub use num::ToPrimitive;
@@ -19,44 +18,28 @@ pub type Value = u64;
 #[derive(Debug, Copy, Clone)]
 /// A handle to the start time of a counter.
 /// Wrapped so it may be changed safely later.
-pub struct TimeHandle(i64);
-
-/// takes 250ns but works every time
-pub fn slow_clock_micros() -> i64 {
-    let local: DateTime<Local> = Local::now();
-    let mut micros = local.timestamp() * 1_000_000;
-    micros += local.timestamp_subsec_micros() as i64;
-    micros
-}
-
-/// takes 25ns but fails to advance time on occasion
-pub fn imprecise_clock_micros() -> i64 {
-    (time::precise_time_ns() / 1000) as i64
-}
-
-// another quick way
-//fn now_micros() -> i64 {
-//    let t = time::get_time();
-//    (t.sec * 1_000_000) + (t.nsec as i64 / 1000)
-//}
+pub struct TimeHandle(Instant);
 
 impl TimeHandle {
 
     /// Get a handle on current time.
     /// Used by the TimerMetric start_time() method.
     pub fn now() -> TimeHandle {
-        TimeHandle(imprecise_clock_micros())
+        TimeHandle(Instant::now())
     }
 
     /// Get the elapsed time in microseconds since TimeHandle was obtained.
     pub fn elapsed_us(self) -> Value {
-        (TimeHandle::now().0 - self.0) as Value
+        let duration = Instant::now() - self.0;
+        duration.as_secs() * 1000000 + (duration.subsec_nanos() / 1000) as Value
     }
 
     /// Get the elapsed time in microseconds since TimeHandle was obtained.
     pub fn elapsed_ms(self) -> Value {
-        self.elapsed_us() / 1_000
+        let duration = Instant::now() - self.0;
+        duration.as_secs() * 1000 + (duration.subsec_nanos() / 1000000) as Value
     }
+
 }
 
 /// Base type for sampling rate.
@@ -467,6 +450,11 @@ impl<M: Clone> ScopeTimer<M> {
 //
 //
 //    #[test]
+//    fn jitter_instant() {
+//        jitter(|| super::slow_clock_micros())
+//    }
+//
+//    #[test]
 //    fn jitter_local_now() {
 //        jitter(|| super::slow_clock_micros())
 //    }
@@ -485,13 +473,8 @@ mod bench {
     use test;
 
     #[bench]
-    fn get_slow_time(b: &mut test::Bencher) {
-        b.iter(|| test::black_box(slow_clock_micros()));
-    }
-
-    #[bench]
-    fn get_imprecise_time(b: &mut test::Bencher) {
-        b.iter(|| test::black_box(imprecise_clock_micros()));
+    fn get_instant(b: &mut test::Bencher) {
+        b.iter(|| test::black_box(TimeHandle::now()));
     }
 
 }
