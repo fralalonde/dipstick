@@ -403,68 +403,6 @@ impl<M: Clone> ScopeTimer<M> {
     }
 }
 
-//#[cfg(test)]
-//mod test {
-//    use core::*;
-//    use test;
-//    use std::f64;
-//
-//    const ITER: i64 = 5_000;
-//    const LOOP: i64 = 50000;
-//
-//    // a retarded, dirty and generally incorrect tentative at jitter measurement
-//    fn jitter(clock: fn() -> i64) {
-//        let mut first = 0;
-//        let mut last = 0;
-//        let mut min = 999_000_000;
-//        let mut max = -8888888;
-//        let mut delta_sum = 0;
-//        let mut dev2_sum = 0;
-//
-//        for i in 1..ITER {
-//            let ts = clock();
-//            test::black_box(for _j in 0..LOOP {});
-//            last = clock();
-//            let delta = last - ts;
-//
-//            delta_sum += delta;
-//            let mean = delta_sum / i;
-//
-//            let dev2 = (delta - mean) ^ 2;
-//            dev2_sum += dev2;
-//
-//            if delta > max {
-//                max = delta
-//            }
-//            if delta < min {
-//                min = delta
-//            }
-//        }
-//
-//        println!("runt {}", last - first);
-//        println!("mean {}", delta_sum / ITER);
-//        println!("dev2 {}", (dev2_sum as f64).sqrt() / ITER as f64);
-//        println!("min {}", min);
-//        println!("max {}", max);
-//    }
-//
-//
-//    #[test]
-//    fn jitter_instant() {
-//        jitter(|| super::slow_clock_micros())
-//    }
-//
-//    #[test]
-//    fn jitter_local_now() {
-//        jitter(|| super::slow_clock_micros())
-//    }
-//
-//    #[test]
-//    fn jitter_precise_time_ns() {
-//        jitter(|| super::imprecise_clock_micros())
-//    }
-//
-//}
 
 #[cfg(feature = "bench")]
 mod bench {
