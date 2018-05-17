@@ -25,7 +25,6 @@ extern crate log;
 extern crate derivative;
 #[macro_use]
 extern crate lazy_static;
-extern crate chrono;
 extern crate time;
 extern crate num;
 
