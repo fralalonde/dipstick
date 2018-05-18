@@ -10,6 +10,7 @@ use scores::ScoreType::*;
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
+use std::time::Instant;
 
 /// A function type to transform aggregated scores into publishable statistics.
 pub type StatsFn = Fn(Kind, &str, ScoreType)
@@ -67,6 +68,7 @@ pub struct MetricAggregator {
 #[derivative(Debug)]
 struct InnerAggregator {
     metrics: HashMap<String, Arc<Scoreboard>>,
+    period_start: Instant,
     #[derivative(Debug = "ignore")]
     stats: Option<Arc<Fn(Kind, &str, ScoreType)
         -> Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static>>,
@@ -85,6 +87,7 @@ impl MetricAggregator {
             namespace: "".into(),
             inner: Arc::new(RwLock::new(InnerAggregator {
                 metrics: HashMap::with_capacity(size),
+                period_start: Instant::now(),
                 stats: None,
                 output: None,
             }))
@@ -179,10 +182,13 @@ impl MetricAggregator {
     /// Compute stats on captured values using assigned or default stats function.
     /// Write stats to assigned or default output.
     pub fn flush_to(&self, publish_scope: &DefineMetric, stats_fn: Arc<StatsFn>) {
-        let snapshot: Vec<ScoreSnapshot> = self.inner.read().expect("Lock Aggregator")
-            .metrics.values()
-            .flat_map(|score| score.reset())
-            .collect();
+        let mut inner = self.inner.write().expect("Lock Aggregator");
+        let now = Instant::now();
+        let duration = now - inner.period_start;
+        let duration_seconds = (duration.subsec_nanos() / 1_000_000_000) as f64 + duration.as_secs() as f64;
+        let snapshot: Vec<ScoreSnapshot> = inner.metrics.values().flat_map(|score| score.reset(duration_seconds)).collect();
+//        snapshot.push((Kind::Counter, "_duration_ms".to_string(), vec![ScoreType::Sum((duration_seconds * 1000.0) as u64)]));
+        inner.period_start = now;
 
         if snapshot.is_empty() {
             // no data was collected for this period
@@ -296,6 +302,7 @@ pub type Aggregate = Arc<Scoreboard>;
 
 /// A predefined export strategy reporting all aggregated stats for all metric types.
 /// Resulting stats are named by appending a short suffix to each metric's name.
+#[allow(dead_code)]
 pub fn all_stats(kind: Kind, name: &str, score: ScoreType) -> Option<(Kind, Vec<&str>, Value)> {
     match score {
         Count(hit) => Some((Counter, vec![name, ".count"], hit)),
@@ -311,6 +318,7 @@ pub fn all_stats(kind: Kind, name: &str, score: ScoreType) -> Option<(Kind, Vec<
 /// Marker metrics export their hit count instead.
 /// Since there is only one stat per metric, there is no risk of collision
 /// and so exported stats copy their metric's name.
+#[allow(dead_code)]
 pub fn average(kind: Kind, name: &str, score: ScoreType) -> Option<(Kind, Vec<&str>, Value)> {
     match kind {
         Marker => match score {
@@ -330,6 +338,7 @@ pub fn average(kind: Kind, name: &str, score: ScoreType) -> Option<(Kind, Vec<&s
 /// - Gauges each export their average
 /// Since there is only one stat per metric, there is no risk of collision
 /// and so exported stats copy their metric's name.
+#[allow(dead_code)]
 pub fn summary(kind: Kind, name: &str, score: ScoreType) -> Option<(Kind, Vec<&str>, Value)> {
     match kind {
         Marker => match score {
@@ -374,14 +383,14 @@ mod bench {
     fn reset_marker(b: &mut test::Bencher) {
         let sink = MetricAggregator::new();
         let metric = sink.define_metric(&ROOT_NS, Marker, "marker", 1.0);
-        b.iter(|| test::black_box(metric.reset()));
+        b.iter(|| test::black_box(metric.reset(1.0)));
     }
 
     #[bench]
     fn reset_counter(b: &mut test::Bencher) {
         let sink = MetricAggregator::new();
         let metric = sink.define_metric(&ROOT_NS, Counter, "count_a", 1.0);
-        b.iter(|| test::black_box(metric.reset()));
+        b.iter(|| test::black_box(metric.reset(1.0)));
     }
 
 }

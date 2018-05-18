@@ -1,5 +1,7 @@
 //! Standard stateless metric outputs.
+
 // TODO parameterize templates
+// TODO define backing structs that can flush() on Drop
 use core::*;
 use output::*;
 use std::sync::RwLock;

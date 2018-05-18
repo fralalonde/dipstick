@@ -5,10 +5,7 @@
 use self::Command::*;
 
 use std::sync::Arc;
-
-use chrono::{Local, DateTime};
-
-use time;
+use std::time::Instant;
 
 // TODO define an 'AsValue' trait + impl for supported number types, then drop 'num' crate
 pub use num::ToPrimitive;
@@ -20,57 +17,29 @@ pub type Value = u64;
 #[derive(Debug, Copy, Clone)]
 /// A handle to the start time of a counter.
 /// Wrapped so it may be changed safely later.
-pub struct TimeHandle(i64);
-
-/// takes 250ns but works every time
-pub fn accurate_clock_micros() -> i64 {
-    let local: DateTime<Local> = Local::now();
-    let mut micros = local.timestamp() * 1_000_000;
-    micros += local.timestamp_subsec_micros() as i64;
-    micros
-}
-
-/// takes 25ns but fails to advance time on occasion
-pub fn fast_clock_micros() -> i64 {
-    (time::precise_time_ns() / 1000) as i64
-}
-
-// another quick way
-//fn now_micros() -> i64 {
-//    let t = time::get_time();
-//    (t.sec * 1_000_000) + (t.nsec as i64 / 1000)
-//}
+pub struct TimeHandle(Instant);
 
 impl TimeHandle {
 
     /// Get a handle on current time.
     /// Used by the TimerMetric start_time() method.
     pub fn now() -> TimeHandle {
-        TimeHandle(fast_clock_micros())
+        TimeHandle(Instant::now())
     }
 
     /// Get the elapsed time in microseconds since TimeHandle was obtained.
     pub fn elapsed_us(self) -> Value {
-        (TimeHandle::now().0 - self.0) as Value
+        let duration = Instant::now() - self.0;
+        duration.as_secs() * 1000000 + (duration.subsec_nanos() / 1000) as Value
     }
 
     /// Get the elapsed time in microseconds since TimeHandle was obtained.
     pub fn elapsed_ms(self) -> Value {
-        self.elapsed_us() / 1_000
+        let duration = Instant::now() - self.0;
+        duration.as_secs() * 1000 + (duration.subsec_nanos() / 1000000) as Value
     }
-}
 
-//impl From<usize> for TimeHandle {
-//    fn from(s: usize) -> TimeHandle {
-//        TimeHandle(s as i64)
-//    }
-//}
-//
-//impl From<TimeHandle> for usize {
-//    fn from(s: TimeHandle) -> usize {
-//        s.0 as usize
-//    }
-//}
+}
 
 /// Base type for sampling rate.
 /// - 1.0 records everything
@@ -237,64 +206,6 @@ impl<M> CommandFn<M> {
     }
 }
 
-//#[cfg(test)]
-//mod test {
-//    use core::*;
-//    use test;
-//    use std::f64;
-//
-//    const ITER: i64 = 5_000;
-//    const LOOP: i64 = 50000;
-//
-//    // a retarded, dirty and generally incorrect tentative at jitter measurement
-//    fn jitter(clock: fn() -> i64) {
-//        let mut first = 0;
-//        let mut last = 0;
-//        let mut min = 999_000_000;
-//        let mut max = -8888888;
-//        let mut delta_sum = 0;
-//        let mut dev2_sum = 0;
-//
-//        for i in 1..ITER {
-//            let ts = clock();
-//            test::black_box(for _j in 0..LOOP {});
-//            last = clock();
-//            let delta = last - ts;
-//
-//            delta_sum += delta;
-//            let mean = delta_sum / i;
-//
-//            let dev2 = (delta - mean) ^ 2;
-//            dev2_sum += dev2;
-//
-//            if delta > max {
-//                max = delta
-//            }
-//            if delta < min {
-//                min = delta
-//            }
-//        }
-//
-//        println!("runt {}", last - first);
-//        println!("mean {}", delta_sum / ITER);
-//        println!("dev2 {}", (dev2_sum as f64).sqrt() / ITER as f64);
-//        println!("min {}", min);
-//        println!("max {}", max);
-//    }
-//
-//
-//    #[test]
-//    fn jitter_local_now() {
-//        jitter(|| super::slow_clock_micros())
-//    }
-//
-//    #[test]
-//    fn jitter_precise_time_ns() {
-//        jitter(|| super::imprecise_clock_micros())
-//    }
-//
-//}
-
 #[cfg(feature = "bench")]
 mod bench {
 
@@ -302,13 +213,8 @@ mod bench {
     use test;
 
     #[bench]
-    fn get_slow_time(b: &mut test::Bencher) {
-        b.iter(|| test::black_box(accurate_clock_micros()));
-    }
-
-    #[bench]
-    fn get_imprecise_time(b: &mut test::Bencher) {
-        b.iter(|| test::black_box(fast_clock_micros()));
+    fn get_instant(b: &mut test::Bencher) {
+        b.iter(|| test::black_box(TimeHandle::now()));
     }
 
 }
