@@ -135,16 +135,19 @@ macro_rules! __metrics_block {
 #[deprecated(since = "0.7.0", note = "Use metrics!() instead")]
 macro_rules! app_metrics {
     ($type_param: ty, $metric_id: ident = ($($SCOPE: expr),+ $(,)*)) => {
-        lazy_static! { pub static ref $metric_id: MetricScope<$type_param> =
-            metric_scope(($($SCOPE),*)); }
+        lazy_static! {
+            pub static ref $metric_id: MetricScope<$type_param> = metric_scope(($($SCOPE),*));
+        }
     };
     ($type_param: ty, $metric_id: ident = [$($SCOPE: expr),+ $(,)*]) => {
-        lazy_static! { pub static ref $metric_id: MetricScope<$type_param> =
-            metric_scope(&[$($SCOPE),*][..],); }
+        lazy_static! {
+            pub static ref $metric_id: MetricScope<$type_param> = metric_scope(&[$($SCOPE),*][..],);
+        }
     };
     ($type_param: ty, $metric_id: ident = $SCOPE: expr) => {
-        lazy_static! { pub static ref $metric_id: MetricScope<$type_param> =
-            $SCOPE.into(); }
+        lazy_static! {
+            pub static ref $metric_id: MetricScope<$type_param> = $SCOPE.into();
+        }
     };
 }
 
@@ -152,21 +155,21 @@ macro_rules! app_metrics {
 #[macro_export]
 #[deprecated(since = "0.7.0", note = "Use metrics!() instead")]
 macro_rules! app_marker {
-    (<$type_param: ty> $SCOPE: expr =>
-    { $($metric_id: ident: $m_exp: expr),* $(,)* } ) => {
-        lazy_static! { $(pub static ref $metric_id:
-        Marker = $SCOPE.marker( $m_exp );)* }
-    };
+    (<$type_param: ty> $SCOPE: expr => { $($metric_id: ident: $m_exp: expr),* $(,)* } ) => {
+        lazy_static! {
+            $(pub static ref $metric_id: Marker = $SCOPE.marker( $m_exp );)*
+        }
+     };
 }
 
 /// Define application-scoped counters.
 #[macro_export]
 #[deprecated(since = "0.7.0", note = "Use metrics!() instead")]
 macro_rules! app_counter {
-    (<$type_param: ty> $SCOPE: expr =>
-    { $($metric_id: ident: $m_exp: expr),* $(,)* } ) => {
-        lazy_static! { $(pub static ref $metric_id:
-        Counter = $SCOPE.counter( $m_exp );)* }
+    (<$type_param: ty> $SCOPE: expr => { $($metric_id: ident: $m_exp: expr),* $(,)* } ) => {
+        lazy_static! {
+            $(pub static ref $metric_id: Counter = $SCOPE.counter( $m_exp );)*
+        }
     };
 }
 
@@ -174,10 +177,10 @@ macro_rules! app_counter {
 #[macro_export]
 #[deprecated(since = "0.7.0", note = "Use metrics!() instead")]
 macro_rules! app_gauge {
-    (<$type_param: ty> $SCOPE: expr =>
-    { $($metric_id: ident: $m_exp: expr),* $(,)* } ) => {
-        lazy_static! { $(pub static ref $metric_id:
-        Gauge = $SCOPE.gauge( $m_exp );)* }
+    (<$type_param: ty> $SCOPE: expr => { $($metric_id: ident: $m_exp: expr),* $(,)* } ) => {
+        lazy_static! {
+            $(pub static ref $metric_id: Gauge = $SCOPE.gauge( $m_exp );)*
+        }
     };
 }
 
@@ -185,10 +188,10 @@ macro_rules! app_gauge {
 #[macro_export]
 #[deprecated(since = "0.7.0", note = "Use metrics!() instead")]
 macro_rules! app_timer {
-    (<$type_param: ty> $SCOPE: expr =>
-    { $($metric_id: ident: $m_exp: expr),* $(,)* } ) => {
-        lazy_static! { $(pub static ref $metric_id:
-        Timer = $SCOPE.timer( $m_exp );)* }
+    (<$type_param: ty> $SCOPE: expr => { $($metric_id: ident: $m_exp: expr),* $(,)* } ) => {
+        lazy_static! {
+            $(pub static ref $metric_id: Timer = $SCOPE.timer( $m_exp );)*
+        }
     };
 }
 
@@ -200,8 +203,9 @@ macro_rules! app_timer {
 #[deprecated(since = "0.7.0", note = "Use metrics!() instead")]
 macro_rules! mod_metrics {
     ($type_param: ty, $metric_id: ident = ($($SCOPE: expr),+ $(,)*)) => {
-        lazy_static! { static ref $metric_id: MetricScope<$type_param> =
-            metric_scope(($($SCOPE),*)); }
+        lazy_static! {
+            static ref $metric_id: MetricScope<$type_param> = metric_scope(($($SCOPE),*));
+        }
     };
     ($type_param: ty, $metric_id: ident = [$($SCOPE: expr),+ $(,)*]) => {
         lazy_static! { static ref $metric_id: MetricScope<$type_param> =
@@ -258,10 +262,41 @@ macro_rules! mod_timer {
 }
 
 #[cfg(test)]
-mod test_app {
+mod test {
     use self_metrics::*;
 
-    metrics!(<Aggregate> TEST_METRICS = DIPSTICK_METRICS.with_suffix("test_prefix"););
+    metrics!(<Aggregate> DIPSTICK_METRICS.with_suffix("test_prefix") => {
+        Marker M1: "failed";
+        Marker M2: "success";
+        Counter C1: "failed";
+        Counter C2: "success";
+        Gauge G1: "failed";
+        Gauge G2: "success";
+        Timer T1: "failed";
+        Timer T2: "success";
+    });
+
+    #[test]
+    fn call_new_macro_defined_metrics() {
+        M1.mark();
+        M2.mark();
+
+        C1.count(1);
+        C2.count(2);
+
+        G1.value(1);
+        G2.value(2);
+
+        T1.interval_us(1);
+        T2.interval_us(2);
+    }
+}
+
+#[cfg(test)]
+mod legacy_test {
+    use self_metrics::*;
+
+    metrics!(<Aggregate> TEST_METRICS = DIPSTICK_METRICS.with_suffix("test_prefix"));
 
     app_marker!(<Aggregate> TEST_METRICS => {
         M1: "failed",
@@ -284,7 +319,7 @@ mod test_app {
     });
 
     #[test]
-    fn call_macro_defined_metrics() {
+    fn call_old_macro_defined_metrics() {
         M1.mark();
         M2.mark();
 

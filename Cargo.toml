@@ -19,12 +19,11 @@ build = "build.rs"
 travis-ci = { repository = "fralalonde/dipstick", branch = "master" }
 
 [dependencies]
-log = "0.3"
+log = "0.4"
 time = "0.1"
 lazy_static = "1.0"
 derivative = "1.0"
 atomic_refcell = "0.1"
-chrono = "^0.3"
 skeptic = { version = "0.13", optional = true }
 
 [build-dependencies]

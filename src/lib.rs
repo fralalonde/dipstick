@@ -17,7 +17,6 @@ extern crate lazy_static;
 extern crate atomic_refcell;
 extern crate num;
 extern crate time;
-extern crate chrono;
 
 pub mod error;
 pub use error::{Error, Result};

@@ -261,6 +261,12 @@ impl Flush for MetricDispatch {
     }
 }
 
+impl Drop for MetricDispatch {
+    fn drop(&mut self) {
+        self.flush()
+    }
+}
+
 impl ScheduleFlush for MetricDispatch {}
 
 #[cfg(feature = "bench")]

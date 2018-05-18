@@ -186,7 +186,6 @@ pub type AppTimer = Timer;
 #[derive(Derivative, Clone)]
 pub struct MetricScope<M> {
     namespace: Namespace,
-    flush_on_drop: bool,
     #[derivative(Debug = "ignore")]
     define_fn: DefineMetricFn<M>,
     #[derivative(Debug = "ignore")]
@@ -198,7 +197,6 @@ impl<M> MetricScope<M> {
     pub fn new(namespace: Namespace, define_metric_fn: DefineMetricFn<M>, scope: CommandFn<M>) -> Self {
         MetricScope {
             namespace,
-            flush_on_drop: true,
             define_fn: define_metric_fn,
             command_fn: scope,
         }
@@ -291,7 +289,6 @@ where
     fn with_suffix(&self, name: &str) -> Self {
         MetricScope {
             namespace: self.namespace.with_suffix(name),
-            flush_on_drop: self.flush_on_drop,
             define_fn: self.define_fn.clone(),
             command_fn: self.command_fn.clone(),
         }
@@ -321,14 +318,6 @@ pub trait ScheduleFlush: Flush + Clone + Send + 'static {
 }
 
 impl<M: Clone + Send + 'static> ScheduleFlush for MetricScope<M> {}
-
-impl<M> Drop for MetricScope<M> {
-    fn drop(&mut self) {
-        if self.flush_on_drop {
-            self.flush()
-        }
-    }
-}
 
 //// Dispatch / Receiver impl
 
@@ -360,7 +349,6 @@ impl<M: Send + Sync + Clone + 'static> WithCache for MetricScope<M> {
     fn with_cache(&self, cache_size: usize) -> Self {
         MetricScope {
             namespace: self.namespace.clone(),
-            flush_on_drop: self.flush_on_drop,
             define_fn: add_cache(cache_size, self.define_fn.clone()),
             command_fn: self.command_fn.clone(),
         }
