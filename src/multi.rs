@@ -23,10 +23,10 @@ where
 
         MetricScope::new(
             ROOT_NS.clone(),
-            Arc::new(move |ns, kind, name, rate| {
+            Arc::new(move |ns, kind, rate| {
                 (
-                    scope0.define_metric(ns, kind, name, rate),
-                    scope1.define_metric(ns, kind, name, rate),
+                    scope0.define_metric(ns, kind, rate),
+                    scope1.define_metric(ns, kind, rate),
                 )
             }),
             command_fn(move |cmd| match cmd {
@@ -54,10 +54,10 @@ where
 
         MetricScope::new(
             ROOT_NS.clone(),
-            Arc::new(move |ns, kind, name, rate| {
+            Arc::new(move |ns, kind, rate| {
                 scopes
                     .iter()
-                    .map(|m| m.define_metric(ns, kind, name, rate))
+                    .map(|m| m.define_metric(ns, kind, rate))
                     .collect()
             }),
             command_fn(move |cmd| match cmd {

@@ -5,7 +5,7 @@ use core::Kind::*;
 use output::{OpenScope, NO_METRIC_OUTPUT, MetricOutput};
 use scope::{self, MetricScope, MetricInput, Flush, ScheduleFlush, DefineMetric,};
 
-use scores::{ScoreSnapshot, ScoreType, Scoreboard};
+use scores::{ScoreType, Scoreboard};
 use scores::ScoreType::*;
 
 use std::collections::HashMap;
@@ -13,8 +13,7 @@ use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
 /// A function type to transform aggregated scores into publishable statistics.
-pub type StatsFn = Fn(Kind, &str, ScoreType)
-    -> Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static;
+pub type StatsFn = Fn(Kind, Namespace, ScoreType) -> Option<(Kind, Namespace, Value)> + Send + Sync + 'static;
 
 fn initial_stats() -> &'static StatsFn {
     &summary
@@ -67,12 +66,52 @@ pub struct MetricAggregator {
 #[derive(Derivative)]
 #[derivative(Debug)]
 struct InnerAggregator {
-    metrics: HashMap<String, Arc<Scoreboard>>,
+    metrics: HashMap<Namespace, Arc<Scoreboard>>,
     period_start: Instant,
     #[derivative(Debug = "ignore")]
-    stats: Option<Arc<Fn(Kind, &str, ScoreType)
-        -> Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static>>,
+    stats: Option<Arc<Fn(Kind, Namespace, ScoreType)
+        -> Option<(Kind, Namespace, Value)> + Send + Sync + 'static>>,
     output: Option<Arc<OpenScope + Sync + Send>>,
+}
+
+impl InnerAggregator {
+    /// Take a snapshot of aggregated values and reset them.
+    /// Compute stats on captured values using assigned or default stats function.
+    /// Write stats to assigned or default output.
+    pub fn flush_to(&mut self, publish_scope: &DefineMetric, stats_fn: Arc<StatsFn>) {
+
+        let now = Instant::now();
+        let duration = now - self.period_start;
+        let duration_seconds = (duration.subsec_nanos() / 1_000_000_000) as f64 + duration.as_secs() as f64;
+        self.period_start = now;
+
+        let snapshot: Vec<(&Namespace, Kind, Vec<ScoreType>)> = self.metrics.iter()
+            .flat_map(|(name, scores)| if let Some(values) = scores.reset(duration_seconds) {
+                Some((name, scores.metric_kind(), values))
+            } else {
+                None
+            })
+            .collect();
+//        snapshot.push((Kind::Counter, "_duration_ms".to_string(), vec![ScoreType::Sum((duration_seconds * 1000.0) as u64)]));
+
+        if snapshot.is_empty() {
+            // no data was collected for this period
+            // TODO repeat previous frame min/max ?
+            // TODO update some canary metric ?
+        } else {
+            for metric in snapshot {
+                for score in metric.2 {
+                    let filtered = (stats_fn)(metric.1, metric.0.clone(), score);
+                    if let Some((kind, name, value)) = filtered {
+                        publish_scope
+                            .define_metric_object(&name, kind, 1.0)
+                            .write(value);
+                    }
+                }
+            }
+        }
+    }
+
 }
 
 impl MetricAggregator {
@@ -97,7 +136,7 @@ impl MetricAggregator {
     /// Set the default aggregated metrics statistics generator.
     pub fn set_default_stats<F>(func: F)
         where
-            F: Fn(Kind, &str, ScoreType) -> Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static
+            F: Fn(Kind, Namespace, ScoreType) -> Option<(Kind, Namespace, Value)> + Send + Sync + 'static
     {
         *DEFAULT_AGGREGATE_STATS.write().unwrap() = Arc::new(func)
     }
@@ -123,14 +162,14 @@ impl MetricAggregator {
     /// Set the default aggregated metrics statistics generator.
     pub fn set_stats<F>(&self, func: F)
         where
-            F: Fn(Kind, &str, ScoreType) -> Option<(Kind, Vec<&str>, Value)> + Send + Sync + 'static
+            F: Fn(Kind, Namespace, ScoreType) -> Option<(Kind, Namespace, Value)> + Send + Sync + 'static
     {
-        self.inner.write().expect("Lock Aggregator").stats = Some(Arc::new(func))
+        self.inner.write().expect("Aggregator").stats = Some(Arc::new(func))
     }
 
     /// Set the default aggregated metrics statistics generator.
     pub fn unset_stats<F>(&self) {
-        self.inner.write().expect("Lock Aggregator").stats = None
+        self.inner.write().expect("Aggregator").stats = None
     }
 
     /// Install a new receiver for all aggregated metrics, replacing any previous receiver.
@@ -138,12 +177,12 @@ impl MetricAggregator {
         where IS: Into<MetricOutput<T>>,
               T: Send + Sync + Clone + 'static
     {
-        self.inner.write().expect("Lock Aggregator").output = Some(Arc::new(new_config.into()))
+        self.inner.write().expect("Aggregator").output = Some(Arc::new(new_config.into()))
     }
 
     /// Install a new receiver for all aggregated metrics, replacing any previous receiver.
     pub fn unset_output(&self) {
-        self.inner.write().expect("Lock Aggregator").output = None
+        self.inner.write().expect("Aggregator").output = None
     }
 
     fn into_scope(&self) -> MetricScope<Aggregate> {
@@ -151,7 +190,7 @@ impl MetricAggregator {
         let agg_1 = self.clone();
         MetricScope::new(
             self.namespace.clone(),
-            Arc::new(move |ns, kind, name, rate| agg_0.define_metric(ns, kind, name, rate)),
+            Arc::new(move |ns, kind, rate| agg_0.define_metric(ns, kind, rate)),
             command_fn(move |cmd| match cmd {
                 Command::Write(metric, value) => {
                     let metric: &Aggregate = metric;
@@ -162,51 +201,21 @@ impl MetricAggregator {
         )
     }
 
-    /// Discard scores for ad-hoc metrics.
-    pub fn cleanup(&self) {
-        let orphans: Vec<String> = self.inner.read().expect("Lock Aggregator").metrics.iter()
-            // is aggregator now the sole owner?
-            // TODO use weak ref + impl Drop to mark abandoned metrics (see dispatch)
-            .filter(|&(_k, v)| Arc::strong_count(v) == 1)
-            .map(|(k, _v)| k.to_string())
-            .collect();
-        if !orphans.is_empty() {
-            let remover = &mut self.inner.write().unwrap().metrics;
-            orphans.iter().for_each(|k| {
-                remover.remove(k);
-            });
-        }
-    }
-
-    /// Take a snapshot of aggregated values and reset them.
-    /// Compute stats on captured values using assigned or default stats function.
-    /// Write stats to assigned or default output.
-    pub fn flush_to(&self, publish_scope: &DefineMetric, stats_fn: Arc<StatsFn>) {
-        let mut inner = self.inner.write().expect("Lock Aggregator");
-        let now = Instant::now();
-        let duration = now - inner.period_start;
-        let duration_seconds = (duration.subsec_nanos() / 1_000_000_000) as f64 + duration.as_secs() as f64;
-        let snapshot: Vec<ScoreSnapshot> = inner.metrics.values().flat_map(|score| score.reset(duration_seconds)).collect();
-//        snapshot.push((Kind::Counter, "_duration_ms".to_string(), vec![ScoreType::Sum((duration_seconds * 1000.0) as u64)]));
-        inner.period_start = now;
-
-        if snapshot.is_empty() {
-            // no data was collected for this period
-            // TODO repeat previous frame min/max ?
-            // TODO update some canary metric ?
-        } else {
-            for metric in snapshot {
-                for score in metric.2 {
-                    if let Some(ex) = (stats_fn)(metric.0, metric.1.as_ref(), score) {
-                        publish_scope
-                            .define_metric_object(&self.namespace, ex.0, &ex.1.concat(), 1.0)
-                            .write(ex.2);
-                    }
-                }
-            }
-        }
-    }
-
+//    /// Discard scores for ad-hoc metrics.
+//    pub fn cleanup(&self) {
+//        let orphans: Vec<Namespace> = self.inner.read().expect("Aggregator").metrics.iter()
+//            // is aggregator now the sole owner?
+//            // TODO use weak ref + impl Drop to mark abandoned metrics (see dispatch)
+//            .filter(|&(_k, v)| Arc::strong_count(v) == 1)
+//            .map(|(k, _v)| k.to_string())
+//            .collect();
+//        if !orphans.is_empty() {
+//            let remover = &mut self.inner.write().unwrap().metrics;
+//            orphans.iter().for_each(|k| {
+//                remover.remove(k);
+//            });
+//        }
+//    }
 
 }
 
@@ -232,14 +241,15 @@ impl MetricInput<Aggregate> for MetricAggregator {
     }
 
     /// Lookup or create a scoreboard for the requested metric.
-    fn define_metric(&self, source_ns: &Namespace, kind: Kind, name: &str, _rate: Sampling) -> Aggregate {
-        let ns = self.namespace.extend(source_ns);
+    fn define_metric(&self, name: &Namespace, kind: Kind, _rate: Sampling) -> Aggregate {
+        let mut zname = self.namespace.clone();
+        zname.extend(name);
         self.inner
             .write()
-            .expect("Locking aggregator")
+            .expect("Aggregator")
             .metrics
-            .entry(name.to_string())
-            .or_insert_with(|| Arc::new(Scoreboard::new(ns, kind, name.to_string())))
+            .entry(zname)
+            .or_insert_with(|| Arc::new(Scoreboard::new(kind)))
             .clone()
     }
 
@@ -269,7 +279,7 @@ impl Flush for MetricAggregator {
     /// Collect and reset aggregated data.
     /// Publish statistics
     fn flush(&self) {
-        let inner = self.inner.read().expect("Lock Aggregator");
+        let mut inner = self.inner.write().expect("Aggregator");
 
         let stats_fn = match &inner.stats {
             &Some(ref stats_fn) => stats_fn.clone(),
@@ -281,7 +291,7 @@ impl Flush for MetricAggregator {
             &None => DEFAULT_AGGREGATE_OUTPUT.read().unwrap().open_scope_object(),
         };
 
-        self.flush_to(pub_scope.as_ref(), stats_fn);
+        inner.flush_to(pub_scope.as_ref(), stats_fn);
 
         // TODO parameterize whether to keep ad-hoc metrics after publish
         // source.cleanup();
@@ -303,14 +313,14 @@ pub type Aggregate = Arc<Scoreboard>;
 /// A predefined export strategy reporting all aggregated stats for all metric types.
 /// Resulting stats are named by appending a short suffix to each metric's name.
 #[allow(dead_code)]
-pub fn all_stats(kind: Kind, name: &str, score: ScoreType) -> Option<(Kind, Vec<&str>, Value)> {
+pub fn all_stats(kind: Kind, name: Namespace, score: ScoreType) -> Option<(Kind, Namespace, Value)> {
     match score {
-        Count(hit) => Some((Counter, vec![name, ".count"], hit)),
-        Sum(sum) => Some((kind, vec![name, ".sum"], sum)),
-        Mean(mean) => Some((kind, vec![name, ".mean"], mean.round() as Value)),
-        Max(max) => Some((Gauge, vec![name, ".max"], max)),
-        Min(min) => Some((Gauge, vec![name, ".min"], min)),
-        Rate(rate) => Some((Gauge, vec![name, ".rate"], rate.round() as Value)),
+        Count(hit) => Some((Counter, name.with_suffix("count"), hit)),
+        Sum(sum) => Some((kind, name.with_suffix("sum"), sum)),
+        Mean(mean) => Some((kind, name.with_suffix("mean"), mean.round() as Value)),
+        Max(max) => Some((Gauge, name.with_suffix("max"), max)),
+        Min(min) => Some((Gauge, name.with_suffix("min"), min)),
+        Rate(rate) => Some((Gauge, name.with_suffix("rate"), rate.round() as Value)),
     }
 }
 
@@ -319,14 +329,14 @@ pub fn all_stats(kind: Kind, name: &str, score: ScoreType) -> Option<(Kind, Vec<
 /// Since there is only one stat per metric, there is no risk of collision
 /// and so exported stats copy their metric's name.
 #[allow(dead_code)]
-pub fn average(kind: Kind, name: &str, score: ScoreType) -> Option<(Kind, Vec<&str>, Value)> {
+pub fn average(kind: Kind, name: Namespace, score: ScoreType) -> Option<(Kind, Namespace, Value)> {
     match kind {
         Marker => match score {
-            Count(count) => Some((Counter, vec![name], count)),
+            Count(count) => Some((Counter, name, count)),
             _ => None,
         },
         _ => match score {
-            Mean(avg) => Some((Gauge, vec![name], avg.round() as Value)),
+            Mean(avg) => Some((Gauge, name, avg.round() as Value)),
             _ => None,
         },
     }
@@ -339,18 +349,18 @@ pub fn average(kind: Kind, name: &str, score: ScoreType) -> Option<(Kind, Vec<&s
 /// Since there is only one stat per metric, there is no risk of collision
 /// and so exported stats copy their metric's name.
 #[allow(dead_code)]
-pub fn summary(kind: Kind, name: &str, score: ScoreType) -> Option<(Kind, Vec<&str>, Value)> {
+pub fn summary(kind: Kind, name: Namespace, score: ScoreType) -> Option<(Kind, Namespace, Value)> {
     match kind {
         Marker => match score {
-            Count(count) => Some((Counter, vec![name], count)),
+            Count(count) => Some((Counter, name, count)),
             _ => None,
         },
         Counter | Timer => match score {
-            Sum(sum) => Some((kind, vec![name], sum)),
+            Sum(sum) => Some((kind, name, sum)),
             _ => None,
         },
         Gauge => match score {
-            Mean(mean) => Some((Gauge, vec![name], mean.round() as Value)),
+            Mean(mean) => Some((Gauge, name, mean.round() as Value)),
             _ => None,
         },
     }
@@ -360,7 +370,6 @@ pub fn summary(kind: Kind, name: &str, score: ScoreType) -> Option<(Kind, Vec<&s
 mod bench {
 
     use test;
-    use core::ROOT_NS;
     use core::Kind::{Counter, Marker};
     use aggregate::MetricAggregator;
     use scope::MetricInput;
@@ -368,28 +377,28 @@ mod bench {
     #[bench]
     fn aggregate_marker(b: &mut test::Bencher) {
         let sink = MetricAggregator::new();
-        let metric = sink.define_metric(&ROOT_NS, Marker, "event_a", 1.0);
+        let metric = sink.define_metric(&"event_a".into(), Marker, 1.0);
         b.iter(|| test::black_box(sink.write(&metric, 1)));
     }
 
     #[bench]
     fn aggregate_counter(b: &mut test::Bencher) {
         let sink = MetricAggregator::new();
-        let metric = sink.define_metric(&ROOT_NS, Counter, "count_a", 1.0);
+        let metric = sink.define_metric(&"count_a".into(), Counter, 1.0);
         b.iter(|| test::black_box(sink.write(&metric, 1)));
     }
 
     #[bench]
     fn reset_marker(b: &mut test::Bencher) {
         let sink = MetricAggregator::new();
-        let metric = sink.define_metric(&ROOT_NS, Marker, "marker", 1.0);
+        let metric = sink.define_metric(&"marker_a".into(), Marker, 1.0);
         b.iter(|| test::black_box(metric.reset(1.0)));
     }
 
     #[bench]
     fn reset_counter(b: &mut test::Bencher) {
         let sink = MetricAggregator::new();
-        let metric = sink.define_metric(&ROOT_NS, Counter, "count_a", 1.0);
+        let metric = sink.define_metric(&"count_a".into(), Counter, 1.0);
         b.iter(|| test::black_box(metric.reset(1.0)));
     }
 

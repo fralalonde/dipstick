@@ -53,7 +53,7 @@ impl<M> MetricOutput<M> {
 /// Create a new metric chain with the provided metric definition and scope creation functions.
 pub fn metric_output<MF, WF, M>(define_fn: MF, open_scope_fn: WF) -> MetricOutput<M>
 where
-    MF: Fn(&Namespace, Kind, &str, Sampling) -> M + Send + Sync + 'static,
+    MF: Fn(&Namespace, Kind, Sampling) -> M + Send + Sync + 'static,
     WF: Fn() -> CommandFn<M> + Send + Sync + 'static,
 {
     MetricOutput {

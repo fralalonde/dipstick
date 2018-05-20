@@ -9,7 +9,7 @@ use std::sync::RwLock;
 /// Write metric values to stdout using `println!`.
 pub fn to_stdout() -> MetricOutput<String> {
     metric_output(
-        |ns, _kind, name, _rate| ns.join(name, "."),
+        |ns, _kind, _rate| ns.join("."),
         || {
             command_fn(|cmd| {
                 if let Command::Write(m, v) = cmd {
@@ -26,7 +26,7 @@ pub fn to_stdout() -> MetricOutput<String> {
 /// If thread latency is a concern you may wish to also use #with_async_queue.
 pub fn to_buffered_stdout() -> MetricOutput<String> {
     metric_output(
-        |ns, _kind, name, _rate| ns.join(name, "."),
+        |ns, _kind, _rate| ns.join("."),
         || {
             let buf = RwLock::new(String::new());
             command_fn(move |cmd| {
@@ -49,7 +49,7 @@ pub fn to_buffered_stdout() -> MetricOutput<String> {
 // TODO parameterize log level
 pub fn to_log() -> MetricOutput<String> {
     metric_output(
-        |ns, _kind, name, _rate| ns.join(name, "."),
+        |ns, _kind, _rate| ns.join("."),
         || {
             command_fn(|cmd| {
                 if let Command::Write(m, v) = cmd {
@@ -67,7 +67,7 @@ pub fn to_log() -> MetricOutput<String> {
 // TODO parameterize log level
 pub fn to_buffered_log() -> MetricOutput<String> {
     metric_output(
-        |ns, _kind, name, _rate| ns.join(name, "."),
+        |ns, _kind, _rate| ns.join("."),
         || {
             let buf = RwLock::new(String::new());
             command_fn(move |cmd| {
@@ -88,7 +88,7 @@ pub fn to_buffered_log() -> MetricOutput<String> {
 
 /// Discard all metric values sent to it.
 pub fn to_void() -> MetricOutput<()> {
-    metric_output(move |_ns, _kind, _name, _rate| (), || command_fn(|_cmd| {}))
+    metric_output(move |_ns, _kind, _rate| (), || command_fn(|_cmd| {}))
 }
 
 #[cfg(test)]
@@ -99,21 +99,21 @@ mod test {
     #[test]
     fn sink_print() {
         let c = super::to_stdout().open_scope();
-        let m = c.define_metric(&ROOT_NS, Kind::Marker, "test", 1.0);
+        let m = c.define_metric(&"test".into(), Kind::Marker, 1.0);
         c.write(&m, 33);
     }
 
     #[test]
     fn test_to_log() {
         let c = super::to_log().open_scope();
-        let m = c.define_metric(&ROOT_NS, Kind::Marker, "test", 1.0);
+        let m = c.define_metric(&"test".into(), Kind::Marker, 1.0);
         c.write(&m, 33);
     }
 
     #[test]
     fn test_to_void() {
         let c = super::to_void().open_scope();
-        let m = c.define_metric(&ROOT_NS, Kind::Marker, "test", 1.0);
+        let m = c.define_metric(&"test".into(), Kind::Marker, 1.0);
         c.write(&m, 33);
     }
 

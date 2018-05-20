@@ -30,7 +30,7 @@ pub trait DefineMetric: Flush {
     /// Register a new metric.
     /// Only one metric of a certain name will be defined.
     /// Observer must return a MetricHandle that uniquely identifies the metric.
-    fn define_metric_object(&self, namespace: &Namespace, kind: Kind, name: &str, rate: Sampling)
+    fn define_metric_object(&self, namespace: &Namespace, kind: Kind, rate: Sampling)
         -> Box<WriteMetric + Send + Sync>;
 }
 
@@ -203,12 +203,13 @@ impl<M> MetricScope<M> {
     }
 }
 
-fn scope_write_fn<M, D: MetricInput<M> + Clone + Send + Sync + 'static>(scope: &D, kind: Kind, name: &str) -> WriteFn
+fn scope_write_fn<M, D>(scope: &D, kind: Kind, name: &str) -> WriteFn
     where
         M: Clone + Send + Sync + 'static,
+        D: MetricInput<M> + Clone + Send + Sync + 'static
 {
     let scope = scope.clone();
-    let metric = scope.define_metric(&ROOT_NS, kind, name, 1.0);
+    let metric = scope.define_metric(&name.into(), kind, 1.0);
     Arc::new(move |value| scope.write(&metric, value))
 }
 
@@ -230,7 +231,7 @@ pub trait MetricInput<M>: Clone + Flush + Send + Sync + 'static
     fn gauge(&self, name: &str) -> Gauge;
 
     /// Define a metric of the specified type.
-    fn define_metric(&self, source_ns: &Namespace, kind: Kind, name: &str, rate: Sampling) -> M;
+    fn define_metric(&self, namespace: &Namespace, kind: Kind, rate: Sampling) -> M;
 
     /// Record or send a value for a previously defined metric.
     fn write(&self, metric: &M, value: Value);
@@ -278,8 +279,8 @@ where
         Gauge { write: scope_write_fn(self, Gauge, name) }
     }
 
-    fn define_metric(&self, source_ns: &Namespace, kind: Kind, name: &str, rate: Sampling) -> M {
-        (self.define_fn)(source_ns, kind, name, rate)
+    fn define_metric(&self, namespace: &Namespace, kind: Kind, rate: Sampling) -> M {
+        (self.define_fn)(namespace, kind, rate)
     }
 
     fn write(&self, metric: &M, value: Value) {
@@ -327,11 +328,11 @@ struct MetricWriter<M> {
 }
 
 impl<M: Send + Sync + Clone + 'static> DefineMetric for MetricScope<M> {
-    fn define_metric_object(&self, namespace: &Namespace, kind: Kind, name: &str, rate: Sampling)
+    fn define_metric_object(&self, namespace: &Namespace, kind: Kind, rate: Sampling)
             -> Box<WriteMetric + Send + Sync>
     {
         Box::new(MetricWriter {
-            define_fn: self.define_metric(namespace, kind, name, rate),
+            define_fn: self.define_metric(namespace, kind, rate),
             command_fn: self.command_fn.clone(),
         })
     }
