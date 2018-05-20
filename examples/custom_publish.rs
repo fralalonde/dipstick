@@ -9,25 +9,33 @@ use dipstick::*;
 fn main() {
     fn custom_statistics(
         kind: Kind,
-        name: &str,
+        mut name: Namespace,
         score: ScoreType,
-    ) -> Option<(Kind, Vec<&str>, Value)> {
+    ) -> Option<(Kind, Namespace, Value)> {
         match (kind, score) {
             // do not export gauge scores
             (Kind::Gauge, _) => None,
 
             // prepend and append to metric name
-            (_, ScoreType::Count(count)) => Some((
-                Kind::Counter,
-                vec!["name customized_with_prefix:", &name, " and a suffix: "],
-                count,
-            )),
+            (_, ScoreType::Count(count)) => {
+                if let Some(last) = name.pop() {
+                    name.push("customized_with_prefix");
+                    name.push(format!("{}_and_a_suffix", last));
+                    Some((
+                        Kind::Counter,
+                        name,
+                        count,
+                    ))
+                } else {
+                    None
+                }
+            },
 
             // scaling the score value and appending unit to name
-            (kind, ScoreType::Sum(sum)) => Some((kind, vec![&name, "_millisecond"], sum * 1000)),
+            (kind, ScoreType::Sum(sum)) => Some((kind, name.with_suffix("per_thousand"), sum / 1000)),
 
             // using the unmodified metric name
-            (kind, ScoreType::Mean(avg)) => Some((kind, vec![&name], avg.round() as u64)),
+            (kind, ScoreType::Mean(avg)) => Some((kind, name, avg.round() as u64)),
 
             // do not export min and max
             _ => None,

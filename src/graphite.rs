@@ -46,7 +46,7 @@ where
     let socket = Arc::new(RwLock::new(RetrySocket::new(address.clone())?));
 
     Ok(metric_output(
-        move |ns, kind, name, rate| graphite_metric(ns, kind, name, rate),
+        move |ns, kind, rate| graphite_metric(ns, kind, rate),
         move || graphite_scope(&socket, false),
     ))
 }
@@ -60,13 +60,13 @@ where
     let socket = Arc::new(RwLock::new(RetrySocket::new(address.clone())?));
 
     Ok(metric_output(
-        move |ns, kind, name, rate| graphite_metric(ns, kind, name, rate),
+        move |ns, kind, rate| graphite_metric(ns, kind, rate),
         move || graphite_scope(&socket, true),
     ))
 }
 
-fn graphite_metric(namespace: &Namespace, kind: Kind, name: &str, rate: Sampling) -> Graphite {
-    let mut prefix = namespace.join(name, ".");
+fn graphite_metric(namespace: &Namespace, kind: Kind, rate: Sampling) -> Graphite {
+    let mut prefix = namespace.join(".");
     prefix.push(' ');
 
     let mut scale = match kind {
@@ -79,9 +79,9 @@ fn graphite_metric(namespace: &Namespace, kind: Kind, name: &str, rate: Sampling
         // graphite does not do sampling, so we'll upsample before sending
         let upsample = (1.0 / rate).round() as u64;
         warn!(
-            "Metric {:?} '{}' being sampled at rate {} will be upsampled \
+            "Metric {:?} '{:?}' being sampled at rate {} will be upsampled \
              by a factor of {} when sent to graphite.",
-            kind, name, rate, upsample
+            kind, namespace, rate, upsample
         );
         scale *= upsample;
     }
@@ -195,7 +195,7 @@ mod bench {
     #[bench]
     pub fn timer_graphite(b: &mut test::Bencher) {
         let sd = to_graphite("localhost:8125").unwrap().open_scope();
-        let timer = sd.define_metric(&ROOT_NS, Kind::Timer, "timer", 1000000.0);
+        let timer = sd.define_metric(&"timer".into(), Kind::Timer, 1000000.0);
 
         b.iter(|| test::black_box(sd.write(&timer, 2000)));
     }

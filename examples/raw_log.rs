@@ -3,7 +3,7 @@
 
 extern crate dipstick;
 
-use dipstick::{MetricInput, ROOT_NS};
+use dipstick::MetricInput;
 
 fn main() {
     raw_write()
@@ -15,9 +15,8 @@ pub fn raw_write() {
 
     // define and send metrics using raw channel API
     let counter = metrics_log.define_metric(
-        &ROOT_NS,
+        &"count_a".into(),
         dipstick::Kind::Counter,
-        "count_a",
         dipstick::FULL_SAMPLING_RATE,
     );
     metrics_log.write(&counter, 1);

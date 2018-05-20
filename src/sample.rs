@@ -15,22 +15,20 @@ where
 }
 
 impl<M: Send + Sync + 'static + Clone> WithSamplingRate for MetricOutput<M> {
-    fn with_sampling_rate(&self, sampling_rate: Sampling) -> Self {
-        let int_sampling_rate = pcg32::to_int_rate(sampling_rate);
+    fn with_sampling_rate(&self, new_rate: Sampling) -> Self {
+        let int_sampling_rate = pcg32::to_int_rate(new_rate);
 
         self.wrap_all(|metric_fn, scope_fn| {
             (
-                Arc::new(move |ns, kind, name, rate| {
+                Arc::new(move |name, kind, prev_rate| {
                     // TODO override only if FULL_SAMPLING else warn!()
-                    if rate != FULL_SAMPLING_RATE {
+                    if prev_rate != FULL_SAMPLING_RATE {
                         info!(
-                            "Metric {} will be downsampled again {}, {}",
-                            name, rate, sampling_rate
-                        );
+                            "Metric {:?} will be sampled twice {}, {}", name, prev_rate, new_rate);
                     }
 
-                    let new_rate = sampling_rate * rate;
-                    metric_fn(ns, kind, name, new_rate)
+                    let new_rate = new_rate * prev_rate;
+                    metric_fn(name, kind, new_rate)
                 }),
                 Arc::new(move || {
                     let next_scope = scope_fn();

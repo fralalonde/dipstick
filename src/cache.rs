@@ -21,20 +21,19 @@ pub fn add_cache<M>(cache_size: usize, next: DefineMetricFn<M>) -> DefineMetricF
 where
     M: Clone + Send + Sync + 'static,
 {
-    let cache: RwLock<lru::LRUCache<String, M>> =
+    let cache: RwLock<lru::LRUCache<Namespace, M>> =
         RwLock::new(lru::LRUCache::with_capacity(cache_size));
-    Arc::new(move |ns, kind, name, rate| {
-        let mut cache = cache.write().expect("Locking metric cache");
-        let name_str = String::from(name);
+    Arc::new(move |name, kind, rate| {
+        let mut cache = cache.write().expect("Metric Cache");
 
         // FIXME lookup should use straight &str
-        if let Some(value) = cache.get(&name_str) {
+        if let Some(value) = cache.get(name) {
             return value.clone();
         }
 
-        let new_value = (next)(ns, kind, name, rate).clone();
-        cache.insert(name_str, new_value.clone());
-        new_value
+        let new_metric: M = (next)(name, kind, rate);
+        cache.insert(name.clone(), new_metric.clone());
+        new_metric
     })
 }
 

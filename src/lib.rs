@@ -25,7 +25,7 @@ pub use error::{Error, Result};
 pub mod macros;
 
 pub mod core;
-pub use core::{Value, Sampling, FULL_SAMPLING_RATE, TimeHandle, Kind, ROOT_NS};
+pub use core::{Value, Sampling, FULL_SAMPLING_RATE, TimeHandle, Kind, ROOT_NS, Namespace};
 
 pub mod output;
 pub use output::{MetricOutput, NO_METRIC_OUTPUT, OpenScope};

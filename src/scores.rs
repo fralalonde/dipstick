@@ -26,33 +26,28 @@ pub enum ScoreType {
     Rate(f64),
 }
 
-/// A snapshot of multiple scores for a single metric.
-pub type ScoreSnapshot = (Kind, String, Vec<ScoreType>);
-
 /// A metric that holds aggregated values.
 /// Some fields are kept public to ease publishing.
 #[derive(Debug)]
 pub struct Scoreboard {
-    namespace: Namespace,
-
-    /// The kind of metric.
+    /// The kind of metric
     kind: Kind,
-
-    /// The metric's name.
-    name: String,
-
+    /// The actual recorded metric scores
     scores: [AtomicUsize; 4],
 }
 
 impl Scoreboard {
     /// Create a new Scoreboard to track summary values of a metric
-    pub fn new(namespace: Namespace, kind: Kind, name: String) -> Self {
+    pub fn new(kind: Kind) -> Self {
         Scoreboard {
-            namespace,
             kind,
-            name,
             scores: unsafe { mem::transmute(Scoreboard::blank()) },
         }
+    }
+
+    /// Returns the metric's kind.
+    pub fn metric_kind(&self) -> Kind {
+        self.kind
     }
 
     #[inline]
@@ -93,7 +88,7 @@ impl Scoreboard {
     }
 
     /// Map raw scores (if any) to applicable statistics
-    pub fn reset(&self, duration_seconds: f64) -> Option<ScoreSnapshot> {
+    pub fn reset(&self, duration_seconds: f64) -> Option<Vec<ScoreType>> {
         let mut scores = Scoreboard::blank();
         if self.snapshot(&mut scores) {
 
@@ -129,7 +124,7 @@ impl Scoreboard {
                     snapshot.push(Rate(scores[1] as f64 / duration_seconds))
                 }
             }
-            Some((self.kind, self.name.clone(), snapshot))
+            Some(snapshot)
         } else {
             None
         }
@@ -158,19 +153,19 @@ mod bench {
 
     #[bench]
     fn bench_score_update_marker(b: &mut test::Bencher) {
-        let metric = Scoreboard::new(ROOT_NS.clone(), Marker, "event_a".to_string());
+        let metric = Scoreboard::new(Marker);
         b.iter(|| test::black_box(metric.update(1)));
     }
 
     #[bench]
     fn bench_score_update_count(b: &mut test::Bencher) {
-        let metric = Scoreboard::new(ROOT_NS.clone(), Counter, "event_a".to_string());
+        let metric = Scoreboard::new(Counter);
         b.iter(|| test::black_box(metric.update(4)));
     }
 
     #[bench]
     fn bench_score_empty_snapshot(b: &mut test::Bencher) {
-        let metric = Scoreboard::new(ROOT_NS.clone(), Counter, "event_a".to_string());
+        let metric = Scoreboard::new(Counter);
         let scores = &mut Scoreboard::blank();
         b.iter(|| test::black_box(metric.snapshot(scores)));
     }

@@ -27,7 +27,7 @@ impl TimeHandle {
         TimeHandle(Instant::now())
     }
 
-    /// Get the elapsed time in microseconds since TimeHandle was obtained.
+    /// Get the elapsed time in microseconds since TimeHanduule was obtained.
     pub fn elapsed_us(self) -> Value {
         let duration = Instant::now() - self.0;
         duration.as_secs() * 1000000 + (duration.subsec_nanos() / 1000) as Value
@@ -67,9 +67,9 @@ pub enum Kind {
 /// A namespace for metrics.
 /// Does _not_ include the metric's "short" name itself.
 /// Can be empty.
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Namespace {
-    inner: Vec<String>
+    inner: Vec<String>,
 }
 
 lazy_static! {
@@ -99,35 +99,52 @@ lazy_static! {
 impl Namespace {
 
     /// Append name to the namespace, returning a modified copy.
-    pub fn with_suffix(&self, name: &str) -> Self {
-        let mut new = self.inner.clone();
+    pub fn with_suffix(&self, name: impl Into<String>) -> Self {
+        let mut new = self.clone();
         new.push(name.into());
-        Namespace { inner: new }
+        new
+    }
+
+    /// Append a component to the name.
+    pub fn push(&mut self, name: impl Into<String>) {
+        self.inner.push(name.into())
     }
 
     /// Returns a copy of this namespace with the second namespace appended.
     /// Both original namespaces stay untouched.
-    pub fn extend(&self, names: &Namespace) -> Self {
-        Namespace {
-            inner: {
-                let mut new = self.inner.clone();
-                new.extend_from_slice(&names.inner);
-                new
-            }
-        }
+    pub fn extend(&mut self, name: &Namespace) {
+        self.inner.extend_from_slice(&name.inner)
+    }
+
+    /// Returns true if the specified namespace is a subset or is equal to this namespace.
+    pub fn starts_with(&self, name: &Namespace) -> bool {
+        (self.inner.len() >= name.inner.len()) && (name.inner[..] == self.inner[..name.inner.len()])
+    }
+
+    /// Remove the last part of the namespace, returning it or None if namespace was empty.
+    pub fn pop(&mut self) -> Option<String> {
+        self.inner.pop()
+    }
+
+    /// Returns the number of substrings constituting this namespace.
+    pub fn len(&self) -> usize {
+        self.inner.len()
     }
 
     /// Combine name parts into a string.
-    pub fn join(&self, name: &str, separator: &str) -> String {
-        if self.inner.is_empty() {
-            return name.into()
-        }
+    pub fn join(&self, separator: &str) -> String {
+
         let mut buf = String::with_capacity(64);
-        for n in &self.inner {
+        let mut i = self.inner.iter();
+        if let Some(n) = i.next() {
             buf.push_str(n.as_ref());
-            buf.push_str(separator);
+        } else {
+            return "".into()
         }
-        buf.push_str(name);
+        for n in i {
+            buf.push_str(separator);
+            buf.push_str(n.as_ref());
+        }
         buf
     }
 }
@@ -140,13 +157,21 @@ impl From<()> for Namespace {
 
 impl<'a> From<&'a str> for Namespace {
     fn from(name: &'a str) -> Namespace {
-        ROOT_NS.with_suffix(name.as_ref())
+        if name.is_empty() {
+            ROOT_NS.clone()
+        } else {
+            ROOT_NS.with_suffix(name)
+        }
     }
 }
 
 impl From<String> for Namespace {
     fn from(name: String) -> Namespace {
-        ROOT_NS.with_suffix(name.as_ref())
+        if name.is_empty() {
+            ROOT_NS.clone()
+        } else {
+            ROOT_NS.with_suffix(name.as_ref())
+        }
     }
 }
 
@@ -155,7 +180,7 @@ impl From<String> for Namespace {
 /// The resulting metrics themselves can be also be safely shared across threads (<M> is Send + Sync).
 /// Concurrent usage of a metric is done using threaded scopes.
 /// Shared concurrent scopes may be provided by some backends (aggregate).
-pub type DefineMetricFn<M> = Arc<Fn(&Namespace, Kind, &str, Sampling) -> M + Send + Sync>;
+pub type DefineMetricFn<M> = Arc<Fn(&Namespace, Kind, Sampling) -> M + Send + Sync>;
 
 /// A function trait that opens a new metric capture scope.
 pub type OpenScopeFn<M> = Arc<Fn() -> CommandFn<M> + Send + Sync>;
