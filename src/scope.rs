@@ -7,10 +7,11 @@
 //!
 //! If multiple [AppMetrics] are defined, they'll each have their scope.
 //!
-use core::*;
+use core::{Value, Sampling, WriteFn, Namespace, Kind, DefineMetricFn, CommandFn};
 use core::Kind::*;
-use cache::*;
-use schedule::{schedule, CancelHandle};
+use clock::TimeHandle;
+use cache::{add_cache, WithCache};
+use scheduler::{set_schedule, CancelHandle};
 use output;
 
 use std::sync::Arc;
@@ -30,28 +31,16 @@ pub trait DefineMetric: Flush {
     /// Register a new metric.
     /// Only one metric of a certain name will be defined.
     /// Observer must return a MetricHandle that uniquely identifies the metric.
-    fn define_metric_object(&self, namespace: &Namespace, kind: Kind, rate: Sampling)
-        -> Box<WriteMetric + Send + Sync>;
+    fn define_metric_object(&self, namespace: &Namespace, kind: Kind, rate: Sampling) -> WriteFn;
 }
 
-/// Dynamic counterpart of the `DispatcherMetric`.
-/// Adapter to a metric of unknown type.
-pub trait WriteMetric {
-    /// Write metric value to a scope.
-    /// Observers only receive previously registered handles.
-    fn write(&self, value: Value);
-}
-
-/// Wrap the metrics backend to provide an application-friendly interface.
-/// Open a metric scope to share across the application.
-#[deprecated(since = "0.7.0", note = "Use into() instead")]
-pub fn app_metrics<M, AM>(scope: AM) -> MetricScope<M>
-where
-    M: Clone + Send + Sync + 'static,
-    AM: Into<MetricScope<M>>,
-{
-    scope.into()
-}
+///// Dynamic counterpart of the `DispatcherMetric`.
+///// Adapter to a metric of unknown type.
+//pub trait WriteMetric {
+//    /// Write metric value to a scope.
+//    /// Observers only receive previously registered handles.
+//    fn write(&self, value: Value);
+//}
 
 /// Wrap the metrics backend to provide an application-friendly interface.
 /// Open a metric scope to share across the application.
@@ -162,26 +151,6 @@ impl Timer {
     }
 }
 
-/// Help transition to new syntax
-#[deprecated(since = "0.7.0", note = "Use Metrics instead")]
-pub type AppMetrics<M> = MetricScope<M>;
-
-/// Help transition to new syntax
-#[deprecated(since = "0.7.0", note = "Use Marker instead")]
-pub type AppMarker = Marker;
-
-/// Help transition to new syntax
-#[deprecated(since = "0.7.0", note = "Use Counter instead")]
-pub type AppCounter = Counter;
-
-/// Help transition to new syntax
-#[deprecated(since = "0.7.0", note = "Use Gauge instead")]
-pub type AppGauge = Gauge;
-
-/// Help transition to new syntax
-#[deprecated(since = "0.7.0", note = "Use Timer instead")]
-pub type AppTimer = Timer;
-
 /// Variations of this should also provide control of the metric recording scope.
 #[derive(Derivative, Clone)]
 pub struct MetricScope<M> {
@@ -214,21 +183,29 @@ fn scope_write_fn<M, D>(scope: &D, kind: Kind, name: &str) -> WriteFn
 }
 
 /// Define metrics, write values and flush them.
-pub trait MetricInput<M>: Clone + Flush + Send + Sync + 'static
+pub trait MetricInput<M>: Clone + Send + Sync + 'static + Flush
     where
         M: Clone + Send + Sync + 'static,
 {
     /// Define an event counter of the provided name.
-    fn marker(&self, name: &str) -> Marker;
+    fn marker(&self, name: &str) -> Marker {
+        Marker { write: scope_write_fn(self, Marker, name) }
+    }
 
     /// Define a counter of the provided name.
-    fn counter(&self, name: &str) -> Counter;
+    fn counter(&self, name: &str) -> Counter {
+        Counter { write: scope_write_fn(self, Counter, name) }
+    }
 
     /// Define a timer of the provided name.
-    fn timer(&self, name: &str) -> Timer;
+    fn timer(&self, name: &str) -> Timer {
+        Timer { write: scope_write_fn(self, Timer, name) }
+    }
 
     /// Define a gauge of the provided name.
-    fn gauge(&self, name: &str) -> Gauge;
+    fn gauge(&self, name: &str) -> Gauge {
+        Gauge { write: scope_write_fn(self, Gauge, name) }
+    }
 
     /// Define a metric of the specified type.
     fn define_metric(&self, namespace: &Namespace, kind: Kind, rate: Sampling) -> M;
@@ -251,33 +228,14 @@ pub trait MetricInput<M>: Clone + Flush + Send + Sync + 'static
 pub trait Flush {
     /// Flushes any recorded metric value.
     /// Has no effect on unbuffered metrics.
-    fn flush(&self);
+    /// Default impl does nothing
+    fn flush(&self) {}
 }
 
 impl<M> MetricInput<M> for MetricScope<M>
 where
     M: Clone + Send + Sync + 'static,
 {
-
-    /// Define an event counter of the provided name.
-    fn marker(&self, name: &str) -> Marker {
-        Marker { write: scope_write_fn(self, Marker, name) }
-    }
-
-    /// Define a counter of the provided name.
-    fn counter(&self, name: &str) -> Counter {
-        Counter { write: scope_write_fn(self, Counter, name) }
-    }
-
-    /// Define a timer of the provided name.
-    fn timer(&self, name: &str) -> Timer {
-        Timer { write: scope_write_fn(self, Timer, name) }
-    }
-
-    /// Define a gauge of the provided name.
-    fn gauge(&self, name: &str) -> Gauge {
-        Gauge { write: scope_write_fn(self, Gauge, name) }
-    }
 
     fn define_metric(&self, namespace: &Namespace, kind: Kind, rate: Sampling) -> M {
         (self.define_fn)(namespace, kind, rate)
@@ -314,7 +272,7 @@ pub trait ScheduleFlush: Flush + Clone + Send + 'static {
     /// Start a thread dedicated to flushing this scope at regular intervals.
     fn flush_every(&self, period: Duration) -> CancelHandle {
         let scope = self.clone();
-        schedule(period, move || scope.flush())
+        set_schedule(period, move || scope.flush())
     }
 }
 
@@ -322,27 +280,25 @@ impl<M: Clone + Send + 'static> ScheduleFlush for MetricScope<M> {}
 
 //// Dispatch / Receiver impl
 
-struct MetricWriter<M> {
-    define_fn: M,
-    command_fn: CommandFn<M>,
-}
+//pub struct MetricWriter<M> {
+//    target_metric: M,
+//    command_fn: CommandFn<M>,
+//}
 
 impl<M: Send + Sync + Clone + 'static> DefineMetric for MetricScope<M> {
-    fn define_metric_object(&self, namespace: &Namespace, kind: Kind, rate: Sampling)
-            -> Box<WriteMetric + Send + Sync>
+    fn define_metric_object(&self, namespace: &Namespace, kind: Kind, rate: Sampling) -> WriteFn
     {
-        Box::new(MetricWriter {
-            define_fn: self.define_metric(namespace, kind, rate),
-            command_fn: self.command_fn.clone(),
-        })
+        let target_metric = self.define_metric(namespace, kind, rate);
+        let write_to = self.clone();
+        Arc::new(move |value| write_to.write(&target_metric, value))
     }
 }
 
-impl<M> WriteMetric for MetricWriter<M> {
-    fn write(&self, value: Value) {
-        self.command_fn.write(&self.define_fn, value);
-    }
-}
+//impl<M> WriteMetric for MetricWriter<M> {
+//    fn write(&self, value: Value) {
+//        self.command_fn.write(&self.target_metric, value);
+//    }
+//}
 
 //// Mutators impl
 

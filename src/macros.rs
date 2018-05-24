@@ -22,21 +22,21 @@ macro_rules! time {
 macro_rules! metrics {
     // TYPED
     // typed, public, no metrics
-    (<$METRIC_TYPE:ty> pub $METRIC_ID:ident = $e:expr $(;)*) => {
-        lazy_static! { pub static ref $METRIC_ID: MetricScope<$METRIC_TYPE> = $e.into(); }
+    ($(#[$attr:meta])* <$METRIC_TYPE:ty> pub $METRIC_ID:ident = $e:expr $(;)*) => {
+        lazy_static! { $(#[$attr])* pub static ref $METRIC_ID: MetricScope<$METRIC_TYPE> = $e.into(); }
     };
     // typed, public, some metrics
-    (<$METRIC_TYPE:ty> pub $METRIC_ID:ident = $e:expr => { $($REMAINING:tt)+ }) => {
-        lazy_static! { pub static ref $METRIC_ID: MetricScope<$METRIC_TYPE> = $e.into(); }
+    ($(#[$attr:meta])* <$METRIC_TYPE:ty> pub $METRIC_ID:ident = $e:expr => { $($REMAINING:tt)+ }) => {
+        lazy_static! { $(#[$attr])* pub static ref $METRIC_ID: MetricScope<$METRIC_TYPE> = $e.into(); }
         __metrics_block!($METRIC_ID; $($REMAINING)*);
     };
     // typed, module, no metrics
-    (<$METRIC_TYPE:ty> $METRIC_ID:ident = $e:expr $(;)*) => {
-        lazy_static! { static ref $METRIC_ID: MetricScope<$METRIC_TYPE> = $e.into(); }
+    ($(#[$attr:meta])* <$METRIC_TYPE:ty> $METRIC_ID:ident = $e:expr $(;)*) => {
+        lazy_static! { $(#[$attr])* static ref $METRIC_ID: MetricScope<$METRIC_TYPE> = $e.into(); }
     };
     // typed, module, some metrics
-    (<$METRIC_TYPE:ty> $METRIC_ID:ident = $e:expr => { $($REMAINING:tt)+ }) => {
-        lazy_static! { static ref $METRIC_ID: MetricScope<$METRIC_TYPE> = $e.into(); }
+    ($(#[$attr:meta])* <$METRIC_TYPE:ty> $METRIC_ID:ident = $e:expr => { $($REMAINING:tt)+ }) => {
+        lazy_static! { $(#[$attr])* static ref $METRIC_ID: MetricScope<$METRIC_TYPE> = $e.into(); }
         __metrics_block!($METRIC_ID; $($REMAINING)*);
     };
     // typed, reuse predeclared
@@ -54,19 +54,19 @@ macro_rules! metrics {
         __metrics_block!(ROOT_METRICS; $($REMAINING)*);
     };
 
-    (pub $METRIC_ID:ident = $e:expr $(;)*) => {
-        metrics! {<Dispatch> pub $METRIC_ID = $e; }
+    ($(#[$attr:meta])* pub $METRIC_ID:ident = $e:expr $(;)*) => {
+        metrics! {$(#[$attr])* <Dispatch> pub $METRIC_ID = $e; }
     };
-    (pub $METRIC_ID:ident = $e:expr => { $($REMAINING:tt)+ }) => {
-        metrics! {<Dispatch> pub $METRIC_ID = $e => { $($REMAINING)* } }
+    ($(#[$attr:meta])* pub $METRIC_ID:ident = $e:expr => { $($REMAINING:tt)+ }) => {
+        metrics! {$(#[$attr])* <Dispatch> pub $METRIC_ID = $e => { $($REMAINING)* } }
     };
-    ($METRIC_ID:ident = $e:expr $(;)*) => {
-        metrics! {<Dispatch> $METRIC_ID = $e; }
+    ($(#[$attr:meta])* $METRIC_ID:ident = $e:expr $(;)*) => {
+        metrics! {$(#[$attr])* <Dispatch> $METRIC_ID = $e; }
     };
-    ($METRIC_ID:ident = $e:expr => { $($REMAINING:tt)+ }) => {
-        metrics! {<Dispatch> $METRIC_ID = $e => { $($REMAINING)* } }
+    ($(#[$attr:meta])* $METRIC_ID:ident = $e:expr => { $($REMAINING:tt)+ }) => {
+        metrics! {$(#[$attr])* <Dispatch> $METRIC_ID = $e => { $($REMAINING)* } }
     };
-    ($METRIC_ID:ident => { $($REMAINING:tt)+ }) => {
+    ($(#[$attr:meta])* $METRIC_ID:ident => { $($REMAINING:tt)+ }) => {
         metrics! {<Dispatch> $METRIC_ID => { $($REMAINING)* } }
     };
     ($e:expr => { $($REMAINING:tt)+ }) => {
@@ -130,136 +130,6 @@ macro_rules! __metrics_block {
     ($METRIC_ID:ident;) => ()
 }
 
-/// Define application-scoped metrics.
-#[macro_export]
-#[deprecated(since = "0.7.0", note = "Use metrics!() instead")]
-macro_rules! app_metrics {
-    ($type_param: ty, $metric_id: ident = ($($SCOPE: expr),+ $(,)*)) => {
-        lazy_static! {
-            pub static ref $metric_id: MetricScope<$type_param> = metric_scope(($($SCOPE),*));
-        }
-    };
-    ($type_param: ty, $metric_id: ident = [$($SCOPE: expr),+ $(,)*]) => {
-        lazy_static! {
-            pub static ref $metric_id: MetricScope<$type_param> = metric_scope(&[$($SCOPE),*][..],);
-        }
-    };
-    ($type_param: ty, $metric_id: ident = $SCOPE: expr) => {
-        lazy_static! {
-            pub static ref $metric_id: MetricScope<$type_param> = $SCOPE.into();
-        }
-    };
-}
-
-/// Define application-scoped markers.
-#[macro_export]
-#[deprecated(since = "0.7.0", note = "Use metrics!() instead")]
-macro_rules! app_marker {
-    (<$type_param: ty> $SCOPE: expr => { $($metric_id: ident: $m_exp: expr),* $(,)* } ) => {
-        lazy_static! {
-            $(pub static ref $metric_id: Marker = $SCOPE.marker( $m_exp );)*
-        }
-     };
-}
-
-/// Define application-scoped counters.
-#[macro_export]
-#[deprecated(since = "0.7.0", note = "Use metrics!() instead")]
-macro_rules! app_counter {
-    (<$type_param: ty> $SCOPE: expr => { $($metric_id: ident: $m_exp: expr),* $(,)* } ) => {
-        lazy_static! {
-            $(pub static ref $metric_id: Counter = $SCOPE.counter( $m_exp );)*
-        }
-    };
-}
-
-/// Define application-scoped gauges.
-#[macro_export]
-#[deprecated(since = "0.7.0", note = "Use metrics!() instead")]
-macro_rules! app_gauge {
-    (<$type_param: ty> $SCOPE: expr => { $($metric_id: ident: $m_exp: expr),* $(,)* } ) => {
-        lazy_static! {
-            $(pub static ref $metric_id: Gauge = $SCOPE.gauge( $m_exp );)*
-        }
-    };
-}
-
-/// Define application-scoped timers.
-#[macro_export]
-#[deprecated(since = "0.7.0", note = "Use metrics!() instead")]
-macro_rules! app_timer {
-    (<$type_param: ty> $SCOPE: expr => { $($metric_id: ident: $m_exp: expr),* $(,)* } ) => {
-        lazy_static! {
-            $(pub static ref $metric_id: Timer = $SCOPE.timer( $m_exp );)*
-        }
-    };
-}
-
-/////////////
-// MOD SCOPE
-
-/// Define module-scoped metrics.
-#[macro_export]
-#[deprecated(since = "0.7.0", note = "Use metrics!() instead")]
-macro_rules! mod_metrics {
-    ($type_param: ty, $metric_id: ident = ($($SCOPE: expr),+ $(,)*)) => {
-        lazy_static! {
-            static ref $metric_id: MetricScope<$type_param> = metric_scope(($($SCOPE),*));
-        }
-    };
-    ($type_param: ty, $metric_id: ident = [$($SCOPE: expr),+ $(,)*]) => {
-        lazy_static! { static ref $metric_id: MetricScope<$type_param> =
-            metric_scope(&[$($SCOPE),*][..],); }
-    };
-    ($type_param: ty, $metric_id: ident = $mod_metrics: expr) => {
-        lazy_static! { static ref $metric_id: MetricScope<$type_param> =
-            $mod_metrics.into(); }
-    };
-}
-
-/// Define module-scoped markers.
-#[macro_export]
-#[deprecated(since = "0.7.0", note = "Use metrics!() instead")]
-macro_rules! mod_marker {
-    ($type_param: ty, $mod_metrics: expr, { $($metric_id: ident: $m_exp: expr),* $(,)* } ) => {
-        lazy_static! { $(static ref $metric_id: Marker =
-            $mod_metrics.marker( $m_exp );)* }
-    };
-}
-
-/// Define module-scoped counters.
-#[macro_export]
-#[deprecated(since = "0.7.0", note = "Use metrics!() instead")]
-macro_rules! mod_counter {
-    ($type_param: ty, $mod_metrics: expr, { $($metric_id: ident: $m_exp: expr),* $(,)* } ) => {
-        lazy_static! { $(static ref $metric_id: Counter =
-            $mod_metrics.counter( $m_exp );)* }
-    };
-}
-
-/// Define module-scoped gauges.
-#[macro_export]
-#[deprecated(since = "0.7.0", note = "Use metrics!() instead")]
-macro_rules! mod_gauge {
-    ($type_param: ty, $mod_metrics: expr, { $($metric_id: ident: $m_exp: expr),* $(,)* } ) => {
-        lazy_static! { $(static ref $metric_id: Gauge =
-            $mod_metrics.gauge( $m_exp );)* }
-    };
-    ($type_param: ty, $mod_metrics: expr, $metric_id: ident: $m_exp: expr) => {
-        lazy_static! { static ref $metric_id: Gauge =
-            $mod_metrics.gauge( $m_exp ); }
-    }
-}
-
-/// Define module-scoped timers.
-#[macro_export]
-#[deprecated(since = "0.7.0", note = "Use metrics!() instead")]
-macro_rules! mod_timer {
-    ($type_param: ty, $mod_metrics: expr, { $($metric_id: ident: $m_exp: expr),* $(,)* } ) => {
-        lazy_static! { $(static ref $metric_id: Timer =
-            $mod_metrics.timer( $m_exp );)* }
-    };
-}
 
 #[cfg(test)]
 mod test {
@@ -278,48 +148,6 @@ mod test {
 
     #[test]
     fn call_new_macro_defined_metrics() {
-        M1.mark();
-        M2.mark();
-
-        C1.count(1);
-        C2.count(2);
-
-        G1.value(1);
-        G2.value(2);
-
-        T1.interval_us(1);
-        T2.interval_us(2);
-    }
-}
-
-#[cfg(test)]
-mod legacy_test {
-    use self_metrics::*;
-
-    metrics!(<Aggregate> TEST_METRICS = DIPSTICK_METRICS.with_suffix("test_prefix"));
-
-    app_marker!(<Aggregate> TEST_METRICS => {
-        M1: "failed",
-        M2: "success",
-    });
-
-    app_counter!(<Aggregate> TEST_METRICS => {
-        C1: "failed",
-        C2: "success",
-    });
-
-    app_gauge!(<Aggregate> TEST_METRICS => {
-        G1: "failed",
-        G2: "success",
-    });
-
-    app_timer!(<Aggregate> TEST_METRICS => {
-        T1: "failed",
-        T2: "success",
-    });
-
-    #[test]
-    fn call_old_macro_defined_metrics() {
         M1.mark();
         M2.mark();
 

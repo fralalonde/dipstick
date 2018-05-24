@@ -5,7 +5,6 @@
 use self::Command::*;
 
 use std::sync::Arc;
-use std::time::Instant;
 
 // TODO define an 'AsValue' trait + impl for supported number types, then drop 'num' crate
 pub use num::ToPrimitive;
@@ -14,32 +13,6 @@ pub use num::ToPrimitive;
 // TODO should this be f64? f32?
 pub type Value = u64;
 
-#[derive(Debug, Copy, Clone)]
-/// A handle to the start time of a counter.
-/// Wrapped so it may be changed safely later.
-pub struct TimeHandle(Instant);
-
-impl TimeHandle {
-
-    /// Get a handle on current time.
-    /// Used by the TimerMetric start_time() method.
-    pub fn now() -> TimeHandle {
-        TimeHandle(Instant::now())
-    }
-
-    /// Get the elapsed time in microseconds since TimeHanduule was obtained.
-    pub fn elapsed_us(self) -> Value {
-        let duration = Instant::now() - self.0;
-        duration.as_secs() * 1000000 + (duration.subsec_nanos() / 1000) as Value
-    }
-
-    /// Get the elapsed time in microseconds since TimeHandle was obtained.
-    pub fn elapsed_ms(self) -> Value {
-        let duration = Instant::now() - self.0;
-        duration.as_secs() * 1000 + (duration.subsec_nanos() / 1000000) as Value
-    }
-
-}
 
 /// Base type for sampling rate.
 /// - 1.0 records everything

@@ -1,16 +1,16 @@
 //! Maintain aggregated metrics for deferred reporting,
 //!
 use core::{command_fn, Kind, Sampling, Command, Value, Namespace};
+use clock::TimeHandle;
 use core::Kind::*;
 use output::{OpenScope, NO_METRIC_OUTPUT, MetricOutput};
-use scope::{self, MetricScope, MetricInput, Flush, ScheduleFlush, DefineMetric,};
+use scope::{MetricScope, MetricInput, Flush, ScheduleFlush, DefineMetric};
 
 use scores::{ScoreType, Scoreboard};
 use scores::ScoreType::*;
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
-use std::time::Instant;
 
 /// A function type to transform aggregated scores into publishable statistics.
 pub type StatsFn = Fn(Kind, Namespace, ScoreType) -> Option<(Kind, Namespace, Value)> + Send + Sync + 'static;
@@ -28,9 +28,6 @@ lazy_static! {
 
     static ref DEFAULT_AGGREGATE_OUTPUT: RwLock<Arc<OpenScope + Sync + Send>> = RwLock::new(initial_output());
 }
-
-/// 1024 Metrics per scoreboard should be enough?
-const DEFAULT_CAPACITY: usize = 1024;
 
 impl From<MetricAggregator> for MetricScope<Aggregate> {
     fn from(agg: MetricAggregator) -> MetricScope<Aggregate> {
@@ -66,46 +63,47 @@ pub struct MetricAggregator {
 #[derive(Derivative)]
 #[derivative(Debug)]
 struct InnerAggregator {
-    metrics: HashMap<Namespace, Arc<Scoreboard>>,
-    period_start: Instant,
+    metrics: BTreeMap<Namespace, Arc<Scoreboard>>,
+    period_start: TimeHandle,
     #[derivative(Debug = "ignore")]
     stats: Option<Arc<Fn(Kind, Namespace, ScoreType)
         -> Option<(Kind, Namespace, Value)> + Send + Sync + 'static>>,
     output: Option<Arc<OpenScope + Sync + Send>>,
 }
 
+lazy_static! {
+    static ref PERIOD_LENGTH: Namespace = "_period_length".into();
+}
+
 impl InnerAggregator {
     /// Take a snapshot of aggregated values and reset them.
     /// Compute stats on captured values using assigned or default stats function.
     /// Write stats to assigned or default output.
-    pub fn flush_to(&mut self, publish_scope: &DefineMetric, stats_fn: Arc<StatsFn>) {
+    pub fn flush_to(&mut self, publish_scope: &DefineMetric, stats_fn: &StatsFn) {
 
-        let now = Instant::now();
-        let duration = now - self.period_start;
-        let duration_seconds = (duration.subsec_nanos() / 1_000_000_000) as f64 + duration.as_secs() as f64;
+        let now = TimeHandle::now();
+        let duration_seconds = self.period_start.elapsed_us() as f64 / 1_000_000.0;
         self.period_start = now;
 
-        let snapshot: Vec<(&Namespace, Kind, Vec<ScoreType>)> = self.metrics.iter()
+        let mut snapshot: Vec<(&Namespace, Kind, Vec<ScoreType>)> = self.metrics.iter()
             .flat_map(|(name, scores)| if let Some(values) = scores.reset(duration_seconds) {
                 Some((name, scores.metric_kind(), values))
             } else {
                 None
             })
             .collect();
-//        snapshot.push((Kind::Counter, "_duration_ms".to_string(), vec![ScoreType::Sum((duration_seconds * 1000.0) as u64)]));
 
         if snapshot.is_empty() {
             // no data was collected for this period
             // TODO repeat previous frame min/max ?
             // TODO update some canary metric ?
         } else {
+            snapshot.push((&PERIOD_LENGTH, Timer, vec![Sum((duration_seconds * 1000.0) as u64)]));
             for metric in snapshot {
                 for score in metric.2 {
                     let filtered = (stats_fn)(metric.1, metric.0.clone(), score);
                     if let Some((kind, name, value)) = filtered {
-                        publish_scope
-                            .define_metric_object(&name, kind, 1.0)
-                            .write(value);
+                        publish_scope.define_metric_object(&name, kind, 1.0)(value)
                     }
                 }
             }
@@ -117,16 +115,11 @@ impl InnerAggregator {
 impl MetricAggregator {
     /// Build a new metric aggregation
     pub fn new() -> MetricAggregator {
-        MetricAggregator::with_capacity(DEFAULT_CAPACITY)
-    }
-
-    /// Build a new metric aggregation point with initial capacity of metrics to aggregate.
-    pub fn with_capacity(size: usize) -> MetricAggregator {
         MetricAggregator {
             namespace: "".into(),
             inner: Arc::new(RwLock::new(InnerAggregator {
-                metrics: HashMap::with_capacity(size),
-                period_start: Instant::now(),
+                metrics: BTreeMap::new(),
+                period_start: TimeHandle::now(),
                 stats: None,
                 output: None,
             }))
@@ -201,6 +194,12 @@ impl MetricAggregator {
         )
     }
 
+    /// Flush the aggregator scores using the specified scope and stats.
+    pub fn flush_to(&self, publish_scope: &DefineMetric, stats_fn: &StatsFn) {
+        let mut inner = self.inner.write().expect("Aggregator");
+        inner.flush_to(publish_scope, stats_fn);
+    }
+
 //    /// Discard scores for ad-hoc metrics.
 //    pub fn cleanup(&self) {
 //        let orphans: Vec<Namespace> = self.inner.read().expect("Aggregator").metrics.iter()
@@ -220,25 +219,6 @@ impl MetricAggregator {
 }
 
 impl MetricInput<Aggregate> for MetricAggregator {
-    /// Define an event counter of the provided name.
-    fn marker(&self, name: &str) -> scope::Marker {
-        self.into_scope().marker(name)
-    }
-
-    /// Define a counter of the provided name.
-    fn counter(&self, name: &str) -> scope::Counter {
-        self.into_scope().counter(name)
-    }
-
-    /// Define a timer of the provided name.
-    fn timer(&self, name: &str) -> scope::Timer {
-        self.into_scope().timer(name)
-    }
-
-    /// Define a gauge of the provided name.
-    fn gauge(&self, name: &str) -> scope::Gauge {
-        self.into_scope().gauge(name)
-    }
 
     /// Lookup or create a scoreboard for the requested metric.
     fn define_metric(&self, name: &Namespace, kind: Kind, _rate: Sampling) -> Aggregate {
@@ -291,7 +271,7 @@ impl Flush for MetricAggregator {
             &None => DEFAULT_AGGREGATE_OUTPUT.read().unwrap().open_scope_object(),
         };
 
-        inner.flush_to(pub_scope.as_ref(), stats_fn);
+        inner.flush_to(pub_scope.as_ref(), stats_fn.as_ref());
 
         // TODO parameterize whether to keep ad-hoc metrics after publish
         // source.cleanup();
