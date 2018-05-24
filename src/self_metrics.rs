@@ -7,4 +7,7 @@ pub use core::*;
 pub use scope::*;
 pub use aggregate::*;
 
-metrics!(<Aggregate> pub DIPSTICK_METRICS = "dipstick");
+metrics!(
+    /// Aggregator of dipstick's own internal metrics.
+    <Aggregate> pub DIPSTICK_METRICS = "dipstick"
+);

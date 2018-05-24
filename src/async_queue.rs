@@ -77,17 +77,6 @@ impl<M: Send + Sync + Clone + 'static> WithAsyncQueue for MetricOutput<M> {
     }
 }
 
-/// Enqueue collected metrics for dispatch on background thread.
-#[deprecated(since = "0.5.0", note = "Use `with_async_queue` instead.")]
-pub fn async<M, IC>(queue_size: usize, chain: IC) -> MetricOutput<M>
-where
-    M: Clone + Send + Sync + 'static,
-    IC: Into<MetricOutput<M>>,
-{
-    let chain = chain.into();
-    chain.with_async_queue(queue_size)
-}
-
 /// Carry the scope command over the queue, from the sender, to be executed by the receiver.
 #[derive(Derivative)]
 #[derivative(Debug)]

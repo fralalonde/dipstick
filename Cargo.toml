@@ -25,17 +25,16 @@ lazy_static = "1.0"
 derivative = "1.0"
 atomic_refcell = "0.1"
 skeptic = { version = "0.13", optional = true }
+num = { version = "0.1", default-features = false }
 
 [build-dependencies]
 skeptic = { version = "0.13", optional = true }
 
-[dependencies.num]
-default-features = false
-version = "0.1"
-
 [features]
-default = []
 bench = []
+# enables the use of the mock metric clock outside of dipstick's own tests
+# this disables real-time metrics clock and should not be used outside of tests
+mock_clock = []
 
 [package.metadata.release]
 #sign-commit = true
