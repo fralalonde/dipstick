@@ -46,17 +46,6 @@ impl<M: Send + Sync + 'static + Clone> WithSamplingRate for MetricOutput<M> {
     }
 }
 
-/// Perform random sampling of values according to the specified rate.
-#[deprecated(since = "0.5.0", note = "Use `with_sampling_rate` instead.")]
-pub fn sample<M, IC>(sampling_rate: Sampling, chain: IC) -> MetricOutput<M>
-where
-    M: Clone + Send + Sync + 'static,
-    IC: Into<MetricOutput<M>>,
-{
-    let chain = chain.into();
-    chain.with_sampling_rate(sampling_rate)
-}
-
 mod pcg32 {
     //! PCG32 random number generation for fast sampling
 

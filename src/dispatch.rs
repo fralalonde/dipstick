@@ -1,7 +1,7 @@
 //! Decouple metric definition from configuration with trait objects.
 
 use core::*;
-use scope::{self, DefineMetric, MetricScope, WriteMetric, MetricInput, Flush, ScheduleFlush, NO_METRIC_SCOPE};
+use scope::{DefineMetric, MetricScope, MetricInput, Flush, ScheduleFlush, NO_METRIC_SCOPE};
 
 use std::collections::{HashMap, BTreeMap};
 use std::sync::{Arc, RwLock, Weak};
@@ -34,7 +34,7 @@ pub struct DispatchMetric {
     // the second part can be up to namespace.len() + 1 if this metric was individually targeted
     // 0 if no target assigned
     #[derivative(Debug = "ignore")]
-    write_metric: (AtomicRefCell<(Box<WriteMetric + Send + Sync>, usize)>),
+    write_metric: (AtomicRefCell<(WriteFn, usize)>),
 
     // a reference to the the parent dispatcher to remove the metric from when it is dropped
     #[derivative(Debug = "ignore")]
@@ -202,7 +202,7 @@ impl MetricDispatch {
             command_fn(move |cmd| match cmd {
                 Command::Write(metric, value) => {
                     let dispatch: &Arc<DispatchMetric> = metric;
-                    dispatch.write_metric.borrow().0.write(value);
+                    dispatch.write_metric.borrow().0(value);
                 }
                 Command::Flush => disp_1.inner.write().expect("Dispatch Lock").flush(&disp_1.namespace),
             }),
@@ -212,25 +212,6 @@ impl MetricDispatch {
 }
 
 impl MetricInput<Dispatch> for MetricDispatch {
-    /// Define an event counter of the provided name.
-    fn marker(&self, name: &str) -> scope::Marker {
-        self.into_scope().marker(name)
-    }
-
-    /// Define a counter of the provided name.
-    fn counter(&self, name: &str) -> scope::Counter {
-        self.into_scope().counter(name)
-    }
-
-    /// Define a timer of the provided name.
-    fn timer(&self, name: &str) -> scope::Timer {
-        self.into_scope().timer(name)
-    }
-
-    /// Define a gauge of the provided name.
-    fn gauge(&self, name: &str) -> scope::Gauge {
-        self.into_scope().gauge(name)
-    }
 
     /// Lookup or create a dispatch stub for the requested metric.
     fn define_metric(&self, name: &Namespace, kind: Kind, rate: Sampling) -> Dispatch {
@@ -262,7 +243,7 @@ impl MetricInput<Dispatch> for MetricDispatch {
 
     #[inline]
     fn write(&self, metric: &Dispatch, value: Value) {
-        metric.write_metric.borrow().0.write(value);
+        metric.write_metric.borrow().0(value);
     }
 
     fn with_suffix(&self, name: &str) -> Self {

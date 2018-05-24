@@ -9,11 +9,11 @@ use std::time::Duration;
 fn main() {
     //    badlog::init(Some("info"));
 
-    let metrics = metric_scope(
+    let metrics =
         to_graphite("localhost:2003")
             .expect("Connecting")
-            .with_suffix("my_app"),
-    );
+            .with_suffix("my_app")
+            .open_scope();
 
     loop {
         metrics.counter("counter_a").count(123);

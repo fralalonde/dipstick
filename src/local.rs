@@ -2,9 +2,83 @@
 
 // TODO parameterize templates
 // TODO define backing structs that can flush() on Drop
-use core::*;
-use output::*;
+use core::{ROOT_NS, Namespace, Sampling, Value, WriteFn, Kind, command_fn, Command};
+use output::{MetricOutput, metric_output};
+use scope::{MetricInput, DefineMetric, Flush};
 use std::sync::RwLock;
+use std::collections::BTreeMap;
+use std::sync::Arc;
+
+/// A HashMap wrapper to receive metrics or stats values.
+/// Every received value for a metric replaces the previous one (if any).
+#[derive(Clone)]
+pub struct StatsMap {
+    namespace: Namespace,
+    map: Arc<RwLock<BTreeMap<Namespace, Value>>>,
+}
+
+impl StatsMap {
+    /// Create a new StatsMap.
+    pub fn new() -> Self {
+        StatsMap { namespace: ROOT_NS.clone(), map: Arc::new(RwLock::new(BTreeMap::new())) }
+    }
+
+    /// Get the latest published value for the named stat (if it exists).
+    pub fn get(&self, key: &Namespace) -> Option<Value> {
+        self.map.read().expect("StatsMap").get(key).map(|v| *v)
+    }
+}
+
+impl From<StatsMap> for BTreeMap<String, Value> {
+    fn from(map: StatsMap) -> Self {
+        let inner = map.map.write().expect("StatsMap");
+        inner.clone().into_iter()
+            .map(|(key, value)| (key.join("."), value))
+            .collect()
+    }
+}
+
+impl DefineMetric for StatsMap {
+    fn define_metric_object(&self, name: &Namespace, kind: Kind, rate: Sampling) -> WriteFn {
+        let target_metric = self.define_metric(name, kind, rate);
+        let write_to = self.clone();
+        Arc::new(move |value| write_to.write(&target_metric, value))
+    }
+}
+
+impl Flush for StatsMap {}
+
+
+impl MetricInput<Namespace> for StatsMap {
+
+    fn define_metric(&self, name: &Namespace, _kind: Kind, _rate: Sampling) -> Namespace {
+        name.clone()
+    }
+
+    fn write(&self, metric: &Namespace, value: Value) {
+        self.map.write().expect("StatsMap").insert(metric.clone(), value);
+    }
+
+    fn with_suffix(&self, name: &str) -> Self {
+        Self {
+            namespace: self.namespace.with_suffix(name),
+            map: self.map.clone(),
+        }
+    }
+
+}
+
+//pub fn to_map(map: StatsMap) -> MetricScope<Namespace> {
+//    let mut map: StatsMap = map;
+//    MetricScope::new(
+//        ().into(),
+//        Arc::new(|name, _kind, _rate| name.clone()),
+//        Arc::new(|cmd|
+//            if let Command::Write(m, v) = cmd {
+//                map.insert(m.clone(), v);
+//            },
+//    )
+//}
 
 /// Write metric values to stdout using `println!`.
 pub fn to_stdout() -> MetricOutput<String> {
