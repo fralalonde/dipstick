@@ -193,8 +193,16 @@ mod bench {
     use test;
 
     #[bench]
-    pub fn timer_graphite(b: &mut test::Bencher) {
+    pub fn unbufferd_graphite(b: &mut test::Bencher) {
         let sd = to_graphite("localhost:8125").unwrap().open_scope();
+        let timer = sd.define_metric(&"timer".into(), Kind::Timer, 1000000.0);
+
+        b.iter(|| test::black_box(sd.write(&timer, 2000)));
+    }
+
+    #[bench]
+    pub fn buffered_graphite(b: &mut test::Bencher) {
+        let sd = to_buffered_graphite("localhost:8125").unwrap().open_scope();
         let timer = sd.define_metric(&"timer".into(), Kind::Timer, 1000000.0);
 
         b.iter(|| test::black_box(sd.write(&timer, 2000)));

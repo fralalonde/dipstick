@@ -25,50 +25,59 @@ pub use error::{Error, Result};
 pub mod macros;
 
 pub mod core;
-pub use core::{Value, Sampling, FULL_SAMPLING_RATE, TimeHandle, Kind, ROOT_NS, Namespace};
+pub use core::{Value, Sampling, FULL_SAMPLING_RATE, Kind, ROOT_NS, Namespace};
 
 pub mod output;
 pub use output::{MetricOutput, NO_METRIC_OUTPUT, OpenScope};
 
-#[macro_use]
 pub mod dispatch;
 pub use dispatch::{MetricDispatch, Dispatch, metric_dispatch};
 
-#[macro_use]
 mod aggregate;
-pub use aggregate::{MetricAggregator, Aggregate};
+pub use aggregate::{MetricAggregator, Aggregate, summary, all_stats, average};
 
 mod local;
-pub use local::*;
+pub use local::{StatsMap, to_buffered_log, to_buffered_stdout, to_log, to_stdout, to_void};
 
 mod scope;
-pub use scope::*;
+pub use scope::{Marker, Timer, Counter, Gauge, MetricInput, MetricScope, Flush, ScheduleFlush, DefineMetric, metric_scope};
 
 mod sample;
-pub use sample::*;
+pub use sample::WithSamplingRate;
 
 mod scores;
-pub use scores::*;
+pub use scores::ScoreType;
 
 mod statsd;
-pub use statsd::*;
+pub use statsd::{Statsd, to_statsd};
 
 mod graphite;
-pub use graphite::*;
+pub use graphite::{Graphite, to_graphite, to_buffered_graphite};
 
 mod socket;
-pub use socket::*;
+pub use socket::RetrySocket;
 
 mod cache;
-pub use cache::*;
+pub use cache::{add_cache, WithCache};
 
 mod multi;
 pub use multi::*;
 
 mod async_queue;
-pub use async_queue::*;
+pub use async_queue::WithAsyncQueue;
 
-mod schedule;
-pub use schedule::*;
+mod scheduler;
+pub use scheduler::{set_schedule, CancelHandle};
 
 mod self_metrics;
+pub use self_metrics::DIPSTICK_METRICS;
+
+mod clock;
+pub use clock::TimeHandle;
+#[cfg(mock_clock)]
+pub use clock::inner::advance_time;
+
+// FIXME using * to prevent "use of deprecated" warnings. #[allow(dead_code)] doesnt work?
+#[macro_use]
+mod deprecated;
+pub use deprecated::*;
