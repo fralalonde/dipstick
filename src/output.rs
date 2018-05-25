@@ -91,13 +91,20 @@ impl<M: Send + Sync + Clone + 'static> MetricOutput<M> {
         }
     }
 
-    /// Return a copy of this output with the specified name appended to the namespace.
-    pub fn with_suffix(&self, name: &str) -> Self {
+    /// Return cloned output with appended namespace.
+    pub fn with_namespace(&self, names: impl Into<Namespace>) -> Self {
+        let mut namespace = self.namespace.clone();
+        namespace.extend(&names.into());
         MetricOutput {
-            namespace: self.namespace.with_suffix(name),
+            namespace,
             define_metric_fn: self.define_metric_fn.clone(),
             open_scope_fn: self.open_scope_fn.clone(),
         }
+    }
+
+    /// Return a copy of this output with the specified name appended to the namespace.
+    pub fn with_suffix(&self, name: &str) -> Self {
+        self.with_namespace(name)
     }
 
 }

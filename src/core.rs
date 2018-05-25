@@ -138,6 +138,14 @@ impl<'a> From<&'a str> for Namespace {
     }
 }
 
+impl<'a, 'b: 'a> From<&'b [&'a str]> for Namespace {
+    fn from(names: &'a [&'a str]) -> Namespace {
+        Namespace {
+            inner: names.iter().map(|n| n.to_string()).collect()
+        }
+    }
+}
+
 impl From<String> for Namespace {
     fn from(name: String) -> Namespace {
         if name.is_empty() {

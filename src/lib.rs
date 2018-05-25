@@ -54,6 +54,9 @@ pub use statsd::{Statsd, to_statsd};
 mod graphite;
 pub use graphite::{Graphite, to_graphite, to_buffered_graphite};
 
+//mod prometheus;
+//pub use prometheus::{Prometheus, to_prometheus, to_buffered_prometheus};
+
 mod socket;
 pub use socket::RetrySocket;
 
