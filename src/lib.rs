@@ -73,9 +73,7 @@ mod self_metrics;
 pub use self_metrics::DIPSTICK_METRICS;
 
 mod clock;
-pub use clock::TimeHandle;
-#[cfg(mock_clock)]
-pub use clock::inner::advance_time;
+pub use clock::{TimeHandle, mock_clock_advance, mock_clock_reset};
 
 // FIXME using * to prevent "use of deprecated" warnings. #[allow(dead_code)] doesnt work?
 #[macro_use]
