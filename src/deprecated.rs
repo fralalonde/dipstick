@@ -1,9 +1,27 @@
 use scope::{Marker, Counter, Gauge, Timer, MetricScope};
 use output::MetricOutput;
-use core::Sampling;
+use core::{Sampling, Namespace, Kind, Value};
+use aggregate::MetricAggregator;
+use scores::ScoreType;
 
 use async_queue::WithAsyncQueue;
 use sample::WithSamplingRate;
+
+/// Aggregate metrics in memory.
+/// Depending on the type of metric, count, sum, minimum and maximum of values will be tracked.
+/// Needs to be connected to a publish to be useful.
+#[deprecated(since = "0.7.0", note = "Use `MetricAggregator::new()` instead.")]
+pub fn aggregate<M, E, P>(stats_fn: E, pub_scope: P) -> MetricAggregator
+    where
+        E: Fn(Kind, Namespace, ScoreType) -> Option<(Kind, Namespace, Value)> + Send + Sync + 'static,
+        P: Into<MetricOutput<M>>,
+        M: Send + Sync + 'static + Clone,
+{
+    let agg = MetricAggregator::new();
+    agg.set_stats(stats_fn);
+    agg.set_output(pub_scope);
+    agg
+}
 
 /// Enqueue collected metrics for dispatch on background thread.
 #[deprecated(since = "0.5.0", note = "Use `with_async_queue` instead.")]
