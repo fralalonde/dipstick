@@ -207,7 +207,7 @@ impl<M> CommandFn<M> {
 #[cfg(feature = "bench")]
 mod bench {
 
-    use super::*;
+    use clock::TimeHandle;
     use test;
 
     #[bench]
