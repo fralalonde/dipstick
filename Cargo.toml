@@ -13,7 +13,6 @@ repository = "https://github.com/fralalonde/dipstick"
 readme = "README.md"
 keywords = ["metrics", "statsd", "graphite", "timer", "monitoring"]
 license = "MIT/Apache-2.0"
-build = "build.rs"
 
 [badges]
 travis-ci = { repository = "fralalonde/dipstick", branch = "master" }
@@ -32,9 +31,6 @@ skeptic = { version = "0.13", optional = true }
 
 [features]
 bench = []
-# enables the use of the mock metric clock outside of dipstick's own tests
-# this disables real-time metrics clock and should not be used outside of tests
-mock_clock = []
 
 [package.metadata.release]
 #sign-commit = true

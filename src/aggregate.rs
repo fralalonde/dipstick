@@ -383,3 +383,89 @@ mod bench {
     }
 
 }
+
+#[cfg(test)]
+mod test {
+    use Value;
+    use std::time::Duration;
+    use std::collections::BTreeMap;
+    use aggregate::{MetricAggregator, all_stats, summary, average, StatsFn};
+    use scope::MetricInput;
+    use clock::{mock_clock_advance, mock_clock_reset};
+    use local::StatsMap;
+
+    fn make_stats(stats_fn: &StatsFn) -> BTreeMap<String, Value> {
+        mock_clock_reset();
+
+        let metrics = MetricAggregator::new().with_suffix("test");
+
+        let counter = metrics.counter("counter_a");
+        let timer = metrics.timer("timer_a");
+        let gauge = metrics.gauge("gauge_a");
+        let marker = metrics.marker("marker_a");
+
+        marker.mark();
+        marker.mark();
+        marker.mark();
+
+        counter.count(10);
+        counter.count(20);
+
+        timer.interval_us(10_000_000);
+        timer.interval_us(20_000_000);
+
+        gauge.value(10);
+        gauge.value(20);
+
+        mock_clock_advance(Duration::from_secs(3));
+
+        // TODO expose & use flush_to()
+        let stats = StatsMap::new();
+        metrics.flush_to(&stats, stats_fn);
+        stats.into()
+    }
+
+    #[test]
+    fn external_aggregate_all_stats() {
+        let map = make_stats(&all_stats);
+
+        assert_eq!(map["test.counter_a.count"], 2);
+        assert_eq!(map["test.counter_a.sum"], 30);
+        assert_eq!(map["test.counter_a.mean"], 15);
+        assert_eq!(map["test.counter_a.rate"], 10);
+
+        assert_eq!(map["test.timer_a.count"], 2);
+        assert_eq!(map["test.timer_a.sum"], 30_000_000);
+        assert_eq!(map["test.timer_a.min"], 10_000_000);
+        assert_eq!(map["test.timer_a.max"], 20_000_000);
+        assert_eq!(map["test.timer_a.mean"], 15_000_000);
+        assert_eq!(map["test.timer_a.rate"], 1);
+
+        assert_eq!(map["test.gauge_a.mean"], 15);
+        assert_eq!(map["test.gauge_a.min"], 10);
+        assert_eq!(map["test.gauge_a.max"], 20);
+
+        assert_eq!(map["test.marker_a.count"], 3);
+        assert_eq!(map["test.marker_a.rate"], 1);
+    }
+
+    #[test]
+    fn external_aggregate_summary() {
+        let map = make_stats(&summary);
+
+        assert_eq!(map["test.counter_a"], 30);
+        assert_eq!(map["test.timer_a"], 30_000_000);
+        assert_eq!(map["test.gauge_a"], 15);
+        assert_eq!(map["test.marker_a"], 3);
+    }
+
+    #[test]
+    fn external_aggregate_average() {
+        let map = make_stats(&average);
+
+        assert_eq!(map["test.counter_a"], 15);
+        assert_eq!(map["test.timer_a"], 15_000_000);
+        assert_eq!(map["test.gauge_a"], 15);
+        assert_eq!(map["test.marker_a"], 3);
+    }
+}
