@@ -12,7 +12,7 @@ fn main() {
     let metrics =
         to_graphite("localhost:2003")
             .expect("Connecting")
-            .with_suffix("my_app")
+            .with_prefix("my_app")
             .open_scope();
 
     loop {

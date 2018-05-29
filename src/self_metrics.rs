@@ -4,7 +4,7 @@
 
 pub use core::*;
 
-pub use scope::*;
+pub use input::*;
 pub use aggregate::*;
 
 metrics!(

@@ -15,12 +15,12 @@ metrics!(<(Statsd, String)> DIFFERENT_TYPES = (
 
 metrics!(<Vec<String>> SAME_TYPE = [
         // combine multiple outputs of the same type by using an array
-        to_stdout().with_suffix("yeah"),
-        to_stdout().with_suffix("ouch"),
+        to_stdout().with_prefix("yeah"),
+        to_stdout().with_prefix("ouch"),
         to_stdout().with_sampling_rate(0.5),
     ][..]);
 
-metrics!(<Vec<String>> MUTANT_CHILD = SAME_TYPE.with_suffix("super").with_suffix("duper"));
+metrics!(<Vec<String>> MUTANT_CHILD = SAME_TYPE.with_prefix("super").with_prefix("duper"));
 
 fn main() {
     loop {

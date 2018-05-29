@@ -2,9 +2,9 @@
 
 // TODO parameterize templates
 // TODO define backing structs that can flush() on Drop
-use core::{ROOT_NS, Namespace, Sampling, Value, WriteFn, Kind, command_fn, Command};
+use core::{ROOT_NS, Namespace, Sampling, Value, WriteFn, Kind, command_fn, Command, WithNamespace};
 use output::{MetricOutput, metric_output};
-use scope::{MetricInput, DefineMetric, Flush};
+use input::{MetricInput, DefineMetric, Flush};
 use std::sync::RwLock;
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -50,7 +50,6 @@ impl Flush for StatsMap {}
 
 
 impl MetricInput<Namespace> for StatsMap {
-
     fn define_metric(&self, name: &Namespace, _kind: Kind, _rate: Sampling) -> Namespace {
         name.clone()
     }
@@ -58,10 +57,16 @@ impl MetricInput<Namespace> for StatsMap {
     fn write(&self, metric: &Namespace, value: Value) {
         self.map.write().expect("StatsMap").insert(metric.clone(), value);
     }
+}
 
-    fn with_suffix(&self, name: &str) -> Self {
+impl WithNamespace for StatsMap {
+
+    fn with_namespace(&self, namespace: &Namespace) -> Self {
+        if namespace.is_empty() {
+            return self.clone()
+        }
         Self {
-            namespace: self.namespace.with_suffix(name),
+            namespace: self.namespace.with_namespace(namespace),
             map: self.map.clone(),
         }
     }
@@ -168,7 +173,7 @@ pub fn to_void() -> MetricOutput<()> {
 #[cfg(test)]
 mod test {
     use core::*;
-    use scope::MetricInput;
+    use input::MetricInput;
 
     #[test]
     fn sink_print() {

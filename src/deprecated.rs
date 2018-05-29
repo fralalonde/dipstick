@@ -1,4 +1,4 @@
-use scope::{Marker, Counter, Gauge, Timer, MetricScope};
+use input::{Marker, Counter, Gauge, Timer, MetricScope};
 use output::MetricOutput;
 use core::{Sampling, Namespace, Kind, Value};
 use aggregate::MetricAggregator;
@@ -211,7 +211,7 @@ macro_rules! mod_timer {
 mod legacy_test {
     use self_metrics::*;
 
-    metrics!(<Aggregate> TEST_METRICS = DIPSTICK_METRICS.with_suffix("test_prefix"));
+    metrics!(<Aggregate> TEST_METRICS = DIPSTICK_METRICS.with_prefix("test_prefix"));
 
     app_marker!(<Aggregate> TEST_METRICS => {
         M1: "failed",

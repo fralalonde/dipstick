@@ -25,7 +25,7 @@ pub use error::{Error, Result};
 pub mod macros;
 
 pub mod core;
-pub use core::{Value, Sampling, FULL_SAMPLING_RATE, Kind, ROOT_NS, Namespace};
+pub use core::{Value, Sampling, FULL_SAMPLING_RATE, Kind, ROOT_NS, Namespace, WithNamespace};
 
 pub mod output;
 pub use output::{MetricOutput, NO_METRIC_OUTPUT, OpenScope};
@@ -39,8 +39,8 @@ pub use aggregate::{MetricAggregator, Aggregate, summary, all_stats, average};
 mod local;
 pub use local::{StatsMap, to_buffered_log, to_buffered_stdout, to_log, to_stdout, to_void};
 
-mod scope;
-pub use scope::{Marker, Timer, Counter, Gauge, MetricInput, MetricScope, Flush, ScheduleFlush, DefineMetric, metric_scope};
+mod input;
+pub use input::{Marker, Timer, Counter, Gauge, MetricInput, MetricScope, Flush, ScheduleFlush, DefineMetric, metric_scope};
 
 mod sample;
 pub use sample::WithSamplingRate;

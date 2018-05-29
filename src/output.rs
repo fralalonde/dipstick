@@ -1,12 +1,12 @@
 //! Chain of command for unscoped metrics.
 
 use core::*;
-use scope::MetricScope;
+use input::MetricScope;
 
 use std::sync::Arc;
 use std::fmt::Debug;
 
-use scope::DefineMetric;
+use input::DefineMetric;
 use local;
 
 lazy_static! {
@@ -66,9 +66,9 @@ where
 impl<M: Send + Sync + Clone + 'static> MetricOutput<M> {
     /// Intercept both metric definition and scope creation, possibly changing the metric type.
     pub fn wrap_all<MF, N>(&self, mod_fn: MF) -> MetricOutput<N>
-    where
-        MF: Fn(DefineMetricFn<M>, OpenScopeFn<M>) -> (DefineMetricFn<N>, OpenScopeFn<N>),
-        N: Clone + Send + Sync,
+        where
+            MF: Fn(DefineMetricFn<M>, OpenScopeFn<M>) -> (DefineMetricFn<N>, OpenScopeFn<N>),
+            N: Clone + Send + Sync,
     {
         let (define_metric_fn, open_scope_fn) =
             mod_fn(self.define_metric_fn.clone(), self.open_scope_fn.clone());
@@ -81,8 +81,8 @@ impl<M: Send + Sync + Clone + 'static> MetricOutput<M> {
 
     /// Intercept scope creation.
     pub fn wrap_scope<MF>(&self, mod_fn: MF) -> Self
-    where
-        MF: Fn(OpenScopeFn<M>) -> OpenScopeFn<M>,
+        where
+            MF: Fn(OpenScopeFn<M>) -> OpenScopeFn<M>,
     {
         MetricOutput {
             namespace: self.namespace.clone(),
@@ -90,21 +90,17 @@ impl<M: Send + Sync + Clone + 'static> MetricOutput<M> {
             open_scope_fn: mod_fn(self.open_scope_fn.clone()),
         }
     }
+}
+
+impl<M> WithNamespace for MetricOutput<M> {
 
     /// Return cloned output with appended namespace.
-    pub fn with_namespace(&self, names: impl Into<Namespace>) -> Self {
-        let mut namespace = self.namespace.clone();
-        namespace.extend(&names.into());
+    fn with_namespace(&self, namespace: &Namespace) -> Self {
         MetricOutput {
-            namespace,
+            namespace: self.namespace.with_namespace(namespace),
             define_metric_fn: self.define_metric_fn.clone(),
             open_scope_fn: self.open_scope_fn.clone(),
         }
-    }
-
-    /// Return a copy of this output with the specified name appended to the namespace.
-    pub fn with_suffix(&self, name: &str) -> Self {
-        self.with_namespace(name)
     }
 
 }
@@ -125,7 +121,7 @@ impl<M: Send + Sync + Clone + 'static> OpenScope for MetricOutput<M> {
 
 impl<M> From<MetricOutput<M>> for MetricScope<M> {
     fn from(metrics: MetricOutput<M>) -> MetricScope<M> {
-        metrics.open_scope()
+        metrics.open_scope().with_namespace(&metrics.namespace)
     }
 }
 

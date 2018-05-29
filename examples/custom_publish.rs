@@ -32,7 +32,7 @@ fn main() {
             },
 
             // scaling the score value and appending unit to name
-            (kind, ScoreType::Sum(sum)) => Some((kind, name.with_suffix("per_thousand"), sum / 1000)),
+            (kind, ScoreType::Sum(sum)) => Some((kind, name.with_prefix("per_thousand"), sum / 1000)),
 
             // using the unmodified metric name
             (kind, ScoreType::Mean(avg)) => Some((kind, name, avg.round() as u64)),

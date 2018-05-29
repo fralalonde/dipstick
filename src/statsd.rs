@@ -11,7 +11,7 @@ use std::sync::{Arc, RwLock};
 pub use std::net::ToSocketAddrs;
 
 metrics! {
-    <Aggregate> DIPSTICK_METRICS.with_suffix("statsd") => {
+    <Aggregate> DIPSTICK_METRICS.with_prefix("statsd") => {
         Marker SEND_ERR: "send_failed";
         Counter SENT_BYTES: "sent_bytes";
     }
