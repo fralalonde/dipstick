@@ -135,7 +135,7 @@ macro_rules! __metrics_block {
 mod test {
     use self_metrics::*;
 
-    metrics!(<Aggregate> DIPSTICK_METRICS.with_suffix("test_prefix") => {
+    metrics!(<Aggregate> DIPSTICK_METRICS.with_prefix("test_prefix") => {
         Marker M1: "failed";
         Marker M2: "success";
         Counter C1: "failed";

@@ -7,7 +7,7 @@ use std::time::Duration;
 use dipstick::*;
 
 fn main() {
-    let metrics = MetricAggregator::new();
+    let metrics = MetricAggregator::new().with_prefix("test");
 
     // MetricAggregator::set_default_output(to_stdout());
     metrics.set_output(to_stdout());

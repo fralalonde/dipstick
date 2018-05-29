@@ -1,7 +1,7 @@
 //! Decouple metric definition from configuration with trait objects.
 
 use core::*;
-use scope::{DefineMetric, MetricScope, MetricInput, Flush, ScheduleFlush, NO_METRIC_SCOPE};
+use input::{DefineMetric, MetricScope, MetricInput, Flush, ScheduleFlush, NO_METRIC_SCOPE};
 
 use std::collections::{HashMap, BTreeMap};
 use std::sync::{Arc, RwLock, Weak};
@@ -68,7 +68,7 @@ struct InnerDispatch {
 /// Allow turning a 'static str into a Delegate, where str is the prefix.
 impl From<&'static str> for MetricScope<Dispatch> {
     fn from(name: &'static str) -> MetricScope<Dispatch> {
-        metric_dispatch().into_scope().with_suffix(name)
+        metric_dispatch().into_scope().with_prefix(name)
     }
 }
 
@@ -212,7 +212,6 @@ impl MetricDispatch {
 }
 
 impl MetricInput<Dispatch> for MetricDispatch {
-
     /// Lookup or create a dispatch stub for the requested metric.
     fn define_metric(&self, name: &Namespace, kind: Kind, rate: Sampling) -> Dispatch {
         let mut zname = self.namespace.clone();
@@ -245,13 +244,16 @@ impl MetricInput<Dispatch> for MetricDispatch {
     fn write(&self, metric: &Dispatch, value: Value) {
         metric.write_metric.borrow().0(value);
     }
+}
 
-    fn with_suffix(&self, name: &str) -> Self {
-        if name.is_empty() {
+impl WithNamespace for MetricDispatch {
+
+    fn with_namespace(&self, namespace: &Namespace) -> Self {
+        if namespace.is_empty() {
             return self.clone()
         }
         MetricDispatch {
-            namespace: self.namespace.with_suffix(name),
+            namespace: self.namespace.with_namespace(namespace),
             inner: self.inner.clone()
         }
     }
@@ -279,7 +281,7 @@ mod bench {
     use dispatch::metric_dispatch;
     use test;
     use aggregate::MetricAggregator;
-    use scope::MetricInput;
+    use input::MetricInput;
 
     #[bench]
     fn dispatch_marker_to_aggregate(b: &mut test::Bencher) {

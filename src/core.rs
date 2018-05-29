@@ -71,11 +71,9 @@ lazy_static! {
 
 impl Namespace {
 
-    /// Append name to the namespace, returning a modified copy.
-    pub fn with_suffix(&self, name: impl Into<String>) -> Self {
-        let mut new = self.clone();
-        new.push(name.into());
-        new
+    /// Returns true if this namespace contains no elements.
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
     }
 
     /// Append a component to the name.
@@ -86,7 +84,7 @@ impl Namespace {
     /// Returns a copy of this namespace with the second namespace appended.
     /// Both original namespaces stay untouched.
     pub fn extend(&mut self, name: &Namespace) {
-        self.inner.extend_from_slice(&name.inner)
+        self.inner.extend_from_slice(&name.inner);
     }
 
     /// Returns true if the specified namespace is a subset or is equal to this namespace.
@@ -122,6 +120,15 @@ impl Namespace {
     }
 }
 
+impl WithNamespace for Namespace {
+
+    fn with_namespace(&self, namespace: &Namespace) -> Self {
+        let mut new = self.clone();
+        new.extend(namespace);
+        new
+    }
+}
+
 impl From<()> for Namespace {
     fn from(_name: ()) -> Namespace {
         ROOT_NS.clone()
@@ -130,19 +137,23 @@ impl From<()> for Namespace {
 
 impl<'a> From<&'a str> for Namespace {
     fn from(name: &'a str) -> Namespace {
-        if name.is_empty() {
-            ROOT_NS.clone()
-        } else {
-            ROOT_NS.with_suffix(name)
+        let mut ns = ROOT_NS.clone();
+        if !name.is_empty() {
+            ns.push(name)
         }
+        ns
     }
 }
 
 impl<'a, 'b: 'a> From<&'b [&'a str]> for Namespace {
-    fn from(names: &'a [&'a str]) -> Namespace {
-        Namespace {
-            inner: names.iter().map(|n| n.to_string()).collect()
+    fn from(names: &'b [&'a str]) -> Namespace {
+        let mut ns = ROOT_NS.clone();
+        for name in names {
+            if !name.is_empty() {
+                ns.push(*name)
+            }
         }
+        ns
     }
 }
 
@@ -151,9 +162,23 @@ impl From<String> for Namespace {
         if name.is_empty() {
             ROOT_NS.clone()
         } else {
-            ROOT_NS.with_suffix(name.as_ref())
+            ROOT_NS.with_prefix(name.as_ref())
         }
     }
+}
+
+/// Common methods of elements that hold a mutable namespace.
+pub trait WithNamespace: Sized {
+
+    /// Return a copy of this object with the specified namespace appended to the existing one.
+    fn with_namespace(&self, namespace: &Namespace) -> Self;
+
+    /// Join namespace and prepend in newly defined metrics.
+//    #[deprecated(since = "0.7.0", note = "Misleading terminology, use with_namespace() instead.")]
+    fn with_prefix(&self, name: &str) -> Self {
+        self.with_namespace(&name.into())
+    }
+
 }
 
 /// Dynamic metric definition function.
@@ -170,9 +195,17 @@ pub type OpenScopeFn<M> = Arc<Fn() -> CommandFn<M> + Send + Sync>;
 pub type WriteFn = Arc<Fn(Value) + Send + Sync + 'static>;
 
 /// A function trait that writes to or flushes a certain scope.
-#[derive(Clone)]
+//#[derive(Clone)]
 pub struct CommandFn<M> {
     inner: Arc<Fn(Command<M>) + Send + Sync + 'static>
+}
+
+impl<M> Clone for CommandFn<M> {
+    fn clone(&self) -> CommandFn<M> {
+        CommandFn {
+            inner: self.inner.clone()
+        }
+    }
 }
 
 /// An method dispatching command enum to manipulate metric scopes.

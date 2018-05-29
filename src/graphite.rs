@@ -15,12 +15,20 @@ use std::fmt::Debug;
 use socket::RetrySocket;
 
 metrics!{
-    <Aggregate> DIPSTICK_METRICS.with_suffix("graphite") => {
+    <Aggregate> DIPSTICK_METRICS.with_prefix("graphite") => {
         Marker SEND_ERR: "send_failed";
         Marker TRESHOLD_EXCEEDED: "bufsize_exceeded";
         Counter SENT_BYTES: "sent_bytes";
     }
 }
+
+//pub struct GraphiteOutput {
+//    socket: Arc<RwLock<RetrySocket>>,
+//}
+//
+//impl MetricOutput for GraphiteOutput {
+//
+//}
 
 // TODO enable fine config
 //struct GraphiteConfig<ADDR = ToSocketAddrs + Debug + Clone> {

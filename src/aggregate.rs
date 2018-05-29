@@ -1,10 +1,10 @@
 //! Maintain aggregated metrics for deferred reporting,
 //!
-use core::{command_fn, Kind, Sampling, Command, Value, Namespace};
+use core::{command_fn, Kind, Sampling, Command, Value, Namespace, WithNamespace};
 use clock::TimeHandle;
 use core::Kind::*;
 use output::{OpenScope, NO_METRIC_OUTPUT, MetricOutput};
-use scope::{MetricScope, MetricInput, Flush, ScheduleFlush, DefineMetric};
+use input::{MetricScope, MetricInput, Flush, ScheduleFlush, DefineMetric};
 
 use scores::{ScoreType, Scoreboard};
 use scores::ScoreType::*;
@@ -39,7 +39,7 @@ impl From<&'static str> for MetricScope<Aggregate> {
     fn from(prefix: &'static str) -> MetricScope<Aggregate> {
         let scope: MetricScope<Aggregate> = MetricAggregator::new().into();
         if !prefix.is_empty() {
-            scope.with_suffix(prefix)
+            scope.with_prefix(prefix)
         } else {
             scope
         }
@@ -69,6 +69,7 @@ struct InnerAggregator {
     stats: Option<Arc<Fn(Kind, Namespace, ScoreType)
         -> Option<(Kind, Namespace, Value)> + Send + Sync + 'static>>,
     output: Option<Arc<OpenScope + Sync + Send>>,
+    publish_metadata: bool,
 }
 
 lazy_static! {
@@ -98,7 +99,10 @@ impl InnerAggregator {
             // TODO repeat previous frame min/max ?
             // TODO update some canary metric ?
         } else {
-            snapshot.push((&PERIOD_LENGTH, Timer, vec![Sum((duration_seconds * 1000.0) as u64)]));
+            // TODO add switch for metadata such as PERIOD_LENGTH
+            if self.publish_metadata {
+                snapshot.push((&PERIOD_LENGTH, Timer, vec![Sum((duration_seconds * 1000.0) as u64)]));
+            }
             for metric in snapshot {
                 for score in metric.2 {
                     let filtered = (stats_fn)(metric.1, metric.0.clone(), score);
@@ -122,6 +126,7 @@ impl MetricAggregator {
                 period_start: TimeHandle::now(),
                 stats: None,
                 output: None,
+                publish_metadata: false,
             }))
         }
     }
@@ -219,7 +224,6 @@ impl MetricAggregator {
 }
 
 impl MetricInput<Aggregate> for MetricAggregator {
-
     /// Lookup or create a scoreboard for the requested metric.
     fn define_metric(&self, name: &Namespace, kind: Kind, _rate: Sampling) -> Aggregate {
         let mut zname = self.namespace.clone();
@@ -237,10 +241,16 @@ impl MetricInput<Aggregate> for MetricAggregator {
     fn write(&self, metric: &Aggregate, value: Value) {
         metric.update(value)
     }
+}
 
-    fn with_suffix(&self, name: &str) -> Self {
+impl WithNamespace for MetricAggregator {
+
+    fn with_namespace(&self, namespace: &Namespace) -> Self {
+        if namespace.is_empty() {
+            return self.clone()
+        }
         MetricAggregator {
-            namespace: self.namespace.with_suffix(name),
+            namespace: self.namespace.with_namespace(namespace),
             inner: self.inner.clone(),
         }
     }
@@ -295,12 +305,12 @@ pub type Aggregate = Arc<Scoreboard>;
 #[allow(dead_code)]
 pub fn all_stats(kind: Kind, name: Namespace, score: ScoreType) -> Option<(Kind, Namespace, Value)> {
     match score {
-        Count(hit) => Some((Counter, name.with_suffix("count"), hit)),
-        Sum(sum) => Some((kind, name.with_suffix("sum"), sum)),
-        Mean(mean) => Some((kind, name.with_suffix("mean"), mean.round() as Value)),
-        Max(max) => Some((Gauge, name.with_suffix("max"), max)),
-        Min(min) => Some((Gauge, name.with_suffix("min"), min)),
-        Rate(rate) => Some((Gauge, name.with_suffix("rate"), rate.round() as Value)),
+        Count(hit) => Some((Counter, name.with_prefix("count"), hit)),
+        Sum(sum) => Some((kind, name.with_prefix("sum"), sum)),
+        Mean(mean) => Some((kind, name.with_prefix("mean"), mean.round() as Value)),
+        Max(max) => Some((Gauge, name.with_prefix("max"), max)),
+        Min(min) => Some((Gauge, name.with_prefix("min"), min)),
+        Rate(rate) => Some((Gauge, name.with_prefix("rate"), rate.round() as Value)),
     }
 }
 
@@ -352,7 +362,7 @@ mod bench {
     use test;
     use core::Kind::{Counter, Marker};
     use aggregate::MetricAggregator;
-    use scope::MetricInput;
+    use input::MetricInput;
 
     #[bench]
     fn aggregate_marker(b: &mut test::Bencher) {
@@ -390,14 +400,15 @@ mod test {
     use std::time::Duration;
     use std::collections::BTreeMap;
     use aggregate::{MetricAggregator, all_stats, summary, average, StatsFn};
-    use scope::MetricInput;
+    use input::MetricInput;
     use clock::{mock_clock_advance, mock_clock_reset};
     use local::StatsMap;
+    use core::WithNamespace;
 
     fn make_stats(stats_fn: &StatsFn) -> BTreeMap<String, Value> {
         mock_clock_reset();
 
-        let metrics = MetricAggregator::new().with_suffix("test");
+        let metrics = MetricAggregator::new().with_prefix("test");
 
         let counter = metrics.counter("counter_a");
         let timer = metrics.timer("timer_a");

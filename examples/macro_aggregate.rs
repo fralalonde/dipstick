@@ -18,7 +18,7 @@ metrics!(<Aggregate> pub AGGREGATE = () => {
 });
 
 
-metrics!(<Aggregate> AGGREGATE.with_suffix("module_prefix") => {
+metrics!(<Aggregate> AGGREGATE.with_prefix("module_prefix") => {
     // create counter "module_prefix.module_counter"
     Counter MOD_COUNTER: "module_counter";
 });

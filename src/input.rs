@@ -7,7 +7,7 @@
 //!
 //! If multiple [AppMetrics] are defined, they'll each have their scope.
 //!
-use core::{Value, Sampling, WriteFn, Namespace, Kind, DefineMetricFn, CommandFn};
+use core::{Value, Sampling, WriteFn, Namespace, Kind, DefineMetricFn, CommandFn, WithNamespace};
 use core::Kind::*;
 use clock::TimeHandle;
 use cache::{add_cache, WithCache};
@@ -31,7 +31,8 @@ pub trait DefineMetric: Flush {
     /// Register a new metric.
     /// Only one metric of a certain name will be defined.
     /// Observer must return a MetricHandle that uniquely identifies the metric.
-    fn define_metric_object(&self, namespace: &Namespace, kind: Kind, rate: Sampling) -> WriteFn;
+    fn define_metric_object(&self, name: &Namespace, kind: Kind, rate: Sampling) -> WriteFn;
+
 }
 
 ///// Dynamic counterpart of the `DispatcherMetric`.
@@ -177,13 +178,13 @@ fn scope_write_fn<M, D>(scope: &D, kind: Kind, name: &str) -> WriteFn
         M: Clone + Send + Sync + 'static,
         D: MetricInput<M> + Clone + Send + Sync + 'static
 {
-    let scope = scope.clone();
+    let scope1 = scope.clone();
     let metric = scope.define_metric(&name.into(), kind, 1.0);
-    Arc::new(move |value| scope.write(&metric, value))
+    Arc::new(move |value| scope1.write(&metric, value))
 }
 
 /// Define metrics, write values and flush them.
-pub trait MetricInput<M>: Clone + Send + Sync + 'static + Flush
+pub trait MetricInput<M>: Clone + Send + Sync + 'static + Flush + WithNamespace
     where
         M: Clone + Send + Sync + 'static,
 {
@@ -213,15 +214,6 @@ pub trait MetricInput<M>: Clone + Send + Sync + 'static + Flush
     /// Record or send a value for a previously defined metric.
     fn write(&self, metric: &M, value: Value);
 
-    /// Join namespace and prepend in newly defined metrics.
-    #[deprecated(since = "0.7.0", note = "Misleading terminology, use with_suffix() instead.")]
-    fn with_prefix(&self, name: &str) -> Self {
-        self.with_suffix(name)
-    }
-
-    /// Join namespace and prepend in newly defined metrics.
-    fn with_suffix(&self, name: &str) -> Self;
-
 }
 
 /// Scopes can implement buffering, requiring flush operations to commit metric values.
@@ -236,18 +228,21 @@ impl<M> MetricInput<M> for MetricScope<M>
 where
     M: Clone + Send + Sync + 'static,
 {
-
     fn define_metric(&self, namespace: &Namespace, kind: Kind, rate: Sampling) -> M {
-        (self.define_fn)(namespace, kind, rate)
+        let name = self.namespace.with_namespace(namespace);
+        (self.define_fn)(&name, kind, rate)
     }
 
     fn write(&self, metric: &M, value: Value) {
         self.command_fn.write(metric, value);
     }
+}
 
-    fn with_suffix(&self, name: &str) -> Self {
+impl<M> WithNamespace for MetricScope<M> {
+
+    fn with_namespace(&self, namespace: &Namespace) -> Self {
         MetricScope {
-            namespace: self.namespace.with_suffix(name),
+            namespace: self.namespace.with_namespace(namespace),
             define_fn: self.define_fn.clone(),
             command_fn: self.command_fn.clone(),
         }
