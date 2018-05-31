@@ -9,7 +9,11 @@ use std::sync::{Arc, RwLock, Weak};
 use atomic_refcell::*;
 
 lazy_static! {
-    static ref ROOT_DISPATCH: MetricDispatch = MetricDispatch::new();
+    /// Root of the default metrics dispatch, usable by all libraries and apps.
+    /// Libraries should create their metrics into sub subspaces of this.
+    /// Applications should configure on startup where the dispatched metrics should go.
+    /// Exceptionally, one can create its own MetricDispatch root, separate from this one.
+    pub static ref ROOT_DISPATCH: MetricDispatch = MetricDispatch::new();
 }
 
 /// Shortcut name because `AppMetrics<Dispatch>`
@@ -19,6 +23,12 @@ pub type Dispatch = Arc<DispatchMetric>;
 /// Provides a copy of the default dispatcher's root.
 pub fn metric_dispatch() -> MetricDispatch {
     ROOT_DISPATCH.clone()
+}
+
+
+/// Provides a copy of the default dispatcher's root.
+pub fn default_dispatch() -> &'static MetricDispatch {
+    &ROOT_DISPATCH
 }
 
 /// A dynamically dispatched metric.

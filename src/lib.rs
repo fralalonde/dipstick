@@ -31,7 +31,7 @@ pub mod output;
 pub use output::{MetricOutput, NO_METRIC_OUTPUT, OpenScope};
 
 pub mod dispatch;
-pub use dispatch::{MetricDispatch, Dispatch, metric_dispatch};
+pub use dispatch::{MetricDispatch, Dispatch, metric_dispatch, ROOT_DISPATCH};
 
 mod aggregate;
 pub use aggregate::{MetricAggregator, Aggregate, summary, all_stats, average};
