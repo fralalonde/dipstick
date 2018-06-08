@@ -52,9 +52,3 @@ impl<M: Clone> ScopeBuffer<M> {
         (self.scope)(Flush)
     }
 }
-
-impl<M: Clone> Drop for ScopeBuffer<M> {
-    fn drop(&mut self) {
-        self.flush()
-    }
-}
