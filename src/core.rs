@@ -158,14 +158,6 @@ impl<M> ControlScopeFn<M> {
     }
 }
 
-impl<M> Drop for ControlScopeFn<M> {
-    fn drop(&mut self) {
-        if self.flush_on_drop {
-            self.flush()
-        }
-    }
-}
-
 /// A pair of functions composing a twin "chain of command".
 /// This is the building block for the metrics backend.
 #[derive(Derivative, Clone)]
