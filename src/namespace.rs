@@ -39,7 +39,6 @@ impl<'a, 'b: 'a> From<&'b [&'a str]> for Namespace {
     }
 }
 
-
 /// Prepend metric names with custom prefix.
 pub trait WithNamespace
 where
