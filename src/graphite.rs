@@ -1,9 +1,9 @@
 //! Send metrics to a graphite server.
 
 use core::*;
-use output::*;
+use aggregate::*;
 use error;
-use self_metrics::*;
+use self_metrics::DIPSTICK_METRICS;
 
 use std::net::ToSocketAddrs;
 
@@ -15,97 +15,84 @@ use std::fmt::Debug;
 use socket::RetrySocket;
 
 metrics!{
-    <Aggregate> DIPSTICK_METRICS.with_prefix("graphite") => {
+    <MetricAggregator> DIPSTICK_METRICS.with_prefix("graphite") => {
         Marker SEND_ERR: "send_failed";
         Marker TRESHOLD_EXCEEDED: "bufsize_exceeded";
         Counter SENT_BYTES: "sent_bytes";
     }
 }
 
-//pub struct GraphiteOutput {
-//    socket: Arc<RwLock<RetrySocket>>,
-//}
-//
-//impl MetricOutput for GraphiteOutput {
-//
-//}
-
-// TODO enable fine config
-//struct GraphiteConfig<ADDR = ToSocketAddrs + Debug + Clone> {
-//    to_socket_address: ADDR,
-//    buffer_bytes: Option<usize>,
-//}
-//
-//impl From<ToSocketAddrs> for GraphiteConfig {
-//    fn from<ADDR: ToSocketAddrs + Debug + Clone>(addr: ADDR) -> GraphiteConfig {
-//        GraphiteConfig {
-//            to_socket_address: addr,
-//            buffer_bytes: None,
-//        }
-//    }
-//}
-
-/// Send metrics to a graphite server at the address and port provided.
-pub fn to_graphite<ADDR>(address: ADDR) -> error::Result<MetricOutput<Graphite>>
-where
-    ADDR: ToSocketAddrs + Debug + Clone,
-{
-    debug!("Connecting to graphite {:?}", address);
-    let socket = Arc::new(RwLock::new(RetrySocket::new(address.clone())?));
-
-    Ok(metric_output(
-        move |ns, kind, rate| graphite_metric(ns, kind, rate),
-        move || graphite_scope(&socket, false),
-    ))
+#[derive(Clone, Debug)]
+pub struct GraphiteOutput {
+    namespace: Namespace,
+    socket: Arc<RwLock<RetrySocket>>,
+    buffered: bool,
 }
 
-/// Send metrics to a graphite server at the address and port provided.
-pub fn to_buffered_graphite<ADDR>(address: ADDR) -> error::Result<MetricOutput<Graphite>>
-where
-    ADDR: ToSocketAddrs + Debug + Clone,
-{
-    debug!("Connecting to graphite {:?}", address);
-    let socket = Arc::new(RwLock::new(RetrySocket::new(address.clone())?));
+impl MetricOutput for GraphiteOutput {
 
-    Ok(metric_output(
-        move |ns, kind, rate| graphite_metric(ns, kind, rate),
-        move || graphite_scope(&socket, true),
-    ))
+    type Input = Graphite;
+
+    fn open(&self) -> Graphite {
+        Graphite {
+            namespace: self.namespace.clone(),
+            buffer: ScopeBuffer {
+                buffer: Arc::new(RwLock::new(String::new())),
+                socket: self.socket.clone(),
+                buffered: self.buffered,
+            }
+        }
+    }
 }
 
-fn graphite_metric(namespace: &Namespace, kind: Kind, rate: Sampling) -> Graphite {
-    let mut prefix = namespace.join(".");
-    prefix.push(' ');
+/// Graphite MetricInput
+#[derive(Debug)]
+pub struct Graphite {
+    namespace: Namespace,
+    buffer: ScopeBuffer,
+}
 
-    let mut scale = match kind {
-        // timers are in µs, lets give graphite milliseconds for consistency with statsd
-        Kind::Timer => 1000,
-        _ => 1,
-    };
+impl MetricInput for Graphite {
+    /// Define a metric of the specified type.
+    fn define_metric(&self, namespace: &Namespace, kind: Kind) -> WriteFn {
+        let mut prefix = namespace.join(".");
+        prefix.push(' ');
 
-    if rate < FULL_SAMPLING_RATE {
-        // graphite does not do sampling, so we'll upsample before sending
-        let upsample = (1.0 / rate).round() as u64;
-        warn!(
-            "Metric {:?} '{:?}' being sampled at rate {} will be upsampled \
-             by a factor of {} when sent to graphite.",
-            kind, namespace, rate, upsample
-        );
-        scale *= upsample;
+        let scale = match kind {
+            // timers are in µs, but we give graphite milliseconds
+            Kind::Timer => 1000,
+            _ => 1,
+        };
+
+        let buffer = self.buffer.clone();
+        let metric = GraphiteMetric { prefix, scale };
+        WriteFn::new(move |value| {
+            if let Err(err) = buffer.write(&metric, value) {
+                debug!("Graphite buffer write failed: {}", err);
+                SEND_ERR.mark();
+            }
+        })
     }
 
-    Graphite { prefix, scale }
 }
 
-fn graphite_scope(socket: &Arc<RwLock<RetrySocket>>, buffered: bool) -> CommandFn<Graphite> {
-    let buf = ScopeBuffer {
-        buffer: Arc::new(RwLock::new(String::new())),
-        socket: socket.clone(),
-        buffered,
-    };
-    command_fn(move |cmd| match cmd {
-        Command::Write(metric, value) => buf.write(metric, value),
-        Command::Flush => buf.flush(),
+impl Flush for Graphite {
+    fn flush(&self) -> error::Result<()> {
+        self.buffer.flush()
+    }
+}
+
+/// Send metrics to a graphite server at the address and port provided.
+pub fn to_graphite<ADDR: ToSocketAddrs + Debug + Clone>(address: ADDR)
+    -> error::Result<GraphiteOutput>
+{
+    debug!("Connecting to graphite {:?}", address);
+    let socket = Arc::new(RwLock::new(RetrySocket::new(address.clone())?));
+
+    Ok(GraphiteOutput {
+        namespace: ROOT_NS.clone(),
+        socket,
+        buffered: true
     })
 }
 
@@ -115,13 +102,13 @@ const BUFFER_FLUSH_THRESHOLD: usize = 65_536;
 
 /// Key of a graphite metric.
 #[derive(Debug, Clone)]
-pub struct Graphite {
+pub struct GraphiteMetric {
     prefix: String,
     scale: u64,
 }
 
 /// Wrap string buffer & socket as one.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct ScopeBuffer {
     buffer: Arc<RwLock<String>>,
     socket: Arc<RwLock<RetrySocket>>,
@@ -131,12 +118,14 @@ struct ScopeBuffer {
 /// Any remaining buffered data is flushed on Drop.
 impl Drop for ScopeBuffer {
     fn drop(&mut self) {
-        self.flush()
+        if let Err(err) = self.flush() {
+            warn!("Could not flush graphite metrics upon Drop: {}", err)
+        }
     }
 }
 
 impl ScopeBuffer {
-    fn write(&self, metric: &Graphite, value: Value) {
+    fn write(&self, metric: &GraphiteMetric, value: Value) -> error::Result<()> {
         let scaled_value = value / metric.scale;
         let value_str = scaled_value.to_string();
 
@@ -158,39 +147,40 @@ impl ScopeBuffer {
                          the threshold of {} bytes. ",
                         BUFFER_FLUSH_THRESHOLD
                     );
-                    self.flush_inner(&mut buf);
+                    self.flush_inner(&mut buf)?;
                 } else if !self.buffered {
-                    self.flush_inner(&mut buf);
+                    self.flush_inner(&mut buf)?;
                 }
             }
             Err(e) => {
                 warn!("Could not compute epoch timestamp. {}", e);
             }
         };
+        Ok(())
     }
 
-    fn flush_inner(&self, buf: &mut String) {
-        if !buf.is_empty() {
-            let mut sock = self.socket.write().expect("Locking graphite socket");
-            match sock.write(buf.as_bytes()) {
-                Ok(size) => {
-                    buf.clear();
-                    SENT_BYTES.count(size);
-                    trace!("Sent {} bytes to graphite", buf.len());
-                }
-                Err(e) => {
-                    SEND_ERR.mark();
-                    // still just a best effort, do not warn! for every failure
-                    debug!("Failed to send buffer to graphite: {}", e);
-                }
-            };
-            buf.clear();
+    fn flush_inner(&self, buf: &mut String) -> error::Result<()> {
+        if buf.is_empty() { return Ok(()) }
+
+        let mut sock = self.socket.write().expect("Locking graphite socket");
+        match sock.write_all(buf.as_bytes()) {
+            Ok(()) => {
+                buf.clear();
+                SENT_BYTES.count(buf.len());
+                trace!("Sent {} bytes to graphite", buf.len());
+                Ok(())
+            }
+            Err(e) => {
+                SEND_ERR.mark();
+                debug!("Failed to send buffer to graphite: {}", e);
+                Err(e.into())
+            }
         }
     }
 
-    fn flush(&self) {
+    fn flush(&self) -> error::Result<()> {
         let mut buf = self.buffer.write().expect("Locking graphite buffer");
-        self.flush_inner(&mut buf);
+        self.flush_inner(&mut buf)
     }
 }
 

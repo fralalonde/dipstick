@@ -9,7 +9,7 @@ use std::sync::Arc;
 /// Two chains of different types can be combined in a tuple.
 /// The chains will act as one, each receiving calls in the order the appear in the tuple.
 /// For more than two types, make tuples of tuples, "Yo Dawg" style.
-impl<M1, M2> From<(MetricOutput<M1>, MetricOutput<M2>)> for MetricScope<(M1, M2)>
+impl<M1, M2> From<(MetricOutput, MetricOutput)> for MetricScope<(M1, M2)>
 where
     M1: 'static + Clone + Send + Sync,
     M2: 'static + Clone + Send + Sync,

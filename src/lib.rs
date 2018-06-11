@@ -21,53 +21,54 @@ extern crate time;
 pub mod error;
 pub use error::{Error, Result};
 
+pub mod core;
+pub use core::{Value, Sampling, FULL_SAMPLING_RATE, Kind, ROOT_NS, Namespace, Namespaced,
+               Marker, Timer, Counter, Gauge, MetricInput, MetricOutput, NO_METRIC_OUTPUT,
+               OpenScope, ScheduleFlush};
+
 #[macro_use]
 pub mod macros;
 
-pub mod core;
-pub use core::{Value, Sampling, FULL_SAMPLING_RATE, Kind, ROOT_NS, Namespace, WithNamespace};
-
-pub mod output;
-pub use output::{MetricOutput, NO_METRIC_OUTPUT, OpenScope};
-
 pub mod dispatch;
-pub use dispatch::{MetricDispatch, Dispatch, metric_dispatch, ROOT_DISPATCH};
+pub use dispatch::{MetricDispatch, ROOT_DISPATCH};
 
 mod aggregate;
-pub use aggregate::{MetricAggregator, Aggregate, summary, all_stats, average};
+pub use aggregate::{MetricAggregator, summary, all_stats, average};
 
-mod local;
-pub use local::{StatsMap, to_buffered_log, to_buffered_stdout, to_log, to_stdout, to_void};
+mod text;
+pub use text::{to_buffered_stdout, to_stdout, TextOutput, BufferedTextOutput, BufferedTextInput};
+pub use text::{to_buffered_log, to_log, LogOutput, BufferedLogOutput, BufferedLogInput};
+pub use text::{to_void, Void};
 
-mod input;
-pub use input::{Marker, Timer, Counter, Gauge, MetricInput, MetricScope, Flush, ScheduleFlush, DefineMetric, metric_scope};
-
-mod sample;
-pub use sample::WithSamplingRate;
+//mod sample;
+//pub use sample::WithSamplingRate;
 
 mod scores;
 pub use scores::ScoreType;
-
-mod statsd;
-pub use statsd::{Statsd, to_statsd};
+//
+//mod statsd;
+//pub use statsd::{Statsd, to_statsd};
 
 mod graphite;
-pub use graphite::{Graphite, to_graphite, to_buffered_graphite};
+pub use graphite::{Graphite, to_graphite};
 
 //mod prometheus;
 //pub use prometheus::{Prometheus, to_prometheus, to_buffered_prometheus};
 
+mod map;
+pub use map::StatsMap;
+
 mod socket;
 pub use socket::RetrySocket;
 
-mod cache;
-pub use cache::{add_cache, WithCache};
+//mod cache;
+//pub use cache::{add_cache, WithCache};
 
-mod multi;
-pub use multi::*;
-
-mod async_queue;
-pub use async_queue::WithAsyncQueue;
+//mod multi;
+//pub use multi::*;
+//
+//mod async_queue;
+//pub use async_queue::WithAsyncQueue;
 
 mod scheduler;
 pub use scheduler::{set_schedule, CancelHandle};

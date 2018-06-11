@@ -2,7 +2,6 @@ use std::net::TcpStream;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::io;
 use std::time::{Duration, Instant};
-use std::fmt::{Debug, Formatter};
 use std::fmt;
 use std::io::Write;
 
@@ -17,8 +16,8 @@ pub struct RetrySocket {
     socket: Option<TcpStream>,
 }
 
-impl Debug for RetrySocket {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+impl fmt::Debug for RetrySocket {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.next_try.fmt(f)?;
         self.socket.fmt(f)
     }
