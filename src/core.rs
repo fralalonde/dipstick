@@ -2,9 +2,13 @@
 //! This is mostly centered around the backend.
 //! Application-facing types are in the `app` module.
 
-use self::Command::*;
-
+use clock::TimeHandle;
+use scheduler::{set_schedule, CancelHandle};
+use std::time::Duration;
 use std::sync::Arc;
+use std::ops::Deref;
+use text;
+use error;
 
 // TODO define an 'AsValue' trait + impl for supported number types, then drop 'num' crate
 pub use num::ToPrimitive;
@@ -49,25 +53,6 @@ lazy_static! {
     /// Root namespace contains no string parts.
     pub static ref ROOT_NS: Namespace = Namespace { inner: vec![] };
 }
-
-//impl<'a> Index<&'a str> for Namespace {
-//    type Output = Self;
-//
-//    /// Returns a copy of this namespace with the "index" appended to it.
-//    /// Returned reference should be dereferenceable:
-//    ///
-//    /// ```
-//    /// let sub_ns = *ROOT_NS["sub_ns"];
-//    /// ```
-//    ///
-//    fn index(&self, index: &'a str) -> &Self::Output {
-//        let mut clone = self.inner.clone();
-//        if !index.is_empty() {
-//            clone.push(index.into());
-//        }
-//        &Namespace{ inner: clone }
-//    }
-//}
 
 impl Namespace {
 
@@ -120,45 +105,18 @@ impl Namespace {
     }
 }
 
-impl WithNamespace for Namespace {
+impl Namespaced for Namespace {
 
-    fn with_namespace(&self, namespace: &Namespace) -> Self {
+    fn with_prefix(&self, namespace: &str) -> Self {
         let mut new = self.clone();
-        new.extend(namespace);
+        new.push(namespace);
         new
     }
 }
 
-impl From<()> for Namespace {
-    fn from(_name: ()) -> Namespace {
-        ROOT_NS.clone()
-    }
-}
-
-impl<'a> From<&'a str> for Namespace {
-    fn from(name: &'a str) -> Namespace {
-        let mut ns = ROOT_NS.clone();
-        if !name.is_empty() {
-            ns.push(name)
-        }
-        ns
-    }
-}
-
-impl<'a, 'b: 'a> From<&'b [&'a str]> for Namespace {
-    fn from(names: &'b [&'a str]) -> Namespace {
-        let mut ns = ROOT_NS.clone();
-        for name in names {
-            if !name.is_empty() {
-                ns.push(*name)
-            }
-        }
-        ns
-    }
-}
-
-impl From<String> for Namespace {
-    fn from(name: String) -> Namespace {
+impl<S: Into<String>> From<S> for Namespace {
+    fn from(name: S) -> Namespace {
+        let name: String = name.into();
         if name.is_empty() {
             ROOT_NS.clone()
         } else {
@@ -168,92 +126,315 @@ impl From<String> for Namespace {
 }
 
 /// Common methods of elements that hold a mutable namespace.
-pub trait WithNamespace: Sized {
-
-    /// Return a copy of this object with the specified namespace appended to the existing one.
-    fn with_namespace(&self, namespace: &Namespace) -> Self;
+pub trait Namespaced: Sized {
 
     /// Join namespace and prepend in newly defined metrics.
-//    #[deprecated(since = "0.7.0", note = "Misleading terminology, use with_namespace() instead.")]
-    fn with_prefix(&self, name: &str) -> Self {
-        self.with_namespace(&name.into())
-    }
+    fn with_prefix(&self, name: &str) -> Self;
 
 }
-
-/// Dynamic metric definition function.
-/// Metrics can be defined from any thread, concurrently (Fn is Sync).
-/// The resulting metrics themselves can be also be safely shared across threads (<M> is Send + Sync).
-/// Concurrent usage of a metric is done using threaded scopes.
-/// Shared concurrent scopes may be provided by some backends (aggregate).
-pub type DefineMetricFn<M> = Arc<Fn(&Namespace, Kind, Sampling) -> M + Send + Sync>;
 
 /// A function trait that opens a new metric capture scope.
-pub type OpenScopeFn<M> = Arc<Fn() -> CommandFn<M> + Send + Sync>;
+pub trait MetricOutput: OpenScope {
+    /// Type of input scope provided by this output.
+    type Input: MetricInput + 'static;
 
-/// A function trait that writes to or flushes a certain scope.
-pub type WriteFn = Arc<Fn(Value) + Send + Sync + 'static>;
-
-/// A function trait that writes to or flushes a certain scope.
-//#[derive(Clone)]
-pub struct CommandFn<M> {
-    inner: Arc<Fn(Command<M>) + Send + Sync + 'static>
+    /// Get an input scope for this metric output.
+    fn open(&self) -> Self::Input;
 }
 
-impl<M> Clone for CommandFn<M> {
-    fn clone(&self) -> CommandFn<M> {
-        CommandFn {
-            inner: self.inner.clone()
-        }
+/// Wrap a MetricConfig in a non-generic trait.
+pub trait OpenScope {
+    /// Open a new metrics scope
+    fn open_scope(&self) -> Arc<MetricInput + Send + Sync>;
+}
+
+/// Blanket impl that provides the trait object flavor
+impl<T: MetricOutput + Send + Sync + 'static> OpenScope for T {
+    fn open_scope(&self) -> Arc<MetricInput + Send + Sync> {
+        Arc::new(self.open())
     }
 }
 
-/// An method dispatching command enum to manipulate metric scopes.
-/// Replaces a potential `Writer` trait that would have methods `write` and `flush`.
-/// Using a command pattern allows buffering, async queuing and inline definition of writers.
-pub enum Command<'a, M: 'a> {
-    /// Write the value for the metric.
-    /// Takes a reference to minimize overhead in single-threaded scenarios.
-    Write(&'a M, Value),
+lazy_static! {
+    /// The reference instance identifying an uninitialized metric config.
+    pub static ref NO_METRIC_OUTPUT: Arc<OpenScope + Send + Sync> = Arc::new(text::to_void());
 
-    /// Flush the scope buffer, if applicable.
-    Flush,
+    /// The reference instance identifying an uninitialized metric scope.
+    pub static ref NO_METRIC_SCOPE: Arc<MetricInput + Send + Sync> = NO_METRIC_OUTPUT.open_scope();
 }
 
-/// Create a new metric scope based on the provided scope function.
-pub fn command_fn<M, F>(scope_fn: F) -> CommandFn<M>
-where
-    F: Fn(Command<M>) + Send + Sync + 'static,
-{
-    CommandFn {
-        inner: Arc::new(scope_fn)
+/// Define metrics, write values and flush them.
+pub trait MetricInput: Send + Sync + Flush {
+    /// Define a metric of the specified type.
+    fn define_metric(&self, namespace: &Namespace, kind: Kind) -> WriteFn;
+
+    /// Define a counter.
+    fn counter(&self, name: &str) -> Counter {
+        self.define_metric(&name.into(), Kind::Counter).into()
+    }
+
+    /// Define a marker.
+    fn marker(&self, name: &str) -> Marker {
+        self.define_metric(&name.into(), Kind::Marker).into()
+    }
+
+    /// Define a timer.
+    fn timer(&self, name: &str) -> Timer {
+        self.define_metric(&name.into(), Kind::Timer).into()
+    }
+
+    /// Define a gauge.
+    fn gauge(&self, name: &str) -> Gauge {
+        self.define_metric(&name.into(), Kind::Gauge).into()
     }
 }
 
-impl<M> CommandFn<M> {
-    /// Write a value to this scope.
-    #[inline]
-    pub fn write(&self, metric: &M, value: Value) {
-        (self.inner)(Write(metric, value))
-    }
-
-    /// Flush this scope.
-    /// Has no effect if scope is unbuffered.
-    #[inline]
-    pub fn flush(&self) {
-        (self.inner)(Flush)
+/// Turn on or off buffering, if supported.
+pub trait WithBuffer: Flush + Clone {
+    /// Buffering not supported by default.
+    fn with_buffered(&self, _buffered: bool) -> Self {
+        self.clone()
     }
 }
+
+/// Enable programmatic buffering of metrics output
+pub trait Flush {
+    /// Flush does nothing by default.
+    fn flush(&self) -> error::Result<()> {
+        Ok(())
+    }
+}
+
+/// Enable background periodical publication of metrics
+pub trait ScheduleFlush {
+    /// Start a thread dedicated to flushing this scope at regular intervals.
+    fn flush_every(&self, period: Duration) -> CancelHandle;
+}
+
+impl<T: Flush + Send + Sync + Clone + 'static> ScheduleFlush for T {
+    /// Start a thread dedicated to flushing this scope at regular intervals.
+    fn flush_every(&self, period: Duration) -> CancelHandle {
+        let scope = self.clone();
+        set_schedule(period, move || {
+            if let Err(err) = scope.flush() {
+                error!("Could not flush metrics: {}", err);
+            }
+        })
+    }
+}
+
+/// A function that writes to a certain metric input.
+#[derive(Clone)]
+pub struct WriteFn {
+    inner: Arc<Fn(Value) + Send + Sync>
+}
+
+impl WriteFn {
+    /// Utility constructor
+    pub fn new<F: Fn(Value) + Send + Sync + 'static>(wfn: F) -> WriteFn    {
+        WriteFn { inner: Arc::new(wfn) }
+    }
+}
+
+impl Deref for WriteFn {
+    type Target = (Fn(Value) + Send + Sync);
+
+    fn deref(&self) -> &Self::Target {
+        self.inner.as_ref()
+    }
+}
+
+/// A monotonic counter metric.
+/// Since value is only ever increased by one, no value parameter is provided,
+/// preventing programming errors.
+#[derive(Derivative)]
+#[derivative(Debug)]
+pub struct Marker {
+    #[derivative(Debug = "ignore")]
+    write: WriteFn,
+}
+
+impl Marker {
+    /// Record a single event occurence.
+    pub fn mark(&self) {
+        (self.write)(1)
+    }
+}
+
+/// A counter that sends values to the metrics backend
+#[derive(Derivative)]
+#[derivative(Debug)]
+pub struct Counter {
+    #[derivative(Debug = "ignore")]
+    write: WriteFn,
+}
+
+impl Counter {
+    /// Record a value count.
+    pub fn count<V: ToPrimitive>(&self, count: V) {
+        (self.write)(count.to_u64().unwrap())
+    }
+}
+
+/// A gauge that sends values to the metrics backend
+#[derive(Derivative)]
+#[derivative(Debug)]
+pub struct Gauge {
+    #[derivative(Debug = "ignore")]
+    write: WriteFn,
+}
+
+impl Gauge {
+    /// Record a value point for this gauge.
+    pub fn value<V: ToPrimitive>(&self, value: V) {
+        (self.write)(value.to_u64().unwrap())
+    }
+}
+
+/// A timer that sends values to the metrics backend
+/// Timers can record time intervals in multiple ways :
+/// - with the time! macrohich wraps an expression or block with start() and stop() calls.
+/// - with the time(Fn) methodhich wraps a closure with start() and stop() calls.
+/// - with start() and stop() methodsrapping around the operation to time
+/// - with the interval_us() method, providing an externally determined microsecond interval
+#[derive(Derivative)]
+#[derivative(Debug)]
+pub struct Timer {
+    #[derivative(Debug = "ignore")]
+    write: WriteFn,
+}
+
+impl Timer {
+    /// Record a microsecond interval for this timer
+    /// Can be used in place of start()/stop() if an external time interval source is used
+    pub fn interval_us<V: ToPrimitive>(&self, interval_us: V) -> V {
+        (self.write)(interval_us.to_u64().unwrap());
+        interval_us
+    }
+
+    /// Obtain a opaque handle to the current time.
+    /// The handle is passed back to the stop() method to record a time interval.
+    /// This is actually a convenience method to the TimeHandle::now()
+    /// Beware, handles obtained here are not bound to this specific timer instance
+    /// _for now_ but might be in the future for safety.
+    /// If you require safe multi-timer handles, get them through TimeType::now()
+    pub fn start(&self) -> TimeHandle {
+        TimeHandle::now()
+    }
+
+    /// Record the time elapsed since the start_time handle was obtained.
+    /// This call can be performed multiple times using the same handle,
+    /// reporting distinct time intervals each time.
+    /// Returns the microsecond interval value that was recorded.
+    pub fn stop(&self, start_time: TimeHandle) -> u64 {
+        let elapsed_us = start_time.elapsed_us();
+        self.interval_us(elapsed_us)
+    }
+
+    /// Record the time taken to execute the provided closure
+    pub fn time<F, R>(&self, operations: F) -> R
+        where
+            F: FnOnce() -> R,
+    {
+        let start_time = self.start();
+        let value: R = operations();
+        self.stop(start_time);
+        value
+    }
+}
+
+impl From<WriteFn> for Gauge {
+    fn from(wfn: WriteFn) -> Gauge {
+        Gauge { write: wfn }
+    }
+}
+
+impl From<WriteFn> for Timer {
+    fn from(wfn: WriteFn) -> Timer {
+        Timer { write: wfn }
+    }
+}
+
+impl From<WriteFn> for Counter {
+    fn from(wfn: WriteFn) -> Counter {
+        Counter { write: wfn }
+    }
+}
+
+impl From<WriteFn> for Marker {
+    fn from(wfn: WriteFn) -> Marker {
+        Marker { write: wfn }
+    }
+}
+
+///// A function trait that writes to or flushes a certain scope.
+////#[derive(Clone)]
+//pub struct CommandFn<M> {
+//    inner: Arc<Fn(Command<M>) + Send + Sync + 'static>
+//}
+//
+//impl<M> Clone for CommandFn<M> {
+//    fn clone(&self) -> CommandFn<M> {
+//        CommandFn {
+//            inner: self.inner.clone()
+//        }
+//    }
+//}
+
+///// An method dispatching command enum to manipulate metric scopes.
+///// Replaces a potential `Writer` trait that would have methods `write` and `flush`.
+///// Using a command pattern allows buffering, async queuing and inline definition of writers.
+//pub enum Command<'a, M: 'a> {
+//    /// Write the value for the metric.
+//    /// Takes a reference to minimize overhead in single-threaded scenarios.
+//    Write(&'a M, Value),
+//
+//    /// Flush the scope buffer, if applicable.
+//    Flush,
+//}
+//
+///// Create a new metric scope based on the provided scope function.
+//pub fn command_fn<M, F>(scope_fn: F) -> CommandFn<M>
+//where
+//    F: Fn(Command<M>) + Send + Sync + 'static,
+//{
+//    CommandFn {
+//        inner: Arc::new(scope_fn)
+//    }
+//}
+//
+//impl<M> CommandFn<M> {
+//    /// Write a value to this scope.
+//    #[inline]
+//    pub fn write(&self, metric: &M, value: Value) {
+//        (self.inner)(Write(metric, value))
+//    }
+//
+//    /// Flush this scope.
+//    /// Has no effect if scope is unbuffered.
+//    #[inline]
+//    pub fn flush(&self) {
+//        (self.inner)(Flush)
+//    }
+//}
 
 #[cfg(feature = "bench")]
 mod bench {
 
     use clock::TimeHandle;
     use test;
+    use ::MetricAggregator;
 
     #[bench]
     fn get_instant(b: &mut test::Bencher) {
         b.iter(|| test::black_box(TimeHandle::now()));
     }
 
+    #[bench]
+    fn time_bench_direct_dispatch_event(b: &mut test::Bencher) {
+        let metrics = MetricAggregator::new();
+        let marker = metrics.marker("aaa");
+        b.iter(|| test::black_box(marker.mark()));
+    }
 }
+

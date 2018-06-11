@@ -92,7 +92,7 @@ impl<M: Send + Sync + Clone + 'static> MetricOutput<M> {
     }
 }
 
-impl<M> WithNamespace for MetricOutput<M> {
+impl<M> Namespaced for MetricOutput<M> {
 
     /// Return cloned output with appended namespace.
     fn with_namespace(&self, namespace: &Namespace) -> Self {

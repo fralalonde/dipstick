@@ -23,20 +23,20 @@ macro_rules! metrics {
     // TYPED
     // typed, public, no metrics
     ($(#[$attr:meta])* <$METRIC_TYPE:ty> pub $METRIC_ID:ident = $e:expr $(;)*) => {
-        lazy_static! { $(#[$attr])* pub static ref $METRIC_ID: MetricScope<$METRIC_TYPE> = $e.into(); }
+        lazy_static! { $(#[$attr])* pub static ref $METRIC_ID: $METRIC_TYPE = $e.into(); }
     };
     // typed, public, some metrics
     ($(#[$attr:meta])* <$METRIC_TYPE:ty> pub $METRIC_ID:ident = $e:expr => { $($REMAINING:tt)+ }) => {
-        lazy_static! { $(#[$attr])* pub static ref $METRIC_ID: MetricScope<$METRIC_TYPE> = $e.into(); }
+        lazy_static! { $(#[$attr])* pub static ref $METRIC_ID: $METRIC_TYPE = $e.into(); }
         __metrics_block!($METRIC_ID; $($REMAINING)*);
     };
     // typed, module, no metrics
     ($(#[$attr:meta])* <$METRIC_TYPE:ty> $METRIC_ID:ident = $e:expr $(;)*) => {
-        lazy_static! { $(#[$attr])* static ref $METRIC_ID: MetricScope<$METRIC_TYPE> = $e.into(); }
+        lazy_static! { $(#[$attr])* static ref $METRIC_ID: $METRIC_TYPE = $e.into(); }
     };
     // typed, module, some metrics
     ($(#[$attr:meta])* <$METRIC_TYPE:ty> $METRIC_ID:ident = $e:expr => { $($REMAINING:tt)+ }) => {
-        lazy_static! { $(#[$attr])* static ref $METRIC_ID: MetricScope<$METRIC_TYPE> = $e.into(); }
+        lazy_static! { $(#[$attr])* static ref $METRIC_ID: $METRIC_TYPE = $e.into(); }
         __metrics_block!($METRIC_ID; $($REMAINING)*);
     };
     // typed, reuse predeclared
@@ -45,12 +45,12 @@ macro_rules! metrics {
     };
     // typed, unidentified, some metrics
     (<$METRIC_TYPE:ty> $e:expr => { $($REMAINING:tt)+ }) => {
-        lazy_static! { static ref UNIDENT_METRIC: MetricScope<$METRIC_TYPE> = $e.into(); }
+        lazy_static! { static ref UNIDENT_METRIC: $METRIC_TYPE = $e.into(); }
         __metrics_block!(UNIDENT_METRIC; $($REMAINING)*);
     };
     // typed, root, some metrics
     (<$METRIC_TYPE:ty> { $($REMAINING:tt)+ }) => {
-        lazy_static! { static ref ROOT_METRICS: MetricScope<$METRIC_TYPE> = ().into(); }
+        lazy_static! { static ref ROOT_METRICS: $METRIC_TYPE = ().into(); }
         __metrics_block!(ROOT_METRICS; $($REMAINING)*);
     };
 
@@ -79,53 +79,53 @@ macro_rules! metrics {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __metrics_block {
-    ($SCOPE:ident;
+    ($INPUT:ident;
     $(#[$attr:meta])* pub Counter $METRIC_ID:ident : $METRIC_NAME:expr; $($REMAINING:tt)*) => {
         lazy_static! { $(#[$attr])* pub static ref $METRIC_ID:
-            Counter = $SCOPE.counter($METRIC_NAME); }
-        __metrics_block!($SCOPE; $($REMAINING)*);
+            Counter = $INPUT.counter($METRIC_NAME); }
+        __metrics_block!($INPUT; $($REMAINING)*);
     };
-    ($SCOPE:ident;
+    ($INPUT:ident;
     $(#[$attr:meta])* Counter $METRIC_ID:ident : $METRIC_NAME:expr; $($REMAINING:tt)*) => {
         lazy_static! { $(#[$attr])* static ref $METRIC_ID:
-            Counter = $SCOPE.counter($METRIC_NAME); }
-        __metrics_block!($SCOPE; $($REMAINING)*);
+            Counter = $INPUT.counter($METRIC_NAME); }
+        __metrics_block!($INPUT; $($REMAINING)*);
     };
-    ($SCOPE:ident;
+    ($INPUT:ident;
     $(#[$attr:meta])* pub Marker $METRIC_ID:ident : $METRIC_NAME:expr; $($REMAINING:tt)*) => {
         lazy_static! { $(#[$attr])* pub static ref $METRIC_ID:
-            Marker = $SCOPE.marker($METRIC_NAME); }
-        __metrics_block!($SCOPE; $($REMAINING)*);
+            Marker = $INPUT.marker($METRIC_NAME); }
+        __metrics_block!($INPUT; $($REMAINING)*);
     };
-    ($SCOPE:ident;
+    ($INPUT:ident;
     $(#[$attr:meta])* Marker $METRIC_ID:ident : $METRIC_NAME:expr; $($REMAINING:tt)*) => {
         lazy_static! { $(#[$attr])* static ref $METRIC_ID:
-            Marker = $SCOPE.marker($METRIC_NAME); }
-        __metrics_block!($SCOPE; $($REMAINING)*);
+            Marker = $INPUT.marker($METRIC_NAME); }
+        __metrics_block!($INPUT; $($REMAINING)*);
     };
-    ($SCOPE:ident;
+    ($INPUT:ident;
     $(#[$attr:meta])* pub Gauge $METRIC_ID:ident : $METRIC_NAME:expr; $($REMAINING:tt)*) => {
         lazy_static! { $(#[$attr])* pub static ref $METRIC_ID:
-            Gauge = $SCOPE.gauge($METRIC_NAME); }
-        __metrics_block!($SCOPE; $($REMAINING)*);
+            Gauge = $INPUT.gauge($METRIC_NAME); }
+        __metrics_block!($INPUT; $($REMAINING)*);
     };
-    ($SCOPE:ident;
+    ($INPUT:ident;
     $(#[$attr:meta])* Gauge $METRIC_ID:ident : $METRIC_NAME:expr; $($REMAINING:tt)*) => {
         lazy_static! { $(#[$attr])* static ref $METRIC_ID:
-            Gauge = $SCOPE.gauge($METRIC_NAME); }
-        __metrics_block!($SCOPE; $($REMAINING)*);
+            Gauge = $INPUT.gauge($METRIC_NAME); }
+        __metrics_block!($INPUT; $($REMAINING)*);
     };
-    ($SCOPE:ident;
+    ($INPUT:ident;
     $(#[$attr:meta])* pub Timer $METRIC_ID:ident : $METRIC_NAME:expr; $($REMAINING:tt)*) => {
         lazy_static! { $(#[$attr])* pub static ref $METRIC_ID:
-            Timer = $SCOPE.timer($METRIC_NAME); }
-        __metrics_block!($SCOPE; $($REMAINING)*);
+            Timer = $INPUT.timer($METRIC_NAME); }
+        __metrics_block!($INPUT; $($REMAINING)*);
     };
-    ($SCOPE:ident;
+    ($INPUT:ident;
     $(#[$attr:meta])* Timer $METRIC_ID:ident : $METRIC_NAME:expr; $($REMAINING:tt)*) => {
         lazy_static! { $(#[$attr])* static ref $METRIC_ID:
-            Timer = $SCOPE.timer($METRIC_NAME); }
-        __metrics_block!($SCOPE; $($REMAINING)*);
+            Timer = $INPUT.timer($METRIC_NAME); }
+        __metrics_block!($INPUT; $($REMAINING)*);
     };
     ($METRIC_ID:ident;) => ()
 }
@@ -133,9 +133,11 @@ macro_rules! __metrics_block {
 
 #[cfg(test)]
 mod test {
+    use core::*;
+    use aggregate::MetricAggregator;
     use self_metrics::*;
 
-    metrics!(<Aggregate> DIPSTICK_METRICS.with_prefix("test_prefix") => {
+    metrics!(<MetricAggregator> DIPSTICK_METRICS.with_prefix("test_prefix") => {
         Marker M1: "failed";
         Marker M2: "success";
         Counter C1: "failed";

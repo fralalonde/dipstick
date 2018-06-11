@@ -1,10 +1,9 @@
 //! Maintain aggregated metrics for deferred reporting,
 //!
-use core::{command_fn, Kind, Sampling, Command, Value, Namespace, WithNamespace};
+use core::{Kind, Value, Namespace, Namespaced, NO_METRIC_OUTPUT, MetricInput, Flush, OpenScope, WriteFn};
 use clock::TimeHandle;
 use core::Kind::*;
-use output::{OpenScope, NO_METRIC_OUTPUT, MetricOutput};
-use input::{MetricScope, MetricInput, Flush, ScheduleFlush, DefineMetric};
+use error;
 
 use scores::{ScoreType, Scoreboard};
 use scores::ScoreType::*;
@@ -19,37 +18,14 @@ fn initial_stats() -> &'static StatsFn {
     &summary
 }
 
-fn initial_output() -> Arc<OpenScope + Sync + Send> {
+fn initial_output() -> Arc<OpenScope + Send + Sync> {
     NO_METRIC_OUTPUT.clone()
 }
 
 lazy_static! {
     static ref DEFAULT_AGGREGATE_STATS: RwLock<Arc<StatsFn>> = RwLock::new(Arc::new(initial_stats()));
 
-    static ref DEFAULT_AGGREGATE_OUTPUT: RwLock<Arc<OpenScope + Sync + Send>> = RwLock::new(initial_output());
-}
-
-impl From<MetricAggregator> for MetricScope<Aggregate> {
-    fn from(agg: MetricAggregator) -> MetricScope<Aggregate> {
-        agg.into_scope()
-    }
-}
-
-impl From<&'static str> for MetricScope<Aggregate> {
-    fn from(prefix: &'static str) -> MetricScope<Aggregate> {
-        let scope: MetricScope<Aggregate> = MetricAggregator::new().into();
-        if !prefix.is_empty() {
-            scope.with_prefix(prefix)
-        } else {
-            scope
-        }
-    }
-}
-
-impl From<()> for MetricScope<Aggregate> {
-    fn from(_: ()) -> MetricScope<Aggregate> {
-        MetricAggregator::new().into_scope()
-    }
+    static ref DEFAULT_AGGREGATE_OUTPUT: RwLock<Arc<OpenScope + Send + Sync>> = RwLock::new(initial_output());
 }
 
 /// Central aggregation structure.
@@ -60,6 +36,8 @@ pub struct MetricAggregator {
     inner: Arc<RwLock<InnerAggregator>>,
 }
 
+pub type Aggregate = MetricAggregator;
+
 #[derive(Derivative)]
 #[derivative(Debug)]
 struct InnerAggregator {
@@ -68,7 +46,8 @@ struct InnerAggregator {
     #[derivative(Debug = "ignore")]
     stats: Option<Arc<Fn(Kind, Namespace, ScoreType)
         -> Option<(Kind, Namespace, Value)> + Send + Sync + 'static>>,
-    output: Option<Arc<OpenScope + Sync + Send>>,
+    #[derivative(Debug = "ignore")]
+    output: Option<Arc<OpenScope + Send + Sync + 'static>>,
     publish_metadata: bool,
 }
 
@@ -80,7 +59,7 @@ impl InnerAggregator {
     /// Take a snapshot of aggregated values and reset them.
     /// Compute stats on captured values using assigned or default stats function.
     /// Write stats to assigned or default output.
-    pub fn flush_to(&mut self, publish_scope: &DefineMetric, stats_fn: &StatsFn) {
+    pub fn flush_to(&mut self, publish_scope: &MetricInput, stats_fn: &StatsFn) {
 
         let now = TimeHandle::now();
         let duration_seconds = self.period_start.elapsed_us() as f64 / 1_000_000.0;
@@ -107,13 +86,20 @@ impl InnerAggregator {
                 for score in metric.2 {
                     let filtered = (stats_fn)(metric.1, metric.0.clone(), score);
                     if let Some((kind, name, value)) = filtered {
-                        publish_scope.define_metric_object(&name, kind, 1.0)(value)
+                        let metric: WriteFn = publish_scope.define_metric(&name, kind);
+                        (metric)(value)
                     }
                 }
             }
         }
     }
 
+}
+
+impl<S: AsRef<str>> From<S> for MetricAggregator {
+    fn from(name: S) -> MetricAggregator {
+        MetricAggregator::new().with_prefix(name.as_ref())
+    }
 }
 
 impl MetricAggregator {
@@ -145,11 +131,10 @@ impl MetricAggregator {
     }
 
     /// Install a new receiver for all aggregateed metrics, replacing any previous receiver.
-    pub fn set_default_output<IS, T>(new_config: IS)
-        where IS: Into<MetricOutput<T>>,
-              T: Send + Sync + Clone + 'static
+    pub fn set_default_output<IS>(new_config: IS)
+        where IS: Into<Arc<OpenScope + Send + Sync>>,
     {
-        *DEFAULT_AGGREGATE_OUTPUT.write().unwrap() = Arc::new(new_config.into());
+        *DEFAULT_AGGREGATE_OUTPUT.write().unwrap() = new_config.into();
     }
 
     /// Install a new receiver for all aggregateed metrics, replacing any previous receiver.
@@ -171,11 +156,10 @@ impl MetricAggregator {
     }
 
     /// Install a new receiver for all aggregated metrics, replacing any previous receiver.
-    pub fn set_output<IS, T>(&self, new_config: IS)
-        where IS: Into<MetricOutput<T>>,
-              T: Send + Sync + Clone + 'static
+    pub fn set_output<IS>(&self, new_config: IS)
+        where IS: Into<Arc<OpenScope + Send + Sync>>,
     {
-        self.inner.write().expect("Aggregator").output = Some(Arc::new(new_config.into()))
+        self.inner.write().expect("Aggregator").output = Some(new_config.into())
     }
 
     /// Install a new receiver for all aggregated metrics, replacing any previous receiver.
@@ -183,24 +167,8 @@ impl MetricAggregator {
         self.inner.write().expect("Aggregator").output = None
     }
 
-    fn into_scope(&self) -> MetricScope<Aggregate> {
-        let agg_0 = self.clone();
-        let agg_1 = self.clone();
-        MetricScope::new(
-            self.namespace.clone(),
-            Arc::new(move |ns, kind, rate| agg_0.define_metric(ns, kind, rate)),
-            command_fn(move |cmd| match cmd {
-                Command::Write(metric, value) => {
-                    let metric: &Aggregate = metric;
-                    metric.update(value)
-                }
-                Command::Flush => agg_1.flush(),
-            })
-        )
-    }
-
     /// Flush the aggregator scores using the specified scope and stats.
-    pub fn flush_to(&self, publish_scope: &DefineMetric, stats_fn: &StatsFn) {
+    pub fn flush_to(&self, publish_scope: &MetricInput, stats_fn: &StatsFn) {
         let mut inner = self.inner.write().expect("Aggregator");
         inner.flush_to(publish_scope, stats_fn);
     }
@@ -223,52 +191,41 @@ impl MetricAggregator {
 
 }
 
-impl MetricInput<Aggregate> for MetricAggregator {
+impl MetricInput for MetricAggregator {
     /// Lookup or create a scoreboard for the requested metric.
-    fn define_metric(&self, name: &Namespace, kind: Kind, _rate: Sampling) -> Aggregate {
+    fn define_metric(&self, name: &Namespace, kind: Kind) -> WriteFn {
         let mut zname = self.namespace.clone();
         zname.extend(name);
-        self.inner
+        let scoreb = self.inner
             .write()
             .expect("Aggregator")
             .metrics
             .entry(zname)
             .or_insert_with(|| Arc::new(Scoreboard::new(kind)))
-            .clone()
+            .clone();
+        WriteFn::new(move |value| scoreb.update(value))
     }
 
-    #[inline]
-    fn write(&self, metric: &Aggregate, value: Value) {
-        metric.update(value)
-    }
 }
 
-impl WithNamespace for MetricAggregator {
+impl Namespaced for MetricAggregator {
 
-    fn with_namespace(&self, namespace: &Namespace) -> Self {
-        if namespace.is_empty() {
+    fn with_prefix(&self, prefix: &str) -> Self {
+        if prefix.is_empty() {
             return self.clone()
         }
         MetricAggregator {
-            namespace: self.namespace.with_namespace(namespace),
+            namespace: self.namespace.with_prefix(prefix),
             inner: self.inner.clone(),
         }
     }
 
 }
 
-//impl<'a> Index<&'a str> for MetricAggregator {
-//    type Output = Self;
-//
-//    fn index(&self, index: &'a str) -> &Self::Output {
-//        &self.push(index)
-//    }
-//}
-
 impl Flush for MetricAggregator {
     /// Collect and reset aggregated data.
     /// Publish statistics
-    fn flush(&self) {
+    fn flush(&self) -> error::Result<()> {
         let mut inner = self.inner.write().expect("Aggregator");
 
         let stats_fn = match &inner.stats {
@@ -277,8 +234,8 @@ impl Flush for MetricAggregator {
         };
 
         let pub_scope = match &inner.output {
-            &Some(ref out) => out.open_scope_object(),
-            &None => DEFAULT_AGGREGATE_OUTPUT.read().unwrap().open_scope_object(),
+            &Some(ref out) => out.open_scope(),
+            &None => DEFAULT_AGGREGATE_OUTPUT.read().unwrap().open_scope(),
         };
 
         inner.flush_to(pub_scope.as_ref(), stats_fn.as_ref());
@@ -288,17 +245,6 @@ impl Flush for MetricAggregator {
         pub_scope.flush()
     }
 }
-
-impl ScheduleFlush for MetricAggregator {}
-
-impl From<MetricAggregator> for Arc<DefineMetric + Send + Sync + 'static> {
-    fn from(metrics: MetricAggregator) -> Arc<DefineMetric + Send + Sync + 'static> {
-        Arc::new(metrics.into_scope())
-    }
-}
-
-/// The type of metric created by the Aggregator.
-pub type Aggregate = Arc<Scoreboard>;
 
 /// A predefined export strategy reporting all aggregated stats for all metric types.
 /// Resulting stats are named by appending a short suffix to each metric's name.
@@ -396,14 +342,13 @@ mod bench {
 
 #[cfg(test)]
 mod test {
-    use Value;
+    use core::{Value, MetricInput, Namespaced};
+    use aggregate::{MetricAggregator, all_stats, summary, average, StatsFn};
+    use clock::{mock_clock_advance, mock_clock_reset};
+    use map::StatsMap;
+
     use std::time::Duration;
     use std::collections::BTreeMap;
-    use aggregate::{MetricAggregator, all_stats, summary, average, StatsFn};
-    use input::MetricInput;
-    use clock::{mock_clock_advance, mock_clock_reset};
-    use local::StatsMap;
-    use core::WithNamespace;
 
     fn make_stats(stats_fn: &StatsFn) -> BTreeMap<String, Value> {
         mock_clock_reset();

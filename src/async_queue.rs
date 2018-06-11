@@ -11,9 +11,9 @@ use std::sync::mpsc;
 use std::thread;
 
 metrics!{
-    <Aggregate> DIPSTICK_METRICS.with_prefix("async_queue") => {
+    Aggregate = DIPSTICK_METRICS.with_prefix("async_queue") => {
         /// Maybe queue was full?
-        Marker SEND_FAILED: "send_failed";
+        SEND_FAILED: Marker = "send_failed";
     }
 }
 
@@ -26,7 +26,7 @@ where
     fn with_async_queue(&self, queue_size: usize) -> Self;
 }
 
-impl<M: Send + Sync + Clone + 'static> WithAsyncQueue for MetricOutput<M> {
+impl<M: Send + Sync + Clone + 'static> WithAsyncQueue for MetricOutput {
     fn with_async_queue(&self, queue_size: usize) -> Self {
         self.wrap_scope(|next| {
             // setup channel

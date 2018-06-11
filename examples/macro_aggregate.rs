@@ -7,20 +7,40 @@ extern crate lazy_static;
 use dipstick::*;
 use std::time::Duration;
 
-// undeclared root (un-prefixed) metrics
-metrics!(<Aggregate> pub AGGREGATE = () => {
+metrics!{
+    pub ROOT: Bucket {
+        SUB_1 = "sub" {
+            SUB_1A = "1a" {
+                COUNTER: Counter = "counter";
+            }
+            SUB_1B = "sub1b";
+        }
+    }
+}
+
+metric_define!{ ROOT => {
     // create counter "some_counter"
-    pub Counter ROOT_COUNTER: "root_counter";
-    // create counter "root_counter"
-    pub Gauge ROOT_GAUGE: "root_gauge";
-    // create counter "root_timer"
-    pub Timer ROOT_TIMER: "root_timer";
+    pub ROOT_COUNTER: Counter = "root_counter";
+    // create gauge "root_gauge"
+    pub ROOT_GAUGE: Gauge = "root_gauge";
+    // create timer "root_timer"
+    pub ROOT_TIMER: Timer = "root_timer";
+}}
+
+// undeclared root (un-prefixed) metrics
+metrics!(pub AGGREGATE: Aggregate {
+    // create counter "some_counter"
+    pub ROOT_COUNTER: Counter = "root_counter";
+    // create gauge "root_gauge"
+    pub ROOT_GAUGE: Gauge = "root_gauge";
+    // create timer "root_timer"
+    pub ROOT_TIMER: Timer = "root_timer";
 });
 
 
-metrics!(<Aggregate> AGGREGATE.with_prefix("module_prefix") => {
+metrics!( AGGREGATE.with_prefix("module_prefix") => {
     // create counter "module_prefix.module_counter"
-    Counter MOD_COUNTER: "module_counter";
+    MOD_COUNTER: Counter = "module_counter";
 });
 
 fn main() {
