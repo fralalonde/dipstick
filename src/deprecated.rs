@@ -1,6 +1,4 @@
 use core::*;
-use aggregate::MetricAggregator;
-use scores::ScoreType;
 
 //use async_queue::WithAsyncQueue;
 //use sample::WithSamplingRate;

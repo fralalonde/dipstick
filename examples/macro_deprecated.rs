@@ -24,7 +24,6 @@ app_metrics!(
         // combine multiple outputs of the same type by using an array
         to_stdout().with_prefix("yeah"),
         to_stdout().with_prefix("ouch"),
-        to_stdout().with_sampling_rate(0.5),
     ]
 );
 

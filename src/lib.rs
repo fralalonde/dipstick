@@ -16,15 +16,16 @@ extern crate derivative;
 extern crate lazy_static;
 extern crate atomic_refcell;
 extern crate num;
+
+// FIXME required only for random seed for sampling
 extern crate time;
 
 pub mod error;
 pub use error::{Error, Result};
 
 pub mod core;
-pub use core::{Value, Sampling, FULL_SAMPLING_RATE, Kind, ROOT_NS, Namespace, Namespaced,
-               Marker, Timer, Counter, Gauge, MetricInput, MetricOutput, NO_METRIC_OUTPUT,
-               OpenScope, ScheduleFlush};
+pub use core::{Value, Kind, Namespace, WithPrefix, Marker, Timer, Counter, Gauge, MetricInput,
+               MetricOutput, NO_METRIC_OUTPUT, OpenScope, ScheduleFlush, WithSamplingRate, Sampling, WithBuffering, Buffering};
 
 #[macro_use]
 pub mod macros;
@@ -37,20 +38,21 @@ pub use aggregate::{MetricAggregator, summary, all_stats, average};
 
 mod text;
 pub use text::{to_buffered_stdout, to_stdout, TextOutput, BufferedTextOutput, BufferedTextInput};
-pub use text::{to_buffered_log, to_log, LogOutput, BufferedLogOutput, BufferedLogInput};
 pub use text::{to_void, Void};
 
-//mod sample;
-//pub use sample::WithSamplingRate;
+mod logging;
+pub use logging::{to_buffered_log, to_log, LogOutput, BufferedLogOutput, BufferedLogInput};
+
+mod pcg32;
 
 mod scores;
 pub use scores::ScoreType;
-//
-//mod statsd;
-//pub use statsd::{Statsd, to_statsd};
+
+mod statsd;
+pub use statsd::{StatsdOutput, StatsdInput, to_statsd};
 
 mod graphite;
-pub use graphite::{Graphite, to_graphite};
+pub use graphite::{GraphiteInput, to_graphite};
 
 //mod prometheus;
 //pub use prometheus::{Prometheus, to_prometheus, to_buffered_prometheus};
@@ -64,9 +66,9 @@ pub use socket::RetrySocket;
 //mod cache;
 //pub use cache::{add_cache, WithCache};
 
-//mod multi;
-//pub use multi::*;
-//
+mod multi;
+pub use multi::{MultiOutput, MultiInput};
+
 //mod async_queue;
 //pub use async_queue::WithAsyncQueue;
 
