@@ -99,6 +99,18 @@ pub fn to_graphite<A: ToSocketAddrs + Debug + Clone>(address: A) -> error::Resul
     Ok(GraphiteOutput {
         attributes: Attributes::default(),
         socket,
+        buffered: false
+    })
+}
+
+/// Send metrics to a graphite server at the address and port provided.
+pub fn to_buffered_graphite<A: ToSocketAddrs + Debug + Clone>(address: A) -> error::Result<GraphiteOutput> {
+    debug!("Connecting to graphite {:?}", address);
+    let socket = Arc::new(RwLock::new(RetrySocket::new(address.clone())?));
+
+    Ok(GraphiteOutput {
+        attributes: Attributes::default(),
+        socket,
         buffered: true
     })
 }
@@ -194,23 +206,24 @@ impl ScopeBuffer {
 #[cfg(feature = "bench")]
 mod bench {
 
+    use core::*;
     use super::*;
     use test;
 
     #[bench]
     pub fn unbuffered_graphite(b: &mut test::Bencher) {
         let sd = to_graphite("localhost:8125").unwrap().open_scope();
-        let timer = sd.define_metric(&"timer".into(), Kind::Timer, 1000000.0);
+        let timer = sd.define_metric(&"timer".into(), Kind::Timer);
 
-        b.iter(|| test::black_box(sd.write(&timer, 2000)));
+        b.iter(|| test::black_box(timer.write(2000)));
     }
 
     #[bench]
     pub fn buffered_graphite(b: &mut test::Bencher) {
         let sd = to_buffered_graphite("localhost:8125").unwrap().open_scope();
-        let timer = sd.define_metric(&"timer".into(), Kind::Timer, 1000000.0);
+        let timer = sd.define_metric(&"timer".into(), Kind::Timer);
 
-        b.iter(|| test::black_box(sd.write(&timer, 2000)));
+        b.iter(|| test::black_box(timer.write(2000)));
     }
 
 }

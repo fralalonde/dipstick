@@ -2,89 +2,108 @@
 //! Metrics definitions are still synchronous.
 //! If queue size is exceeded, calling code reverts to blocking.
 //!
-use core::*;
-use output::*;
-use self_metrics::*;
+use core::{MetricInput, Value, WriteFn, Namespace, Kind, Flush, Marker, WithPrefix,
+           Attributes, WithAttributes};
+use aggregate::MetricAggregator;
+use error;
+use self_metrics::DIPSTICK_METRICS;
 
 use std::sync::Arc;
 use std::sync::mpsc;
 use std::thread;
 
 metrics!{
-    Aggregate = DIPSTICK_METRICS.with_prefix("async_queue") => {
+    <MetricAggregator> DIPSTICK_METRICS.with_prefix("async_queue") => {
         /// Maybe queue was full?
-        SEND_FAILED: Marker = "send_failed";
+        Marker SEND_FAILED: "send_failed";
     }
 }
 
-/// Enqueue collected metrics for dispatch on background thread.
-pub trait WithAsyncQueue
-where
-    Self: Sized,
-{
-    /// Enqueue collected metrics for dispatch on background thread.
-    fn with_async_queue(&self, queue_size: usize) -> Self;
+/// Wrap the input with an async dispatch queue for lower app latency.
+pub fn to_async<IN: MetricInput + Send + Sync + 'static + Clone>(input: IN, queue_length: usize) -> AsyncInput {
+    AsyncInput::wrap(input, queue_length)
 }
 
-impl<M: Send + Sync + Clone + 'static> WithAsyncQueue for MetricOutput {
-    fn with_async_queue(&self, queue_size: usize) -> Self {
-        self.wrap_scope(|next| {
-            // setup channel
-            let (sender, receiver) = mpsc::sync_channel::<QueueCommand<M>>(queue_size);
+//pub fn to_async<OUT: MetricOutput + Send + Sync + 'static + Clone>(input: OUT, queue_length: usize) -> AsyncInput {
+//    AsyncInput::wrap(input, queue_length)
+//}
 
-            // start queue processor thread
-            thread::spawn(move || loop {
-                while let Ok(cmd) = receiver.recv() {
-                    match cmd {
-                        QueueCommand {
-                            cmd: Some((metric, value)),
-                            next_scope,
-                        } => next_scope.write(&metric, value),
-                        QueueCommand {
-                            cmd: None,
-                            next_scope,
-                        } => next_scope.flush(),
+//pub struct AsyncOutput {
+//    attributes: Attributes,
+//    sender: Arc<mpsc::SyncSender<AsyncCmd>>,
+//}
+
+/// This is only `pub` because `error` module needs to know about it.
+/// Async commands should be of no concerns to applications.
+pub enum AsyncCmd {
+    Write(WriteFn, Value),
+    Flush,
+}
+
+/// A metric input wrapper that sends writes & flushes over a Rust sync channel.
+/// Commands are executed by a background thread.
+#[derive(Clone)]
+pub struct AsyncInput {
+    attributes: Attributes,
+    sender: Arc<mpsc::SyncSender<AsyncCmd>>,
+    input: Arc<MetricInput + Send + Sync + 'static>
+}
+
+impl WithAttributes for AsyncInput {
+    fn get_attributes(&self) -> &Attributes { &self.attributes }
+    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
+}
+
+impl AsyncInput {
+    /// Wrap the input with an async dispatch queue for lower app latency.
+    pub fn wrap(input: impl MetricInput + Send + Sync + 'static + Clone, queue_length: usize) -> Self {
+        let flusher = input.clone();
+        let (sender, receiver) = mpsc::sync_channel::<AsyncCmd>(queue_length);
+        thread::spawn(move || {
+            let mut done = false;
+            while !done {
+                match receiver.recv() {
+                    Ok(AsyncCmd::Write(wfn, value)) => (wfn)(value),
+                    Ok(AsyncCmd::Flush) => if let Err(e) = flusher.flush() {
+                        debug!("Could not asynchronously flush metrics: {}", e);
+                    },
+                    Err(e) => {
+                        debug!("Async metrics receive loop terminated: {}", e);
+                        // cannot break from within match, use safety pin instead
+                        done = true
                     }
                 }
-            });
+            }
+        });
+        AsyncInput {
+            attributes: Attributes::default(),
+            sender: Arc::new(sender),
+            input: Arc::new(input),
+        }
+    }
+}
 
-            Arc::new(move || {
-                // open next scope, make it Arc to move across queue
-                let next_scope: CommandFn<M> = next();
-                let sender = sender.clone();
-
-                // forward any scope command through the channel
-                command_fn(move |cmd| {
-                    let send_cmd = match cmd {
-                        Command::Write(metric, value) => {
-                            let metric: &M = metric;
-                            Some((metric.clone(), value))
-                        }
-                        Command::Flush => None,
-                    };
-                    sender
-                        .send(QueueCommand {
-                            cmd: send_cmd,
-                            next_scope: next_scope.clone(),
-                        })
-                        .unwrap_or_else(|e| {
-                            SEND_FAILED.mark();
-                            trace!("Async metrics could not be sent: {}", e);
-                        })
-                })
-            })
+impl MetricInput for AsyncInput {
+    fn define_metric(&self, name: &Namespace, kind:Kind) -> WriteFn {
+        let target_metric = self.input.define_metric(&self.qualified_name(name), kind);
+        let sender = self.sender.clone();
+        WriteFn::new(move |value| {
+            if let Err(e) = sender.send(AsyncCmd::Write(target_metric.clone(), value)) {
+                SEND_FAILED.mark();
+                debug!("Failed to send async metrics: {}", e);
+            }
         })
     }
 }
 
-/// Carry the scope command over the queue, from the sender, to be executed by the receiver.
-#[derive(Derivative)]
-#[derivative(Debug)]
-pub struct QueueCommand<M> {
-    /// If Some(), the metric and value to write.
-    /// If None, flush the scope
-    cmd: Option<(M, Value)>,
-    /// The scope to write the metric to
-    #[derivative(Debug = "ignore")]
-    next_scope: CommandFn<M>,
+impl Flush for AsyncInput {
+    fn flush(&self) -> error::Result<()> {
+        if let Err(e) = self.sender.send(AsyncCmd::Flush) {
+            SEND_FAILED.mark();
+            debug!("Failed to flush async metrics: {}", e);
+            Err(e.into())
+        } else {
+            Ok(())
+        }
+    }
 }

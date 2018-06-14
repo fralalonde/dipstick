@@ -11,6 +11,11 @@ pub struct MultiOutput {
     outputs: Vec<Arc<OpenScope + Send + Sync>>,
 }
 
+/// Create a new multi-output.
+pub fn to_multi() -> MultiOutput {
+    MultiOutput::new()
+}
+
 impl MetricOutput for MultiOutput {
     type Input = MultiInput;
 

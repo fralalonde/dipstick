@@ -2,12 +2,13 @@
 
 // TODO parameterize templates
 // TODO define backing structs that can flush() on Drop
-use core::{Namespace, WithPrefix, Value, WriteFn, Kind, MetricOutput, MetricInput, Flush, WithAttributes, Attributes, OpenScope};
+use core::{Namespace, WithPrefix, Value, WriteFn, Kind, MetricOutput, MetricInput, Flush, WithAttributes, Attributes};
 use error;
 use std::sync::{RwLock, Arc};
 use std::io::{Write, BufWriter, self};
 
 /// Unbuffered metrics text output.
+// FIXME #[derive(Clone)] - manual impl - see below
 pub struct TextOutput<W: Write + Send + Sync + 'static> {
     attributes: Attributes,
     inner: Arc<RwLock<W>>,
@@ -146,9 +147,9 @@ impl<W: Write + Send + Sync + 'static> MetricInput for BufferedTextInput<W> {
 impl<W: Write + Send + Sync + 'static> Flush for BufferedTextInput<W> {
     fn flush(&self) -> error::Result<()> {
         let mut output = self.output.inner.write().expect("TextOutput");
-        let entries = self.entries.write().expect("Metrics TextBuffer");
-        for entry in entries.iter() {
-            output.write_all(entry)?
+        let mut entries = self.entries.write().expect("Metrics TextBuffer");
+        for entry in entries.drain(..) {
+            output.write_all(&entry)?
         }
         Ok(())
     }

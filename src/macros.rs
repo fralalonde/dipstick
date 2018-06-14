@@ -53,22 +53,22 @@ macro_rules! metrics {
     };
 
     ($(#[$attr:meta])* pub $METRIC_ID:ident = $e:expr $(;)*) => {
-        metrics! {$(#[$attr])* <Dispatch> pub $METRIC_ID = $e; }
+        metrics! {$(#[$attr])* <MetricDispatch> pub $METRIC_ID = $e; }
     };
     ($(#[$attr:meta])* pub $METRIC_ID:ident = $e:expr => { $($REMAINING:tt)+ }) => {
-        metrics! {$(#[$attr])* <Dispatch> pub $METRIC_ID = $e => { $($REMAINING)* } }
+        metrics! {$(#[$attr])* <MetricDispatch> pub $METRIC_ID = $e => { $($REMAINING)* } }
     };
     ($(#[$attr:meta])* $METRIC_ID:ident = $e:expr $(;)*) => {
-        metrics! {$(#[$attr])* <Dispatch> $METRIC_ID = $e; }
+        metrics! {$(#[$attr])* <MetricDispatch> $METRIC_ID = $e; }
     };
     ($(#[$attr:meta])* $METRIC_ID:ident = $e:expr => { $($REMAINING:tt)+ }) => {
-        metrics! {$(#[$attr])* <Dispatch> $METRIC_ID = $e => { $($REMAINING)* } }
+        metrics! {$(#[$attr])* <MetricDispatch> $METRIC_ID = $e => { $($REMAINING)* } }
     };
     ($(#[$attr:meta])* $METRIC_ID:ident => { $($REMAINING:tt)+ }) => {
-        metrics! {<Dispatch> $METRIC_ID => { $($REMAINING)* } }
+        metrics! {<MetricDispatch> $METRIC_ID => { $($REMAINING)* } }
     };
     ($e:expr => { $($REMAINING:tt)+ }) => {
-        metrics! {<Dispatch> $e => { $($REMAINING)* } }
+        metrics! {<MetricDispatch> $e => { $($REMAINING)* } }
     };
 
 }

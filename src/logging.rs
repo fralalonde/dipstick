@@ -2,7 +2,7 @@ use core::{Namespace, WithPrefix, Value, WriteFn, Kind, MetricOutput, MetricInpu
 use error;
 use std::sync::{RwLock, Arc};
 use text;
-use std::io::{Write, BufWriter, self};
+use std::io::Write;
 
 use log;
 

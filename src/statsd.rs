@@ -1,7 +1,7 @@
 //! Send metrics to a statsd server.
 
 use core::{MetricInput, MetricOutput, Value, WriteFn, Attributes, WithAttributes, Kind,
-           Flush, Counter, Marker, Namespace, WithSamplingRate, WithPrefix, WithBuffering, Buffering, Sampling};
+           Flush, Counter, Marker, Namespace, WithSamplingRate, WithPrefix, WithBuffering, Sampling};
 use pcg32;
 use error;
 use self_metrics::DIPSTICK_METRICS;
@@ -67,6 +67,7 @@ impl WithAttributes for StatsdOutput {
     }
 }
 
+/// Metrics input for statsd.
 #[derive(Clone)]
 pub struct StatsdInput {
     attributes: Attributes,
@@ -115,7 +116,7 @@ impl MetricInput for StatsdInput {
 impl Flush for StatsdInput {
     fn flush(&self) -> error::Result<()> {
         let mut buffer = self.buffer.write().expect("InputBuffer");
-        buffer.flush()
+        Ok(buffer.flush()?)
     }
 }
 
@@ -161,7 +162,7 @@ impl InputBuffer {
         let remaining = self.buffer.capacity() - self.buffer.len();
         if entry_len + 1 > remaining {
             // buffer is full, flush before appending
-            self.flush();
+            let _ = self.flush();
         } else {
             if !self.buffer.is_empty() {
                 // separate from previous entry
@@ -172,7 +173,7 @@ impl InputBuffer {
             self.buffer.push_str(suffix);
         }
         if self.buffering {
-            self.flush();
+            let _ = self.flush();
         }
     }
 
@@ -197,15 +198,16 @@ impl InputBuffer {
 #[cfg(feature = "bench")]
 mod bench {
 
+    use core::*;
     use super::*;
     use test;
 
     #[bench]
     pub fn timer_statsd(b: &mut test::Bencher) {
         let sd = to_statsd("localhost:8125").unwrap().open_scope();
-        let timer = sd.define_metric(&"timer".into(), Kind::Timer, 1000000.0);
+        let timer = sd.define_metric(&"timer".into(), Kind::Timer);
 
-        b.iter(|| test::black_box(sd.write(&timer, 2000)));
+        b.iter(|| test::black_box(timer.write(2000)));
     }
 
 }
