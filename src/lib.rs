@@ -24,17 +24,17 @@ pub mod error;
 pub use error::{Error, Result};
 
 pub mod core;
-pub use core::{Value, Kind, Namespace, WithPrefix, Marker, Timer, Counter, Gauge, MetricInput,
+pub use core::{Value, Kind, Namespace, WithPrefix, Marker, Timer, Counter, Gauge, MetricInput, Flush,
                MetricOutput, NO_METRIC_OUTPUT, OpenScope, ScheduleFlush, WithSamplingRate, Sampling, WithBuffering, Buffering};
 
 #[macro_use]
 pub mod macros;
 
 pub mod dispatch;
-pub use dispatch::{MetricDispatch, ROOT_DISPATCH};
+pub use dispatch::{MetricDispatch, to_dispatch, ROOT_DISPATCH};
 
 mod aggregate;
-pub use aggregate::{MetricAggregator, summary, all_stats, average};
+pub use aggregate::{MetricAggregator, to_aggregate, summary, all_stats, average};
 
 mod text;
 pub use text::{to_buffered_stdout, to_stdout, TextOutput, BufferedTextOutput, BufferedTextInput};
@@ -52,7 +52,7 @@ mod statsd;
 pub use statsd::{StatsdOutput, StatsdInput, to_statsd};
 
 mod graphite;
-pub use graphite::{GraphiteInput, to_graphite};
+pub use graphite::{GraphiteInput, to_graphite, to_buffered_graphite};
 
 //mod prometheus;
 //pub use prometheus::{Prometheus, to_prometheus, to_buffered_prometheus};
@@ -67,10 +67,10 @@ pub use socket::RetrySocket;
 //pub use cache::{add_cache, WithCache};
 
 mod multi;
-pub use multi::{MultiOutput, MultiInput};
+pub use multi::{MultiOutput, MultiInput, to_multi};
 
-//mod async_queue;
-//pub use async_queue::WithAsyncQueue;
+mod async_queue;
+pub use async_queue::{AsyncInput, to_async};
 
 mod scheduler;
 pub use scheduler::{set_schedule, CancelHandle};

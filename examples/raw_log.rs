@@ -3,7 +3,7 @@
 
 extern crate dipstick;
 
-use dipstick::{MetricInput, LogOutput};
+use dipstick::{MetricOutput, MetricInput};
 
 fn main() {
     raw_write()
@@ -17,7 +17,6 @@ pub fn raw_write() {
     let counter = metrics_log.define_metric(
         &"count_a".into(),
         dipstick::Kind::Counter,
-        dipstick::FULL_SAMPLING_RATE,
     );
-    metrics_log.write(&counter, 1);
+    counter.write(1);
 }

@@ -21,7 +21,7 @@ impl MetricInput for StatsMap {
         let write_to = self.inner.clone();
         let name: String = name.join(".");
         WriteFn::new(move |value| {
-            write_to.write().expect("StatsMap").insert(name.clone(), value).expect("Insertion");
+            let _previous = write_to.write().expect("StatsMap").insert(name.clone(), value);
         })
     }
 }

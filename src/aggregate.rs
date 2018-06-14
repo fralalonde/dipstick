@@ -28,6 +28,11 @@ lazy_static! {
     static ref DEFAULT_AGGREGATE_OUTPUT: RwLock<Arc<OpenScope + Send + Sync>> = RwLock::new(initial_output());
 }
 
+/// Create a new metric aggregator
+pub fn to_aggregate() -> MetricAggregator {
+    MetricAggregator::new()
+}
+
 /// Central aggregation structure.
 /// Maintains a list of metrics for enumeration when used as source.
 #[derive(Debug, Clone)]
@@ -35,8 +40,6 @@ pub struct MetricAggregator {
     attributes: Attributes,
     inner: Arc<RwLock<InnerAggregator>>,
 }
-
-pub type Aggregate = MetricAggregator;
 
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -290,43 +293,28 @@ pub fn summary(kind: Kind, name: Namespace, score: ScoreType) -> Option<(Kind, N
 mod bench {
 
     use test;
-    use core::Kind::{Counter, Marker};
+    use core::*;
     use aggregate::MetricAggregator;
-    use input::MetricInput;
 
     #[bench]
     fn aggregate_marker(b: &mut test::Bencher) {
         let sink = MetricAggregator::new();
-        let metric = sink.define_metric(&"event_a".into(), Marker, 1.0);
-        b.iter(|| test::black_box(sink.write(&metric, 1)));
+        let metric = sink.define_metric(&"event_a".into(), Kind::Marker);
+        b.iter(|| test::black_box(metric.write(1)));
     }
 
     #[bench]
     fn aggregate_counter(b: &mut test::Bencher) {
         let sink = MetricAggregator::new();
-        let metric = sink.define_metric(&"count_a".into(), Counter, 1.0);
-        b.iter(|| test::black_box(sink.write(&metric, 1)));
-    }
-
-    #[bench]
-    fn reset_marker(b: &mut test::Bencher) {
-        let sink = MetricAggregator::new();
-        let metric = sink.define_metric(&"marker_a".into(), Marker, 1.0);
-        b.iter(|| test::black_box(metric.reset(1.0)));
-    }
-
-    #[bench]
-    fn reset_counter(b: &mut test::Bencher) {
-        let sink = MetricAggregator::new();
-        let metric = sink.define_metric(&"count_a".into(), Counter, 1.0);
-        b.iter(|| test::black_box(metric.reset(1.0)));
+        let metric = sink.define_metric(&"count_a".into(), Kind::Counter);
+        b.iter(|| test::black_box(metric.write(1)));
     }
 
 }
 
 #[cfg(test)]
 mod test {
-    use core::{Value, MetricInput, WithPrefix};
+    use core::*;
     use aggregate::{MetricAggregator, all_stats, summary, average, StatsFn};
     use clock::{mock_clock_advance, mock_clock_reset};
     use map::StatsMap;

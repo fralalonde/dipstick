@@ -16,6 +16,11 @@ lazy_static! {
     pub static ref ROOT_DISPATCH: MetricDispatch = MetricDispatch::new();
 }
 
+/// Return the default dispatch's root.
+pub fn to_dispatch() -> MetricDispatch {
+    ROOT_DISPATCH.clone()
+}
+
 /// A dynamically dispatched metric.
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -154,9 +159,9 @@ impl MetricDispatch {
     }
 
     /// Replace target for this dispatch and it's children.
-    pub fn set_target<IS: Into<Arc<MetricInput + Send + Sync + 'static>>>(&self, target: IS) {
+    pub fn set_target<IS: MetricInput + Send + Sync + 'static>(&self, target: IS) {
         let mut inner = self.inner.write().expect("Dispatch Lock");
-        inner.set_target(self.get_namespace().clone(), target.into());
+        inner.set_target(self.get_namespace().clone(), Arc::new(target));
     }
 
     /// Replace target for this dispatch and it's children.
@@ -216,21 +221,21 @@ impl WithAttributes for MetricDispatch {
 #[cfg(feature = "bench")]
 mod bench {
 
-    use dispatch::metric_dispatch;
+    use core::*;
+    use dispatch::*;
     use test;
     use aggregate::MetricAggregator;
-    use input::MetricInput;
 
     #[bench]
     fn dispatch_marker_to_aggregate(b: &mut test::Bencher) {
-        metric_dispatch().set_target(MetricAggregator::new());
-        let metric = metric_dispatch().marker("event_a");
+        ROOT_DISPATCH.set_target(MetricAggregator::new());
+        let metric = ROOT_DISPATCH.marker("event_a");
         b.iter(|| test::black_box(metric.mark()));
     }
 
     #[bench]
     fn dispatch_marker_to_void(b: &mut test::Bencher) {
-        let metric = metric_dispatch().marker("event_a");
+        let metric = ROOT_DISPATCH.marker("event_a");
         b.iter(|| test::black_box(metric.mark()));
     }
 

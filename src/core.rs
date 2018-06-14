@@ -4,11 +4,9 @@
 
 use clock::TimeHandle;
 use scheduler::{set_schedule, CancelHandle};
-use pcg32;
 use std::time::Duration;
 use std::sync::Arc;
 use std::ops::Deref;
-use std::collections::HashMap;
 use text;
 use error;
 
@@ -54,7 +52,9 @@ impl Default for Sampling {
 /// A metrics buffering strategy.
 #[derive(Debug, Clone, Copy)]
 pub enum Buffering {
+    /// No buffering is performed (default).
     Unbuffered,
+    /// A buffer of maximum specified size is used.
     BufferSize(usize),
 }
 
@@ -95,14 +95,12 @@ pub trait WithAttributes: Clone {
     /// But the benefits of a generic solution means we can live with that for a while.
     fn with_attributes<F: Fn(&mut Attributes)>(&self, edit: F) -> Self {
         let mut cloned = self.clone();
-        {
-            let mut new_attr = cloned.mut_attributes();
-            (edit)(new_attr);
-        }
+        (edit)(cloned.mut_attributes());
         cloned
     }
 }
 
+/// Namespace operations support.
 pub trait WithPrefix {
     /// Return the namespace of the component.
     fn get_namespace(&self) -> &Namespace;
@@ -114,7 +112,6 @@ pub trait WithPrefix {
     fn qualified_name(&self, metric_name: &Namespace) -> Namespace;
 }
 
-/// Common methods of elements that hold a mutable namespace.
 impl<T: WithAttributes> WithPrefix for T {
     fn get_namespace(&self) -> &Namespace {
         &self.get_attributes().namespace
@@ -150,18 +147,20 @@ pub trait WithSamplingRate: WithAttributes {
 /// Changing this only affects inputs opened afterwards.
 /// Buffering is done on best effort, meaning flush will occur if buffer capacity is exceeded.
 pub trait WithBuffering: WithAttributes {
-    /// Buffering not supported by default.
+    /// Return a clone with the specified buffering set.
     fn with_buffering(&self, buffering: Buffering) -> Self {
         self.with_attributes(|new_attr| new_attr.buffering = buffering)
     }
 
+    /// Is this component using buffering?
     fn is_buffering(&self) -> bool {
-        match self.get_attributes().buffering {
+        match self.get_buffering() {
             Buffering::Unbuffered => true,
             _ => false
         }
     }
 
+    /// Return the buffering.
     fn get_buffering(&self) -> Buffering {
         self.get_attributes().buffering
     }
@@ -187,6 +186,7 @@ impl Namespace {
         self.inner.push(name.into())
     }
 
+    /// Concatenate with another namespace into a new one.
     pub fn with_prefix(&self, prefix: &str) -> Self {
         let mut cloned = self.clone();
         cloned.push(prefix);
@@ -335,6 +335,13 @@ impl WriteFn {
     /// Utility constructor
     pub fn new<F: Fn(Value) + Send + Sync + 'static>(wfn: F) -> WriteFn    {
         WriteFn { inner: Arc::new(wfn) }
+    }
+
+    /// Some may prefer the `metric.write(value)` form to the `(metric)(value)` form.
+    /// This shouldn't matter as metrics should be of type Counter, Marker, etc.
+    #[inline]
+    pub fn write(&self, value: Value) {
+        (self)(value)
     }
 }
 
@@ -523,9 +530,10 @@ impl From<WriteFn> for Marker {
 #[cfg(feature = "bench")]
 mod bench {
 
+    use core::*;
     use clock::TimeHandle;
     use test;
-    use ::MetricAggregator;
+    use aggregate::MetricAggregator;
 
     #[bench]
     fn get_instant(b: &mut test::Bencher) {

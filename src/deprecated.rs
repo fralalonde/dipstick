@@ -2,6 +2,10 @@ use core::*;
 
 //use async_queue::WithAsyncQueue;
 //use sample::WithSamplingRate;
+use aggregate::MetricAggregator;
+
+/// Backward compatibility alias.
+pub type Aggregate = MetricAggregator;
 
 ///// Aggregate metrics in memory.
 ///// Depending on the type of metric, count, sum, minimum and maximum of values will be tracked.
@@ -76,19 +80,9 @@ pub type AppTimer = Timer;
 #[macro_export]
 #[deprecated(since = "0.7.0", note = "Use metrics!() instead")]
 macro_rules! app_metrics {
-    ($type_param: ty, $metric_id: ident = ($($SCOPE: expr),+ $(,)*)) => {
+    ($type_param:ty, $metric_id:ident = $SCOPE:expr) => {
         lazy_static! {
-            pub static ref $metric_id: MetricScope<$type_param> = metric_scope(($($SCOPE),*));
-        }
-    };
-    ($type_param: ty, $metric_id: ident = [$($SCOPE: expr),+ $(,)*]) => {
-        lazy_static! {
-            pub static ref $metric_id: MetricScope<$type_param> = metric_scope(&[$($SCOPE),*][..],);
-        }
-    };
-    ($type_param: ty, $metric_id: ident = $SCOPE: expr) => {
-        lazy_static! {
-            pub static ref $metric_id: MetricScope<$type_param> = $SCOPE.into();
+            pub static ref $metric_id: $type_param = $SCOPE.into();
         }
     };
 }
@@ -206,8 +200,8 @@ macro_rules! mod_timer {
 #[cfg(test)]
 mod legacy_test {
     use core::*;
-    use aggregate::*;
     use self_metrics::*;
+    use deprecated::*;
 
     metrics!(<Aggregate> TEST_METRICS = DIPSTICK_METRICS.with_prefix("test_prefix"));
 
