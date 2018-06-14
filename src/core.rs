@@ -4,9 +4,11 @@
 
 use clock::TimeHandle;
 use scheduler::{set_schedule, CancelHandle};
+use pcg32;
 use std::time::Duration;
 use std::sync::Arc;
 use std::ops::Deref;
+use std::collections::HashMap;
 use text;
 use error;
 
@@ -16,17 +18,6 @@ pub use num::ToPrimitive;
 /// Base type for recorded metric values.
 // TODO should this be f64? f32?
 pub type Value = u64;
-
-
-/// Base type for sampling rate.
-/// - 1.0 records everything
-/// - 0.5 records one of two values
-/// - 0.0 records nothing
-/// The actual distribution (random, fixed-cycled, etc) depends on selected sampling method.
-pub type Sampling = f64;
-
-/// Do not sample, use all data.
-pub const FULL_SAMPLING_RATE: Sampling = 1.0;
 
 /// Used to differentiate between metric kinds in the backend.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
@@ -41,17 +32,147 @@ pub enum Kind {
     Timer,
 }
 
+/// The actual distribution (random, fixed-cycled, etc) depends on selected sampling method.
+#[derive(Debug, Clone, Copy)]
+pub enum Sampling {
+    /// Do not sample, use all data.
+    Full,
+
+    /// Floating point sampling rate
+    /// - 1.0+ records everything
+    /// - 0.5 records one of two values
+    /// - 0.0 records nothing
+    SampleRate(f64)
+}
+
+impl Default for Sampling {
+    fn default() -> Self {
+        Sampling::Full
+    }
+}
+
+/// A metrics buffering strategy.
+#[derive(Debug, Clone, Copy)]
+pub enum Buffering {
+    Unbuffered,
+    BufferSize(usize),
+}
+
+impl Default for Buffering {
+    fn default() -> Self {
+        Buffering::Unbuffered
+    }
+}
+
+/// One struct to rule them all.
+/// Possible attributes of metric outputs and inputs.
+/// Private trait used by impls of specific With* traits.
+/// Not all attributes are used by all structs!
+/// This is a design choice to centralize code at the expense of slight waste of memory.
+/// Fields have also not been made `pub` to make it easy to change this mechanism.
+/// Field access must go through `is_` and `get_` methods declared in sub-traits.
+#[derive(Debug, Clone, Default)]
+pub struct Attributes {
+    namespace: Namespace,
+    sampling_rate: Sampling,
+    buffering: Buffering,
+}
+
+/// The only trait that requires concrete impl by metric components.
+/// Default impl of actual attributes use this to clone & mutate the original component.
+/// This trait is _not_ exposed by the lib.
+pub trait WithAttributes: Clone {
+    /// Return attributes for evaluation.
+    // TODO replace with fields-in-traits if ever stabilized (https://github.com/nikomatsakis/fields-in-traits-rfc)
+    fn get_attributes(&self) -> &Attributes;
+
+    /// Return attributes of component to be mutated after cloning.
+    // TODO replace with fields-in-traits if ever stabilized (https://github.com/nikomatsakis/fields-in-traits-rfc)
+    fn mut_attributes(&mut self) -> &mut Attributes;
+
+    /// Clone this component and its attributes before returning it.
+    /// This means one of the attributes will be cloned only to be replaced immediately.
+    /// But the benefits of a generic solution means we can live with that for a while.
+    fn with_attributes<F: Fn(&mut Attributes)>(&self, edit: F) -> Self {
+        let mut cloned = self.clone();
+        {
+            let mut new_attr = cloned.mut_attributes();
+            (edit)(new_attr);
+        }
+        cloned
+    }
+}
+
+pub trait WithPrefix {
+    /// Return the namespace of the component.
+    fn get_namespace(&self) -> &Namespace;
+
+    /// Join namespace and prepend in newly defined metrics.
+    fn with_prefix(&self, name: &str) -> Self;
+
+    /// Append the specified name to the local namespace and return the concatenated result.
+    fn qualified_name(&self, metric_name: &Namespace) -> Namespace;
+}
+
+/// Common methods of elements that hold a mutable namespace.
+impl<T: WithAttributes> WithPrefix for T {
+    fn get_namespace(&self) -> &Namespace {
+        &self.get_attributes().namespace
+    }
+
+    /// Join namespace and prepend in newly defined metrics.
+    fn with_prefix(&self, name: &str) -> Self {
+        self.with_attributes(|new_attr| new_attr.namespace = new_attr.namespace.with_prefix(name))
+    }
+
+    /// Append the specified name to the local namespace and return the concatenated result.
+    fn qualified_name(&self, metric_name: &Namespace) -> Namespace {
+        let mut full_name = self.get_attributes().namespace.clone();
+        full_name.extend(metric_name);
+        full_name
+    }
+}
+
+/// Apply statistical sampling to collected metrics data.
+pub trait WithSamplingRate: WithAttributes {
+    /// Perform random sampling of values according to the specified rate.
+    fn with_sampling_rate(&self, sampling_rate: Sampling) -> Self {
+        self.with_attributes(|new_attr| new_attr.sampling_rate = sampling_rate)
+    }
+
+    /// Get the sampling strategy for this component, if any.
+    fn get_sampling(&self) -> Sampling {
+        self.get_attributes().sampling_rate
+    }
+}
+
+/// Determine input buffering strategy, if supported by output.
+/// Changing this only affects inputs opened afterwards.
+/// Buffering is done on best effort, meaning flush will occur if buffer capacity is exceeded.
+pub trait WithBuffering: WithAttributes {
+    /// Buffering not supported by default.
+    fn with_buffering(&self, buffering: Buffering) -> Self {
+        self.with_attributes(|new_attr| new_attr.buffering = buffering)
+    }
+
+    fn is_buffering(&self) -> bool {
+        match self.get_attributes().buffering {
+            Buffering::Unbuffered => true,
+            _ => false
+        }
+    }
+
+    fn get_buffering(&self) -> Buffering {
+        self.get_attributes().buffering
+    }
+}
+
 /// A namespace for metrics.
 /// Does _not_ include the metric's "short" name itself.
 /// Can be empty.
-#[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd, Default)]
 pub struct Namespace {
     inner: Vec<String>,
-}
-
-lazy_static! {
-    /// Root namespace contains no string parts.
-    pub static ref ROOT_NS: Namespace = Namespace { inner: vec![] };
 }
 
 impl Namespace {
@@ -64,6 +185,12 @@ impl Namespace {
     /// Append a component to the name.
     pub fn push(&mut self, name: impl Into<String>) {
         self.inner.push(name.into())
+    }
+
+    pub fn with_prefix(&self, prefix: &str) -> Self {
+        let mut cloned = self.clone();
+        cloned.push(prefix);
+        cloned
     }
 
     /// Returns a copy of this namespace with the second namespace appended.
@@ -105,32 +232,15 @@ impl Namespace {
     }
 }
 
-impl Namespaced for Namespace {
-
-    fn with_prefix(&self, namespace: &str) -> Self {
-        let mut new = self.clone();
-        new.push(namespace);
-        new
-    }
-}
-
 impl<S: Into<String>> From<S> for Namespace {
     fn from(name: S) -> Namespace {
         let name: String = name.into();
         if name.is_empty() {
-            ROOT_NS.clone()
+            Namespace::default()
         } else {
-            ROOT_NS.with_prefix(name.as_ref())
+            Namespace { inner: vec![name] }
         }
     }
-}
-
-/// Common methods of elements that hold a mutable namespace.
-pub trait Namespaced: Sized {
-
-    /// Join namespace and prepend in newly defined metrics.
-    fn with_prefix(&self, name: &str) -> Self;
-
 }
 
 /// A function trait that opens a new metric capture scope.
@@ -145,12 +255,12 @@ pub trait MetricOutput: OpenScope {
 /// Wrap a MetricConfig in a non-generic trait.
 pub trait OpenScope {
     /// Open a new metrics scope
-    fn open_scope(&self) -> Arc<MetricInput + Send + Sync>;
+    fn open_scope(&self) -> Arc<MetricInput + Send + Sync + 'static>;
 }
 
-/// Blanket impl that provides the trait object flavor
+/// Blanket impl that provides all MetricOuputs their "trait object flavor"
 impl<T: MetricOutput + Send + Sync + 'static> OpenScope for T {
-    fn open_scope(&self) -> Arc<MetricInput + Send + Sync> {
+    fn open_scope(&self) -> Arc<MetricInput + Send + Sync + 'static> {
         Arc::new(self.open())
     }
 }
@@ -186,14 +296,6 @@ pub trait MetricInput: Send + Sync + Flush {
     /// Define a gauge.
     fn gauge(&self, name: &str) -> Gauge {
         self.define_metric(&name.into(), Kind::Gauge).into()
-    }
-}
-
-/// Turn on or off buffering, if supported.
-pub trait WithBuffer: Flush + Clone {
-    /// Buffering not supported by default.
-    fn with_buffered(&self, _buffered: bool) -> Self {
-        self.clone()
     }
 }
 

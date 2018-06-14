@@ -1,31 +1,12 @@
 //! A sample application sending ad-hoc counter values both to statsd _and_ to stdout.
 
+#[macro_use]
 extern crate dipstick;
 #[macro_use]
 extern crate lazy_static;
 
 use dipstick::*;
 use std::time::Duration;
-
-metrics!{
-    pub ROOT: Bucket {
-        SUB_1 = "sub" {
-            SUB_1A = "1a" {
-                COUNTER: Counter = "counter";
-            }
-            SUB_1B = "sub1b";
-        }
-    }
-}
-
-metric_define!{ ROOT => {
-    // create counter "some_counter"
-    pub ROOT_COUNTER: Counter = "root_counter";
-    // create gauge "root_gauge"
-    pub ROOT_GAUGE: Gauge = "root_gauge";
-    // create timer "root_timer"
-    pub ROOT_TIMER: Timer = "root_timer";
-}}
 
 // undeclared root (un-prefixed) metrics
 metrics!(pub AGGREGATE: Aggregate {

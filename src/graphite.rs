@@ -24,18 +24,18 @@ metrics!{
 
 #[derive(Clone, Debug)]
 pub struct GraphiteOutput {
-    namespace: Namespace,
+    attributes: Attributes,
     socket: Arc<RwLock<RetrySocket>>,
     buffered: bool,
 }
 
 impl MetricOutput for GraphiteOutput {
 
-    type Input = Graphite;
+    type Input = GraphiteInput;
 
-    fn open(&self) -> Graphite {
-        Graphite {
-            namespace: self.namespace.clone(),
+    fn open(&self) -> GraphiteInput {
+        GraphiteInput {
+            attributes: self.attributes.clone(),
             buffer: ScopeBuffer {
                 buffer: Arc::new(RwLock::new(String::new())),
                 socket: self.socket.clone(),
@@ -45,17 +45,22 @@ impl MetricOutput for GraphiteOutput {
     }
 }
 
+impl WithAttributes for GraphiteOutput {
+    fn get_attributes(&self) -> &Attributes { &self.attributes }
+    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
+}
+
 /// Graphite MetricInput
-#[derive(Debug)]
-pub struct Graphite {
-    namespace: Namespace,
+#[derive(Debug, Clone)]
+pub struct GraphiteInput {
+    attributes: Attributes,
     buffer: ScopeBuffer,
 }
 
-impl MetricInput for Graphite {
+impl MetricInput for GraphiteInput {
     /// Define a metric of the specified type.
-    fn define_metric(&self, namespace: &Namespace, kind: Kind) -> WriteFn {
-        let mut prefix = namespace.join(".");
+    fn define_metric(&self, name: &Namespace, kind: Kind) -> WriteFn {
+        let mut prefix = self.qualified_name(name).join(".");
         prefix.push(' ');
 
         let scale = match kind {
@@ -73,24 +78,26 @@ impl MetricInput for Graphite {
             }
         })
     }
-
 }
 
-impl Flush for Graphite {
+impl WithAttributes for GraphiteInput {
+    fn get_attributes(&self) -> &Attributes { &self.attributes }
+    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
+}
+
+impl Flush for GraphiteInput {
     fn flush(&self) -> error::Result<()> {
         self.buffer.flush()
     }
 }
 
 /// Send metrics to a graphite server at the address and port provided.
-pub fn to_graphite<ADDR: ToSocketAddrs + Debug + Clone>(address: ADDR)
-    -> error::Result<GraphiteOutput>
-{
+pub fn to_graphite<A: ToSocketAddrs + Debug + Clone>(address: A) -> error::Result<GraphiteOutput> {
     debug!("Connecting to graphite {:?}", address);
     let socket = Arc::new(RwLock::new(RetrySocket::new(address.clone())?));
 
     Ok(GraphiteOutput {
-        namespace: ROOT_NS.clone(),
+        attributes: Attributes::default(),
         socket,
         buffered: true
     })
@@ -191,7 +198,7 @@ mod bench {
     use test;
 
     #[bench]
-    pub fn unbufferd_graphite(b: &mut test::Bencher) {
+    pub fn unbuffered_graphite(b: &mut test::Bencher) {
         let sd = to_graphite("localhost:8125").unwrap().open_scope();
         let timer = sd.define_metric(&"timer".into(), Kind::Timer, 1000000.0);
 

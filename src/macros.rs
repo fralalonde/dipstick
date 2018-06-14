@@ -1,8 +1,6 @@
 //! Publicly exposed metric macros are defined here.
-//! Although `dipstick` does not have a macro-based API,
-//! in some situations they can make instrumented code simpler.
 
-// TODO add #[timer("name")] method annotation processors
+// TODO add #[timer("name")] custom derive
 
 /// A convenience macro to wrap a block or an expression with a start / stop timer.
 /// Elapsed time is sent to the supplied statsd client after the computation has been performed.

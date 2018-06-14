@@ -1,6 +1,6 @@
 //! Maintain aggregated metrics for deferred reporting,
 //!
-use core::{Kind, Value, Namespace, Namespaced, NO_METRIC_OUTPUT, MetricInput, Flush, OpenScope, WriteFn};
+use core::{Kind, Value, Namespace, WithPrefix, NO_METRIC_OUTPUT, MetricInput, Flush, OpenScope, WriteFn, WithAttributes, Attributes};
 use clock::TimeHandle;
 use core::Kind::*;
 use error;
@@ -32,7 +32,7 @@ lazy_static! {
 /// Maintains a list of metrics for enumeration when used as source.
 #[derive(Debug, Clone)]
 pub struct MetricAggregator {
-    namespace: Namespace,
+    attributes: Attributes,
     inner: Arc<RwLock<InnerAggregator>>,
 }
 
@@ -106,7 +106,7 @@ impl MetricAggregator {
     /// Build a new metric aggregation
     pub fn new() -> MetricAggregator {
         MetricAggregator {
-            namespace: "".into(),
+            attributes: Attributes::default(),
             inner: Arc::new(RwLock::new(InnerAggregator {
                 metrics: BTreeMap::new(),
                 period_start: TimeHandle::now(),
@@ -131,10 +131,8 @@ impl MetricAggregator {
     }
 
     /// Install a new receiver for all aggregateed metrics, replacing any previous receiver.
-    pub fn set_default_output<IS>(new_config: IS)
-        where IS: Into<Arc<OpenScope + Send + Sync>>,
-    {
-        *DEFAULT_AGGREGATE_OUTPUT.write().unwrap() = new_config.into();
+    pub fn set_default_output(default_config: impl OpenScope + Send + Sync + 'static) {
+        *DEFAULT_AGGREGATE_OUTPUT.write().unwrap() = Arc::new(default_config);
     }
 
     /// Install a new receiver for all aggregateed metrics, replacing any previous receiver.
@@ -156,10 +154,8 @@ impl MetricAggregator {
     }
 
     /// Install a new receiver for all aggregated metrics, replacing any previous receiver.
-    pub fn set_output<IS>(&self, new_config: IS)
-        where IS: Into<Arc<OpenScope + Send + Sync>>,
-    {
-        self.inner.write().expect("Aggregator").output = Some(new_config.into())
+    pub fn set_output(&self, new_config: impl OpenScope + Send + Sync + 'static) {
+        self.inner.write().expect("Aggregator").output = Some(Arc::new(new_config))
     }
 
     /// Install a new receiver for all aggregated metrics, replacing any previous receiver.
@@ -194,32 +190,20 @@ impl MetricAggregator {
 impl MetricInput for MetricAggregator {
     /// Lookup or create a scoreboard for the requested metric.
     fn define_metric(&self, name: &Namespace, kind: Kind) -> WriteFn {
-        let mut zname = self.namespace.clone();
-        zname.extend(name);
         let scoreb = self.inner
             .write()
             .expect("Aggregator")
             .metrics
-            .entry(zname)
+            .entry(self.qualified_name(name))
             .or_insert_with(|| Arc::new(Scoreboard::new(kind)))
             .clone();
         WriteFn::new(move |value| scoreb.update(value))
     }
-
 }
 
-impl Namespaced for MetricAggregator {
-
-    fn with_prefix(&self, prefix: &str) -> Self {
-        if prefix.is_empty() {
-            return self.clone()
-        }
-        MetricAggregator {
-            namespace: self.namespace.with_prefix(prefix),
-            inner: self.inner.clone(),
-        }
-    }
-
+impl WithAttributes for MetricAggregator {
+    fn get_attributes(&self) -> &Attributes { &self.attributes }
+    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
 impl Flush for MetricAggregator {
@@ -342,7 +326,7 @@ mod bench {
 
 #[cfg(test)]
 mod test {
-    use core::{Value, MetricInput, Namespaced};
+    use core::{Value, MetricInput, WithPrefix};
     use aggregate::{MetricAggregator, all_stats, summary, average, StatsFn};
     use clock::{mock_clock_advance, mock_clock_reset};
     use map::StatsMap;

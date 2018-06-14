@@ -6,22 +6,16 @@ use dipstick::*;
 use std::time::Duration;
 
 fn main() {
-    // note that this can also be done using the app_metrics! macro
-    let different_type_metrics = metric_scope((
-        // combine metrics of different types in a tuple
-        to_statsd("localhost:8125").expect("Connecting"),
-        to_stdout(),
-    ));
+    // will output metrics to graphite and to stdout
+    let different_type_metrics = MultiOutput::new()
+        .with_output(to_graphite("localhost:2003").expect("Connecting"))
+        .with_output(to_stdout()).open();
 
-    // note that this can also be done using the app_metrics! macro
-    let same_type_metrics = metric_scope(
-        &[
-            // use slices to combine multiple metrics of the same type
-            to_stdout().with_prefix("yeah"),
-            to_stdout().with_prefix("ouch"),
-            to_stdout().with_sampling_rate(0.5),
-        ][..],
-    );
+    // will output metrics twice, once with "cool.yeah" prefix and once with "cool.ouch" prefix.
+    let same_type_metrics = MultiOutput::new()
+        .with_output(to_stdout().with_prefix("yeah"))
+        .with_output(to_stdout().with_prefix("ouch"))
+        .with_prefix("cool").open();
 
     loop {
         different_type_metrics.counter("counter_a").count(123);

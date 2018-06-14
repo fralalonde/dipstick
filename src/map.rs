@@ -1,7 +1,6 @@
 use core::{Value, WriteFn, Kind, Namespace, MetricInput, Flush};
-use std::sync::{Arc, RwLock, RwLockWriteGuard};
+use std::sync::{Arc, RwLock};
 use std::collections::BTreeMap;
-use std::cell::RefCell;
 
 /// A HashMap wrapper to receive metrics or stats values.
 /// Every received value for a metric replaces the previous one (if any).
