@@ -1,6 +1,6 @@
 //! Dispatch metrics to multiple sinks.
 
-use core::{MetricOutput, MetricInput, Namespace, WithPrefix, OpenScope, Kind, WriteFn, Flush, WithAttributes, Attributes};
+use core::{Output, Input, Name, WithName, OutputDyn, Kind, WriteFn, Flush, WithAttributes, Attributes};
 use error;
 use std::sync::Arc;
 
@@ -8,7 +8,7 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct MultiOutput {
     attributes: Attributes,
-    outputs: Vec<Arc<OpenScope + Send + Sync>>,
+    outputs: Vec<Arc<OutputDyn + Send + Sync>>,
 }
 
 /// Create a new multi-output.
@@ -16,11 +16,11 @@ pub fn to_multi() -> MultiOutput {
     MultiOutput::new()
 }
 
-impl MetricOutput for MultiOutput {
+impl Output for MultiOutput {
     type Input = MultiInput;
 
-    fn open(&self) -> Self::Input {
-        let inputs = self.outputs.iter().map(|out| out.open_scope()).collect();
+    fn new_input(&self) -> Self::Input {
+        let inputs = self.outputs.iter().map(|out| out.new_input_dyn()).collect();
         MultiInput {
             attributes: self.attributes.clone(),
             inputs,
@@ -38,7 +38,7 @@ impl MultiOutput {
     }
 
     /// Returns a clone of the dispatch with the new output added to the list.
-    pub fn with_output<O: OpenScope + Send + Sync + 'static>(&self, out: O) -> Self {
+    pub fn with_output<O: OutputDyn + Send + Sync + 'static>(&self, out: O) -> Self {
         let mut cloned = self.clone();
         cloned.outputs.push(Arc::new(out));
         cloned
@@ -54,13 +54,13 @@ impl WithAttributes for MultiOutput {
 #[derive(Clone)]
 pub struct MultiInput {
     attributes: Attributes,
-    inputs: Vec<Arc<MetricInput + Send + Sync>>,
+    inputs: Vec<Arc<Input + Send + Sync>>,
 }
 
-impl MetricInput for MultiInput {
-    fn define_metric(&self, name: &Namespace, kind: Kind) -> WriteFn {
-        let name = self.qualified_name(name);
-        let write_fns: Vec<WriteFn> = self.inputs.iter().map(|input| input.define_metric(&name, kind)).collect();
+impl Input for MultiInput {
+    fn new_metric(&self, name: Name, kind: Kind) -> WriteFn {
+        let ref name = self.qualified_name(name);
+        let write_fns: Vec<WriteFn> = self.inputs.iter().map(move |input| input.new_metric(name.clone(), kind)).collect();
         WriteFn::new(move |value| for w in &write_fns {
             (w)(value)
         })

@@ -1,7 +1,7 @@
 //! Send metrics to a graphite server.
 
 use core::*;
-use aggregate::*;
+use bucket::*;
 use error;
 use self_metrics::DIPSTICK_METRICS;
 
@@ -15,7 +15,7 @@ use std::fmt::Debug;
 use socket::RetrySocket;
 
 metrics!{
-    <MetricAggregator> DIPSTICK_METRICS.with_prefix("graphite") => {
+    <Bucket> DIPSTICK_METRICS.add_name("graphite") => {
         Marker SEND_ERR: "send_failed";
         Marker TRESHOLD_EXCEEDED: "bufsize_exceeded";
         Counter SENT_BYTES: "sent_bytes";
@@ -29,11 +29,11 @@ pub struct GraphiteOutput {
     buffered: bool,
 }
 
-impl MetricOutput for GraphiteOutput {
+impl Output for GraphiteOutput {
 
     type Input = GraphiteInput;
 
-    fn open(&self) -> GraphiteInput {
+    fn new_input(&self) -> GraphiteInput {
         GraphiteInput {
             attributes: self.attributes.clone(),
             buffer: ScopeBuffer {
@@ -50,16 +50,16 @@ impl WithAttributes for GraphiteOutput {
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
-/// Graphite MetricInput
+/// Graphite Input
 #[derive(Debug, Clone)]
 pub struct GraphiteInput {
     attributes: Attributes,
     buffer: ScopeBuffer,
 }
 
-impl MetricInput for GraphiteInput {
+impl Input for GraphiteInput {
     /// Define a metric of the specified type.
-    fn define_metric(&self, name: &Namespace, kind: Kind) -> WriteFn {
+    fn new_metric(&self, name: Name, kind: Kind) -> WriteFn {
         let mut prefix = self.qualified_name(name).join(".");
         prefix.push(' ');
 
@@ -212,16 +212,16 @@ mod bench {
 
     #[bench]
     pub fn unbuffered_graphite(b: &mut test::Bencher) {
-        let sd = to_graphite("localhost:8125").unwrap().open_scope();
-        let timer = sd.define_metric(&"timer".into(), Kind::Timer);
+        let sd = to_graphite("localhost:8125").unwrap().new_input_dyn();
+        let timer = sd.new_metric("timer".into(), Kind::Timer);
 
         b.iter(|| test::black_box(timer.write(2000)));
     }
 
     #[bench]
     pub fn buffered_graphite(b: &mut test::Bencher) {
-        let sd = to_buffered_graphite("localhost:8125").unwrap().open_scope();
-        let timer = sd.define_metric(&"timer".into(), Kind::Timer);
+        let sd = to_buffered_graphite("localhost:8125").unwrap().new_input_dyn();
+        let timer = sd.new_metric("timer".into(), Kind::Timer);
 
         b.iter(|| test::black_box(timer.write(2000)));
     }

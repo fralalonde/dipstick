@@ -15,7 +15,7 @@ fn main() {
         // add counts forever, non-stop
         println!("\n------- open scope");
 
-        let metrics = output.open_scope();
+        let metrics = output.new_input_dyn();
 
         let counter = metrics.counter("counter_a");
         let timer = metrics.timer("timer_a");

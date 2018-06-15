@@ -2,7 +2,7 @@
 
 // TODO parameterize templates
 // TODO define backing structs that can flush() on Drop
-use core::{Namespace, WithPrefix, Value, WriteFn, Kind, MetricOutput, MetricInput, Flush, WithAttributes, Attributes};
+use core::{Name, WithName, Value, WriteFn, Kind, Output, Input, Flush, WithAttributes, Attributes};
 use error;
 use std::sync::{RwLock, Arc};
 use std::io::{Write, BufWriter, self};
@@ -12,7 +12,7 @@ use std::io::{Write, BufWriter, self};
 pub struct TextOutput<W: Write + Send + Sync + 'static> {
     attributes: Attributes,
     inner: Arc<RwLock<W>>,
-    format_fn: Arc<Fn(&Namespace, Kind) -> Vec<String> + Send + Sync>,
+    format_fn: Arc<Fn(&Name, Kind) -> Vec<String> + Send + Sync>,
     print_fn: Arc<Fn(&mut W, &[String], Value) -> error::Result<()> + Send + Sync>,
 }
 
@@ -33,15 +33,15 @@ impl<W: Write + Send + Sync + 'static> WithAttributes for TextOutput<W> {
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
-impl<W: Write + Send + Sync + 'static> MetricOutput for TextOutput<W> {
+impl<W: Write + Send + Sync + 'static> Output for TextOutput<W> {
     type Input = TextOutput<W>;
-    fn open(&self) -> Self::Input {
+    fn new_input(&self) -> Self::Input {
         self.clone()
     }
 }
 
-impl<W: Write + Send + Sync + 'static> MetricInput for TextOutput<W> {
-    fn define_metric(&self, name: &Namespace, kind: Kind) -> WriteFn {
+impl<W: Write + Send + Sync + 'static> Input for TextOutput<W> {
+    fn new_metric(&self, name: Name, kind: Kind) -> WriteFn {
         let name = self.qualified_name(name);
         let template = (self.format_fn)(&name, kind);
         let print_fn = self.print_fn.clone();
@@ -66,7 +66,7 @@ impl<W: Write + Send + Sync + 'static> Flush for TextOutput<W> {
 pub struct BufferedTextOutput<W: Write + Send + Sync + 'static> {
     attributes: Attributes,
     inner: Arc<RwLock<W>>,
-    format_fn: Arc<Fn(&Namespace, Kind) -> Vec<String> + Send + Sync>,
+    format_fn: Arc<Fn(&Name, Kind) -> Vec<String> + Send + Sync>,
     buffer_print_fn: Arc<Fn(&mut Vec<u8>, &[String], Value) -> error::Result<()> + Send + Sync>,
 //    flush_print_fn: Arc<Fn(&mut W, &mut [String]) -> error::Result<()> + Send + Sync>,
 }
@@ -88,11 +88,11 @@ impl<W: Write + Send + Sync + 'static> WithAttributes for BufferedTextOutput<W> 
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
-impl<W: Write + Send + Sync + 'static> MetricOutput for BufferedTextOutput<W> {
+impl<W: Write + Send + Sync + 'static> Output for BufferedTextOutput<W> {
 
     type Input = BufferedTextInput<W>;
 
-    fn open(&self) -> Self::Input {
+    fn new_input(&self) -> Self::Input {
         BufferedTextInput {
             attributes: self.attributes.clone(),
             entries: Arc::new(RwLock::new(Vec::new())),
@@ -123,8 +123,8 @@ impl<W: Write + Send + Sync + 'static> WithAttributes for BufferedTextInput<W> {
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
-impl<W: Write + Send + Sync + 'static> MetricInput for BufferedTextInput<W> {
-    fn define_metric(&self, name: &Namespace, kind: Kind) -> WriteFn {
+impl<W: Write + Send + Sync + 'static> Input for BufferedTextInput<W> {
+    fn new_metric(&self, name: Name, kind: Kind) -> WriteFn {
         let name = self.qualified_name(name);
         let template = (self.output.format_fn)(&name, kind);
 
@@ -166,7 +166,7 @@ pub fn to_stdout() -> TextOutput<io::Stdout> {
     }
 }
 
-pub fn format_name(name: &Namespace, _kind: Kind) -> Vec<String> {
+pub fn format_name(name: &Name, _kind: Kind) -> Vec<String> {
     let mut z = name.join(".");
     z.push_str(" ");
     vec![z]
@@ -200,16 +200,16 @@ pub fn to_buffered_stdout() -> BufferedTextOutput<BufWriter<io::Stdout>> {
 #[derive(Clone)]
 pub struct Void {}
 
-impl MetricOutput for Void {
+impl Output for Void {
     type Input = Void;
 
-    fn open(&self) -> Void {
+    fn new_input(&self) -> Void {
         self.clone()
     }
 }
 
-impl MetricInput for Void {
-    fn define_metric(&self, _name: &Namespace, _kind: Kind) -> WriteFn {
+impl Input for Void {
+    fn new_metric(&self, _name: Name, _kind: Kind) -> WriteFn {
         WriteFn::new(|_value| {})
     }
 }
@@ -227,15 +227,15 @@ mod test {
 
     #[test]
     fn sink_print() {
-        let c = super::to_stdout().open_scope();
-        let m = c.define_metric(&"test".into(), Kind::Marker);
+        let c = super::to_stdout().new_input_dyn();
+        let m = c.new_metric("test".into(), Kind::Marker);
         (m)(33);
     }
 
     #[test]
     fn test_to_void() {
-        let c = super::to_void().open_scope();
-        let m = c.define_metric(&"test".into(), Kind::Marker);
+        let c = super::to_void().new_input_dyn();
+        let m = c.new_metric("test".into(), Kind::Marker);
         (m)(33);
     }
 

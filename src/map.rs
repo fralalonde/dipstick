@@ -1,4 +1,4 @@
-use core::{Value, WriteFn, Kind, Namespace, MetricInput, Flush};
+use core::{Value, WriteFn, Kind, Name, Input, Flush};
 use std::sync::{Arc, RwLock};
 use std::collections::BTreeMap;
 
@@ -16,8 +16,8 @@ impl StatsMap {
     }
 }
 
-impl MetricInput for StatsMap {
-    fn define_metric(&self, name: &Namespace, _kind: Kind) -> WriteFn {
+impl Input for StatsMap {
+    fn new_metric(&self, name: Name, _kind: Kind) -> WriteFn {
         let write_to = self.inner.clone();
         let name: String = name.join(".");
         WriteFn::new(move |value| {

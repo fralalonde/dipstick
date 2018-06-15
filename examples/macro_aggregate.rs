@@ -9,7 +9,7 @@ use dipstick::*;
 use std::time::Duration;
 
 // undeclared root (un-prefixed) metrics
-metrics!(<MetricAggregator> pub AGGREGATE = to_aggregate() => {
+metrics!(<Bucket> pub AGGREGATE = to_aggregate() => {
     // create counter "some_counter"
     pub Counter ROOT_COUNTER: "root_counter";
     // create gauge "root_gauge"
@@ -19,14 +19,14 @@ metrics!(<MetricAggregator> pub AGGREGATE = to_aggregate() => {
 });
 
 
-metrics!( <MetricAggregator> AGGREGATE.with_prefix("module_prefix") => {
+metrics!( <Bucket> AGGREGATE.add_name("module_prefix") => {
     // create counter "module_prefix.module_counter"
     Counter MOD_COUNTER: "module_counter";
 });
 
 fn main() {
     // print aggregated metrics to the console
-    MetricAggregator::set_default_output(to_stdout());
+    Bucket::set_default_output(to_stdout());
 
     // enable autoflush...
     AGGREGATE.flush_every(Duration::from_millis(4000));

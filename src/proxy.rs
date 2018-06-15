@@ -1,6 +1,6 @@
 //! Decouple metric definition from configuration with trait objects.
 
-use core::{Namespace, WithPrefix, Kind, MetricInput, WriteFn, NO_METRIC_OUTPUT, Flush, WithAttributes, Attributes};
+use core::{Name, WithName, Kind, Input, WriteFn, NO_METRIC_OUTPUT, Flush, WithAttributes, Attributes};
 use error;
 
 use std::collections::{HashMap, BTreeMap};
@@ -12,36 +12,31 @@ lazy_static! {
     /// Root of the default metrics dispatch, usable by all libraries and apps.
     /// Libraries should create their metrics into sub subspaces of this.
     /// Applications should configure on startup where the dispatched metrics should go.
-    /// Exceptionally, one can create its own MetricDispatch root, separate from this one.
-    pub static ref ROOT_DISPATCH: MetricDispatch = MetricDispatch::new();
-}
-
-/// Return the default dispatch's root.
-pub fn to_dispatch() -> MetricDispatch {
-    ROOT_DISPATCH.clone()
+    /// Exceptionally, one can create its own InputProxy root, separate from this one.
+    pub static ref ROOT_PROXY: InputProxy = InputProxy::new();
 }
 
 /// A dynamically dispatched metric.
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub struct MetricProxy {
+struct ProxiedMetric {
     // basic info for this metric, needed to recreate new corresponding trait object if target changes
-    name: Namespace,
+    name: Name,
     kind: Kind,
 
     // the metric trait object to dispatch metric values to
     // the second part can be up to namespace.len() + 1 if this metric was individually targeted
     // 0 if no target assigned
     #[derivative(Debug = "ignore")]
-    write_metric: (AtomicRefCell<(WriteFn, usize)>),
+    target: (AtomicRefCell<(WriteFn, usize)>),
 
     // a reference to the the parent dispatcher to remove the metric from when it is dropped
     #[derivative(Debug = "ignore")]
-    dispatch: Arc<RwLock<InnerDispatch>>,
+    dispatch: Arc<RwLock<InnerProxy>>,
 }
 
 /// Dispatcher weak ref does not prevent dropping but still needs to be cleaned out.
-impl Drop for MetricProxy {
+impl Drop for ProxiedMetric {
     fn drop(&mut self) {
         self.dispatch.write().expect("Dispatch Lock").drop_metric(&self.name)
     }
@@ -52,18 +47,18 @@ impl Drop for MetricProxy {
 /// Allows defining metrics before a concrete type has been selected.
 /// Allows replacing metrics backend on the fly at runtime.
 #[derive(Clone)]
-pub struct MetricDispatch {
+pub struct InputProxy {
     attributes: Attributes,
-    inner: Arc<RwLock<InnerDispatch>>,
+    inner: Arc<RwLock<InnerProxy>>,
 }
 
-struct InnerDispatch {
+struct InnerProxy {
     // namespaces can target one, many or no metrics
-    targets: HashMap<Namespace, Arc<MetricInput + Send + Sync>>,
+    targets: HashMap<Name, Arc<Input + Send + Sync>>,
     // last part of the namespace is the metric's name
-    metrics: BTreeMap<Namespace, Weak<MetricProxy>>,
+    metrics: BTreeMap<Name, Weak<ProxiedMetric>>,
 }
-impl InnerDispatch {
+impl InnerProxy {
 
     fn new() -> Self {
         Self {
@@ -72,7 +67,7 @@ impl InnerDispatch {
         }
     }
 
-    fn set_target(&mut self, target_name: Namespace, target_scope: Arc<MetricInput + Send + Sync>) {
+    fn set_target(&mut self, target_name: Name, target_scope: Arc<Input + Send + Sync>) {
         self.targets.insert(target_name.clone(), target_scope.clone());
         for (metric_name, metric) in self.metrics.range_mut(target_name.clone()..) {
             if let Some(metric) = metric.upgrade() {
@@ -80,22 +75,21 @@ impl InnerDispatch {
                 if !metric_name.starts_with(&target_name) { break }
 
                 // check if metric targeted by _lower_ namespace
-                if metric.write_metric.borrow().1 > target_name.len() { continue }
+                if metric.target.borrow().1 > target_name.len() { continue }
 
-                let target_metric = target_scope.define_metric(&metric.name, metric.kind);
-                *metric.write_metric.borrow_mut() = (target_metric, target_name.len());
+                let target_metric = target_scope.new_metric(metric.name.clone(), metric.kind);
+                *metric.target.borrow_mut() = (target_metric, target_name.len());
             }
         }
     }
 
-    fn get_effective_target(&self, namespace: &Namespace)
-            -> Option<(Arc<MetricInput + Send + Sync>, usize)> {
-        if let Some(target) = self.targets.get(namespace) {
-            return Some((target.clone(), namespace.len()));
+    fn get_effective_target(&self, name: &Name) -> Option<(Arc<Input + Send + Sync>, usize)> {
+        if let Some(target) = self.targets.get(name) {
+            return Some((target.clone(), name.len()));
         }
 
         // no 1:1 match, scan upper namespaces
-        let mut name = namespace.clone();
+        let mut name = name.clone();
         while let Some(_popped) = name.pop() {
             if let Some(target) = self.targets.get(&name) {
                 return Some((target.clone(), name.len()))
@@ -104,14 +98,14 @@ impl InnerDispatch {
         None
     }
 
-    fn unset_target(&mut self, namespace: &Namespace) {
+    fn unset_target(&mut self, namespace: &Name) {
         if self.targets.remove(namespace).is_none() {
             // nothing to do
             return
         }
 
         let (up_target, up_nslen) = self.get_effective_target(namespace)
-            .unwrap_or_else(|| (NO_METRIC_OUTPUT.open_scope(), 0));
+            .unwrap_or_else(|| (NO_METRIC_OUTPUT.new_input_dyn(), 0));
 
         // update all affected metrics to next upper targeted namespace
         for (name, metric) in self.metrics.range_mut(namespace..) {
@@ -120,21 +114,21 @@ impl InnerDispatch {
 
             if let Some(mut metric) = metric.upgrade() {
                 // check if metric targeted by _lower_ namespace
-                if metric.write_metric.borrow().1 > namespace.len() { continue }
+                if metric.target.borrow().1 > namespace.len() { continue }
 
-                let new_metric = up_target.define_metric(name, metric.kind);
-                *metric.write_metric.borrow_mut() = (new_metric, up_nslen);
+                let new_metric = up_target.new_metric(name.clone(), metric.kind);
+                *metric.target.borrow_mut() = (new_metric, up_nslen);
             }
         }
     }
 
-    fn drop_metric(&mut self, name: &Namespace) {
+    fn drop_metric(&mut self, name: &Name) {
         if self.metrics.remove(name).is_none() {
             panic!("Could not remove DelegatingMetric weak ref from delegation point")
         }
     }
 
-    fn flush(&self, namespace: &Namespace) -> error::Result<()> {
+    fn flush(&self, namespace: &Name) -> error::Result<()> {
         if let Some((target, _nslen)) = self.get_effective_target(namespace) {
             target.flush()
         } else {
@@ -144,7 +138,7 @@ impl InnerDispatch {
 
 }
 
-impl MetricDispatch {
+impl InputProxy {
 
     /// Create a new "private" metric dispatch root. This is usually not what you want.
     /// Since this dispatch will not be part of the standard dispatch tree,
@@ -152,14 +146,14 @@ impl MetricDispatch {
     /// its existence this may never happen and metrics will not be dispatched anywhere.
     /// If you want to use the standard dispatch tree, use #metric_dispatch() instead.
     pub fn new() -> Self {
-        MetricDispatch {
+        InputProxy {
             attributes: Attributes::default(),
-            inner: Arc::new(RwLock::new(InnerDispatch::new())),
+            inner: Arc::new(RwLock::new(InnerProxy::new())),
         }
     }
 
     /// Replace target for this dispatch and it's children.
-    pub fn set_target<IS: MetricInput + Send + Sync + 'static>(&self, target: IS) {
+    pub fn set_target<IS: Input + Send + Sync + 'static>(&self, target: IS) {
         let mut inner = self.inner.write().expect("Dispatch Lock");
         inner.set_target(self.get_namespace().clone(), Arc::new(target));
     }
@@ -172,15 +166,15 @@ impl MetricDispatch {
 
 }
 
-impl<S: AsRef<str>> From<S> for MetricDispatch {
-    fn from(name: S) -> MetricDispatch {
-        MetricDispatch::new().with_prefix(name.as_ref())
+impl<S: AsRef<str>> From<S> for InputProxy {
+    fn from(name: S) -> InputProxy {
+        InputProxy::new().add_name(name.as_ref())
     }
 }
 
-impl MetricInput for MetricDispatch {
+impl Input for InputProxy {
     /// Lookup or create a dispatch stub for the requested metric.
-    fn define_metric(&self, name: &Namespace, kind: Kind) -> WriteFn {
+    fn new_metric(&self, name: Name, kind: Kind) -> WriteFn {
         let name = self.qualified_name(name);
         let mut inner = self.inner.write().expect("Dispatch Lock");
         let proxy = inner
@@ -192,28 +186,28 @@ impl MetricInput for MetricDispatch {
                 let name2 = name.clone();
                 // not found, define new
                 let (target, target_namespace_length) = inner.get_effective_target(&name)
-                    .unwrap_or_else(|| (NO_METRIC_OUTPUT.open_scope(), 0));
-                let metric_object = target.define_metric(&name, kind);
-                let proxy = Arc::new(MetricProxy {
+                    .unwrap_or_else(|| (NO_METRIC_OUTPUT.new_input_dyn(), 0));
+                let metric_object = target.new_metric(name.clone(), kind);
+                let proxy = Arc::new(ProxiedMetric {
                     name,
                     kind,
-                    write_metric: AtomicRefCell::new((metric_object, target_namespace_length)),
+                    target: AtomicRefCell::new((metric_object, target_namespace_length)),
                     dispatch: self.inner.clone(),
                 });
                 inner.metrics.insert(name2, Arc::downgrade(&proxy));
                 proxy
             });
-        WriteFn::new(move |value| (proxy.write_metric.borrow().0)(value))
+        WriteFn::new(move |value| (proxy.target.borrow().0)(value))
     }
 }
 
-impl Flush for MetricDispatch {
+impl Flush for InputProxy {
     fn flush(&self) -> error::Result<()> {
         self.inner.write().expect("Dispatch Lock").flush(self.get_namespace())
     }
 }
 
-impl WithAttributes for MetricDispatch {
+impl WithAttributes for InputProxy {
     fn get_attributes(&self) -> &Attributes { &self.attributes }
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
@@ -222,20 +216,20 @@ impl WithAttributes for MetricDispatch {
 mod bench {
 
     use core::*;
-    use dispatch::*;
+    use proxy::*;
     use test;
-    use aggregate::MetricAggregator;
+    use bucket::Bucket;
 
     #[bench]
     fn dispatch_marker_to_aggregate(b: &mut test::Bencher) {
-        ROOT_DISPATCH.set_target(MetricAggregator::new());
-        let metric = ROOT_DISPATCH.marker("event_a");
+        ROOT_PROXY.set_target(Bucket::new());
+        let metric = ROOT_PROXY.marker("event_a");
         b.iter(|| test::black_box(metric.mark()));
     }
 
     #[bench]
     fn dispatch_marker_to_void(b: &mut test::Bencher) {
-        let metric = ROOT_DISPATCH.marker("event_a");
+        let metric = ROOT_PROXY.marker("event_a");
         b.iter(|| test::black_box(metric.mark()));
     }
 
