@@ -5,7 +5,7 @@ use std::error;
 use std::fmt::{self, Display, Formatter};
 use std::result;
 use std::sync::mpsc;
-use async_queue;
+use async;
 use self::Error::*;
 
 /// Any error that may result from dipstick usage.
@@ -14,7 +14,7 @@ pub enum Error {
     /// A generic I/O error.
     IO(io::Error),
     /// An error from the async metric queue.
-    Async(mpsc::SendError<async_queue::AsyncCmd>)
+    Async(mpsc::SendError<async::AsyncCmd>)
 }
 
 impl Display for Error {
@@ -51,8 +51,8 @@ impl From<io::Error> for Error {
     }
 }
 
-impl From<mpsc::SendError<async_queue::AsyncCmd>> for Error {
-    fn from(err: mpsc::SendError<async_queue::AsyncCmd>) -> Self {
+impl From<mpsc::SendError<async::AsyncCmd>> for Error {
+    fn from(err: mpsc::SendError<async::AsyncCmd>) -> Self {
         Async(err)
     }
 }

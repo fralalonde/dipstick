@@ -18,17 +18,17 @@
 //#[ignore(deprecated)]
 //app_metrics!(
 //    MultiOutput, SAME_TYPE = to_multi()
-//        .with_output(to_stdout().with_prefix("yeah"))
-//        .with_output(to_stdout().with_prefix("ouch"))
+//        .with_output(to_stdout().add_name("yeah"))
+//        .with_output(to_stdout().add_name("ouch"))
 //);
 //
 //#[ignore(deprecated)]
 //app_metrics!(
-//    MultiOutput, MUTANT_CHILD = SAME_TYPE.with_prefix("super").with_prefix("duper")
+//    MultiOutput, MUTANT_CHILD = SAME_TYPE.add_name("super").add_name("duper")
 //);
 
 fn main() {
-//    let mmm: &OpenScope = &to_stdout();
+//    let mmm: &OutputDyn = &to_stdout();
 //
 //    loop {
 //        DIFFERENT_TYPES.counter("counter_a").count(123);

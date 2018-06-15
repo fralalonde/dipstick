@@ -2,22 +2,22 @@ use core::*;
 
 //use async_queue::WithAsyncQueue;
 //use sample::WithSamplingRate;
-use aggregate::MetricAggregator;
+use bucket::Bucket;
 
 /// Backward compatibility alias.
-pub type Aggregate = MetricAggregator;
+pub type Aggregate = Bucket;
 
 ///// Aggregate metrics in memory.
 ///// Depending on the type of metric, count, sum, minimum and maximum of values will be tracked.
 ///// Needs to be connected to a publish to be useful.
-//#[deprecated(since = "0.7.0", note = "Use `MetricAggregator::new()` instead.")]
-//pub fn aggregate<M, E, P>(stats_fn: E, pub_scope: P) -> MetricAggregator
+//#[deprecated(since = "0.7.0", note = "Use `Bucket::new()` instead.")]
+//pub fn aggregate<M, E, P>(stats_fn: E, pub_scope: P) -> Bucket
 //    where
-//        E: Fn(Kind, Namespace, ScoreType) -> Option<(Kind, Namespace, Value)> + Send + Sync + 'static,
+//        E: Fn(Kind, Name, ScoreType) -> Option<(Kind, Name, Value)> + Send + Sync + 'static,
 //        P: Into<MetricOutput<M>>,
 //        M: Send + Sync + 'static + Clone,
 //{
-//    let agg = MetricAggregator::new();
+//    let agg = Bucket::new();
 //    agg.set_stats(stats_fn);
 //    agg.set_output(pub_scope);
 //    agg
@@ -58,7 +58,7 @@ pub type Aggregate = MetricAggregator;
 
 /// Help transition to new syntax
 #[deprecated(since = "0.7.0", note = "Use Metrics instead")]
-pub type AppMetrics = MetricInput;
+pub type AppMetrics = Input;
 
 /// Help transition to new syntax
 #[deprecated(since = "0.7.0", note = "Use Marker instead")]
@@ -203,7 +203,7 @@ mod legacy_test {
     use self_metrics::*;
     use deprecated::*;
 
-    metrics!(<Aggregate> TEST_METRICS = DIPSTICK_METRICS.with_prefix("test_prefix"));
+    metrics!(<Aggregate> TEST_METRICS = DIPSTICK_METRICS.add_name("test_prefix"));
 
     app_marker!(<Aggregate> TEST_METRICS => {
         M1: "failed",

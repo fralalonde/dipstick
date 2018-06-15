@@ -7,11 +7,11 @@ use std::time::Duration;
 use dipstick::*;
 
 fn main() {
-    let metrics = MetricAggregator::new().with_prefix("test");
+    let metrics = Bucket::new().add_name("test");
 
-    // MetricAggregator::set_default_output(to_stdout());
+    // Bucket::set_default_output(to_stdout());
     metrics.set_output(to_graphite("localhost:2003").expect("Graphite host name and port")
-        .with_prefix("machine1").with_prefix("application"));
+        .add_name("machine1").add_name("application"));
 
     metrics.flush_every(Duration::from_secs(3));
 

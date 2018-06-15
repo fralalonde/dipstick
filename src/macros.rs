@@ -53,22 +53,22 @@ macro_rules! metrics {
     };
 
     ($(#[$attr:meta])* pub $METRIC_ID:ident = $e:expr $(;)*) => {
-        metrics! {$(#[$attr])* <MetricDispatch> pub $METRIC_ID = $e; }
+        metrics! {$(#[$attr])* <InputProxy> pub $METRIC_ID = $e; }
     };
     ($(#[$attr:meta])* pub $METRIC_ID:ident = $e:expr => { $($REMAINING:tt)+ }) => {
-        metrics! {$(#[$attr])* <MetricDispatch> pub $METRIC_ID = $e => { $($REMAINING)* } }
+        metrics! {$(#[$attr])* <InputProxy> pub $METRIC_ID = $e => { $($REMAINING)* } }
     };
     ($(#[$attr:meta])* $METRIC_ID:ident = $e:expr $(;)*) => {
-        metrics! {$(#[$attr])* <MetricDispatch> $METRIC_ID = $e; }
+        metrics! {$(#[$attr])* <InputProxy> $METRIC_ID = $e; }
     };
     ($(#[$attr:meta])* $METRIC_ID:ident = $e:expr => { $($REMAINING:tt)+ }) => {
-        metrics! {$(#[$attr])* <MetricDispatch> $METRIC_ID = $e => { $($REMAINING)* } }
+        metrics! {$(#[$attr])* <InputProxy> $METRIC_ID = $e => { $($REMAINING)* } }
     };
     ($(#[$attr:meta])* $METRIC_ID:ident => { $($REMAINING:tt)+ }) => {
-        metrics! {<MetricDispatch> $METRIC_ID => { $($REMAINING)* } }
+        metrics! {<InputProxy> $METRIC_ID => { $($REMAINING)* } }
     };
     ($e:expr => { $($REMAINING:tt)+ }) => {
-        metrics! {<MetricDispatch> $e => { $($REMAINING)* } }
+        metrics! {<InputProxy> $e => { $($REMAINING)* } }
     };
 
 }
@@ -132,10 +132,10 @@ macro_rules! __metrics_block {
 #[cfg(test)]
 mod test {
     use core::*;
-    use aggregate::MetricAggregator;
+    use bucket::Bucket;
     use self_metrics::*;
 
-    metrics!(<MetricAggregator> DIPSTICK_METRICS.with_prefix("test_prefix") => {
+    metrics!(<Bucket> DIPSTICK_METRICS.add_name("test_prefix") => {
         Marker M1: "failed";
         Marker M2: "success";
         Counter C1: "failed";

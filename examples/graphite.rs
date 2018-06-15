@@ -12,8 +12,8 @@ fn main() {
     let metrics =
         to_graphite("localhost:2003")
             .expect("Connecting")
-            .with_prefix("my_app")
-            .open_scope();
+            .add_name("my_app")
+            .new_input_dyn();
 
     loop {
         metrics.counter("counter_a").count(123);

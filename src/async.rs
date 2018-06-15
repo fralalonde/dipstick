@@ -2,9 +2,9 @@
 //! Metrics definitions are still synchronous.
 //! If queue size is exceeded, calling code reverts to blocking.
 //!
-use core::{MetricInput, Value, WriteFn, Namespace, Kind, Flush, Marker, WithPrefix,
+use core::{Input, Value, WriteFn, Name, Kind, Flush, Marker, WithName,
            Attributes, WithAttributes};
-use aggregate::MetricAggregator;
+use bucket::Bucket;
 use error;
 use self_metrics::DIPSTICK_METRICS;
 
@@ -13,14 +13,14 @@ use std::sync::mpsc;
 use std::thread;
 
 metrics!{
-    <MetricAggregator> DIPSTICK_METRICS.with_prefix("async_queue") => {
+    <Bucket> DIPSTICK_METRICS.add_name("async_queue") => {
         /// Maybe queue was full?
         Marker SEND_FAILED: "send_failed";
     }
 }
 
 /// Wrap the input with an async dispatch queue for lower app latency.
-pub fn to_async<IN: MetricInput + Send + Sync + 'static + Clone>(input: IN, queue_length: usize) -> AsyncInput {
+pub fn to_async<IN: Input + Send + Sync + 'static + Clone>(input: IN, queue_length: usize) -> AsyncInput {
     AsyncInput::wrap(input, queue_length)
 }
 
@@ -46,7 +46,7 @@ pub enum AsyncCmd {
 pub struct AsyncInput {
     attributes: Attributes,
     sender: Arc<mpsc::SyncSender<AsyncCmd>>,
-    input: Arc<MetricInput + Send + Sync + 'static>
+    input: Arc<Input + Send + Sync + 'static>
 }
 
 impl WithAttributes for AsyncInput {
@@ -56,7 +56,7 @@ impl WithAttributes for AsyncInput {
 
 impl AsyncInput {
     /// Wrap the input with an async dispatch queue for lower app latency.
-    pub fn wrap(input: impl MetricInput + Send + Sync + 'static + Clone, queue_length: usize) -> Self {
+    pub fn wrap(input: impl Input + Send + Sync + 'static + Clone, queue_length: usize) -> Self {
         let flusher = input.clone();
         let (sender, receiver) = mpsc::sync_channel::<AsyncCmd>(queue_length);
         thread::spawn(move || {
@@ -83,9 +83,9 @@ impl AsyncInput {
     }
 }
 
-impl MetricInput for AsyncInput {
-    fn define_metric(&self, name: &Namespace, kind:Kind) -> WriteFn {
-        let target_metric = self.input.define_metric(&self.qualified_name(name), kind);
+impl Input for AsyncInput {
+    fn new_metric(&self, name: Name, kind:Kind) -> WriteFn {
+        let target_metric = self.input.new_metric(self.qualified_name(name), kind);
         let sender = self.sender.clone();
         WriteFn::new(move |value| {
             if let Err(e) = sender.send(AsyncCmd::Write(target_metric.clone(), value)) {

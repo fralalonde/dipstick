@@ -7,9 +7,9 @@ use std::time::Duration;
 use dipstick::*;
 
 fn main() {
-    let metrics = MetricAggregator::new().with_prefix("test");
+    let metrics = Bucket::new().add_name("test");
 
-    // MetricAggregator::set_default_output(to_stdout());
+    // Bucket::set_default_output(to_stdout());
     metrics.set_output(to_stdout());
 
     metrics.flush_every(Duration::from_secs(3));

@@ -1,11 +1,11 @@
 //! Send metrics to a statsd server.
 
-use core::{MetricInput, MetricOutput, Value, WriteFn, Attributes, WithAttributes, Kind,
-           Flush, Counter, Marker, Namespace, WithSamplingRate, WithPrefix, WithBuffering, Sampling};
+use core::{Input, Output, Value, WriteFn, Attributes, WithAttributes, Kind,
+           Flush, Counter, Marker, Name, WithSamplingRate, WithName, WithBuffering, Sampling};
 use pcg32;
 use error;
 use self_metrics::DIPSTICK_METRICS;
-use aggregate::MetricAggregator;
+use bucket::Bucket;
 
 use std::net::UdpSocket;
 use std::sync::{Arc, RwLock};
@@ -13,7 +13,7 @@ use std::sync::{Arc, RwLock};
 pub use std::net::ToSocketAddrs;
 
 metrics! {
-    <MetricAggregator> DIPSTICK_METRICS.with_prefix("statsd") => {
+    <Bucket> DIPSTICK_METRICS.add_name("statsd") => {
         Marker SEND_ERR: "send_failed";
         Counter SENT_BYTES: "sent_bytes";
     }
@@ -39,9 +39,9 @@ pub fn to_statsd<ADDR: ToSocketAddrs>(address: ADDR) -> error::Result<StatsdOutp
     })
 }
 
-impl MetricOutput for StatsdOutput {
+impl Output for StatsdOutput {
     type Input = StatsdInput;
-    fn open(&self) -> Self::Input {
+    fn new_input(&self) -> Self::Input {
         StatsdInput {
             attributes: self.attributes.clone(),
             buffer: Arc::new(RwLock::new(InputBuffer {
@@ -74,8 +74,8 @@ pub struct StatsdInput {
     buffer: Arc<RwLock<InputBuffer>>,
 }
 
-impl MetricInput for StatsdInput {
-    fn define_metric(&self, name: &Namespace, kind: Kind) -> WriteFn {
+impl Input for StatsdInput {
+    fn new_metric(&self, name: Name, kind: Kind) -> WriteFn {
         let mut prefix = self.qualified_name(name).join(".");
         prefix.push(':');
 
@@ -204,8 +204,8 @@ mod bench {
 
     #[bench]
     pub fn timer_statsd(b: &mut test::Bencher) {
-        let sd = to_statsd("localhost:8125").unwrap().open_scope();
-        let timer = sd.define_metric(&"timer".into(), Kind::Timer);
+        let sd = to_statsd("localhost:8125").unwrap().new_input_dyn();
+        let timer = sd.new_metric("timer".into(), Kind::Timer);
 
         b.iter(|| test::black_box(timer.write(2000)));
     }

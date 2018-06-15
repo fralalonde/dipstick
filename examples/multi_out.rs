@@ -9,13 +9,13 @@ fn main() {
     // will output metrics to graphite and to stdout
     let different_type_metrics = MultiOutput::new()
         .with_output(to_graphite("localhost:2003").expect("Connecting"))
-        .with_output(to_stdout()).open();
+        .with_output(to_stdout()).new_input();
 
     // will output metrics twice, once with "cool.yeah" prefix and once with "cool.ouch" prefix.
     let same_type_metrics = MultiOutput::new()
-        .with_output(to_stdout().with_prefix("yeah"))
-        .with_output(to_stdout().with_prefix("ouch"))
-        .with_prefix("cool").open();
+        .with_output(to_stdout().add_name("yeah"))
+        .with_output(to_stdout().add_name("ouch"))
+        .add_name("cool").new_input();
 
     loop {
         different_type_metrics.counter("counter_a").count(123);

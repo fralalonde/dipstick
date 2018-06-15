@@ -24,17 +24,17 @@ pub mod error;
 pub use error::{Error, Result};
 
 pub mod core;
-pub use core::{Value, Kind, Namespace, WithPrefix, Marker, Timer, Counter, Gauge, MetricInput, Flush,
-               MetricOutput, NO_METRIC_OUTPUT, OpenScope, ScheduleFlush, WithSamplingRate, Sampling, WithBuffering, Buffering};
+pub use core::{Value, Kind, Name, WithName, Marker, Timer, Counter, Gauge, Input, Flush,
+               Output, NO_METRIC_OUTPUT, OutputDyn, ScheduleFlush, WithSamplingRate, Sampling, WithBuffering, Buffering};
 
 #[macro_use]
 pub mod macros;
 
-pub mod dispatch;
-pub use dispatch::{MetricDispatch, to_dispatch, ROOT_DISPATCH};
+pub mod proxy;
+pub use proxy::{InputProxy, ROOT_PROXY};
 
-mod aggregate;
-pub use aggregate::{MetricAggregator, to_aggregate, summary, all_stats, average};
+mod bucket;
+pub use bucket::{Bucket, to_aggregate, summary, all_stats, average};
 
 mod text;
 pub use text::{to_buffered_stdout, to_stdout, TextOutput, BufferedTextOutput, BufferedTextInput};
@@ -69,8 +69,8 @@ pub use socket::RetrySocket;
 mod multi;
 pub use multi::{MultiOutput, MultiInput, to_multi};
 
-mod async_queue;
-pub use async_queue::{AsyncInput, to_async};
+mod async;
+pub use async::{AsyncInput, to_async};
 
 mod scheduler;
 pub use scheduler::{set_schedule, CancelHandle};

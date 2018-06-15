@@ -1,4 +1,4 @@
-use core::{Namespace, WithPrefix, Value, WriteFn, Kind, MetricOutput, MetricInput, Flush, WithAttributes, Attributes};
+use core::{Name, WithName, Value, WriteFn, Kind, Output, Input, Flush, WithAttributes, Attributes};
 use error;
 use std::sync::{RwLock, Arc};
 use text;
@@ -10,14 +10,14 @@ use log;
 #[derive(Clone)]
 pub struct LogOutput {
     attributes: Attributes,
-    format_fn: Arc<Fn(&Namespace, Kind) -> Vec<String> + Send + Sync>,
+    format_fn: Arc<Fn(&Name, Kind) -> Vec<String> + Send + Sync>,
     print_fn: Arc<Fn(&mut Vec<u8>, &[String], Value) -> error::Result<()> + Send + Sync>,
 }
 
-impl MetricOutput for LogOutput {
+impl Output for LogOutput {
     type Input = LogOutput;
 
-    fn open(&self) -> Self::Input {
+    fn new_input(&self) -> Self::Input {
         self.clone()
     }
 }
@@ -27,8 +27,8 @@ impl WithAttributes for LogOutput {
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
-impl MetricInput for LogOutput {
-    fn define_metric(&self, name: &Namespace, kind: Kind) -> WriteFn {
+impl Input for LogOutput {
+    fn new_metric(&self, name: Name, kind: Kind) -> WriteFn {
         let name = self.qualified_name(name);
         let template = (self.format_fn)(&name, kind);
 
@@ -61,14 +61,14 @@ pub fn to_log() -> LogOutput {
 #[derive(Clone)]
 pub struct BufferedLogOutput {
     attributes: Attributes,
-    format_fn: Arc<Fn(&Namespace, Kind) -> Vec<String> + Send + Sync>,
+    format_fn: Arc<Fn(&Name, Kind) -> Vec<String> + Send + Sync>,
     buffer_print_fn: Arc<Fn(&mut Vec<u8>, &[String], Value) -> error::Result<()> + Send + Sync>,
 }
 
-impl MetricOutput for BufferedLogOutput {
+impl Output for BufferedLogOutput {
     type Input = BufferedLogInput;
 
-    fn open(&self) -> Self::Input {
+    fn new_input(&self) -> Self::Input {
         BufferedLogInput {
             attributes: self.attributes.clone(),
             entries: Arc::new(RwLock::new(Vec::new())),
@@ -95,8 +95,8 @@ impl WithAttributes for BufferedLogInput {
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
-impl MetricInput for BufferedLogInput {
-    fn define_metric(&self, name: &Namespace, kind: Kind) -> WriteFn {
+impl Input for BufferedLogInput {
+    fn new_metric(&self, name: Name, kind: Kind) -> WriteFn {
         let name = self.qualified_name(name);
         let template = (self.output.format_fn)(&name, kind);
 
@@ -148,8 +148,8 @@ mod test {
 
     #[test]
     fn test_to_log() {
-        let c = super::to_log().open_scope();
-        let m = c.define_metric(&"test".into(), Kind::Marker);
+        let c = super::to_log().new_input_dyn();
+        let m = c.new_metric("test".into(), Kind::Marker);
         (m)(33);
     }
 

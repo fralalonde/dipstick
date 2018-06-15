@@ -16,7 +16,7 @@ use std::fmt::Debug;
 use socket::RetrySocket;
 
 metrics!{
-    <Aggregate> DIPSTICK_METRICS.with_prefix("prometheus") => {
+    <Aggregate> DIPSTICK_METRICS.add_name("prometheus") => {
         Marker SEND_ERR: "send_failed";
         Marker TRESHOLD_EXCEEDED: "bufsize_exceeded";
         Counter SENT_BYTES: "sent_bytes";
@@ -51,7 +51,7 @@ pub fn to_buffered_prometheus<ADDR>(address: ADDR) -> error::Result<MetricOutput
     ))
 }
 
-fn prometheus_metric(namespace: &Namespace, kind: Kind, rate: Sampling) -> Prometheus {
+fn prometheus_metric(namespace: &Name, kind: Kind, rate: Sampling) -> Prometheus {
     let mut prefix = namespace.join(".");
     prefix.push(' ');
 
@@ -180,16 +180,16 @@ mod bench {
 
     #[bench]
     pub fn unbufferd_prometheus(b: &mut test::Bencher) {
-        let sd = to_prometheus("localhost:8125").unwrap().open_scope();
-        let timer = sd.define_metric(&"timer".into(), Kind::Timer, 1000000.0);
+        let sd = to_prometheus("localhost:8125").unwrap().new_input_dyn();
+        let timer = sd.new_metric(&"timer".into(), Kind::Timer, 1000000.0);
 
         b.iter(|| test::black_box(sd.write(&timer, 2000)));
     }
 
     #[bench]
     pub fn buffered_prometheus(b: &mut test::Bencher) {
-        let sd = to_buffered_prometheus("localhost:8125").unwrap().open_scope();
-        let timer = sd.define_metric(&"timer".into(), Kind::Timer, 1000000.0);
+        let sd = to_buffered_prometheus("localhost:8125").unwrap().new_input_dyn();
+        let timer = sd.new_metric(&"timer".into(), Kind::Timer, 1000000.0);
 
         b.iter(|| test::black_box(sd.write(&timer, 2000)));
     }

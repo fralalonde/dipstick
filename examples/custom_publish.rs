@@ -9,9 +9,9 @@ use dipstick::*;
 fn main() {
     fn custom_statistics(
         kind: Kind,
-        mut name: Namespace,
+        mut name: Name,
         score: ScoreType,
-    ) -> Option<(Kind, Namespace, Value)> {
+    ) -> Option<(Kind, Name, Value)> {
         match (kind, score) {
             // do not export gauge scores
             (Kind::Gauge, _) => None,
@@ -19,7 +19,7 @@ fn main() {
             // prepend and append to metric name
             (_, ScoreType::Count(count)) => {
                 if let Some(last) = name.pop() {
-                    name.push("customized_with_prefix");
+                    name.push("customized_add_name".into());
                     name.push(format!("{}_and_a_suffix", last));
                     Some((
                         Kind::Counter,
@@ -32,7 +32,7 @@ fn main() {
             },
 
             // scaling the score value and appending unit to name
-            (kind, ScoreType::Sum(sum)) => Some((kind, name.with_prefix("per_thousand"), sum / 1000)),
+            (kind, ScoreType::Sum(sum)) => Some((kind, name.add_name("per_thousand"), sum / 1000)),
 
             // using the unmodified metric name
             (kind, ScoreType::Mean(avg)) => Some((kind, name, avg.round() as u64)),
@@ -43,10 +43,10 @@ fn main() {
     }
 
     // send application metrics to aggregator
-    MetricAggregator::set_default_output(to_stdout());
-    MetricAggregator::set_default_stats(custom_statistics);
+    Bucket::set_default_output(to_stdout());
+    Bucket::set_default_stats(custom_statistics);
 
-    let app_metrics = MetricAggregator::new();
+    let app_metrics = Bucket::new();
 
     // schedule aggregated metrics to be printed every 3 seconds
     app_metrics.flush_every(Duration::from_secs(3));

@@ -1,6 +1,6 @@
 //! Maintain aggregated metrics for deferred reporting,
 //!
-use core::{Kind, Value, Namespace, WithPrefix, NO_METRIC_OUTPUT, MetricInput, Flush, OpenScope, WriteFn, WithAttributes, Attributes};
+use core::{Kind, Value, Name, WithName, NO_METRIC_OUTPUT, Input, Flush, OutputDyn, WriteFn, WithAttributes, Attributes};
 use clock::TimeHandle;
 use core::Kind::*;
 use error;
@@ -12,63 +12,63 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
 
 /// A function type to transform aggregated scores into publishable statistics.
-pub type StatsFn = Fn(Kind, Namespace, ScoreType) -> Option<(Kind, Namespace, Value)> + Send + Sync + 'static;
+pub type StatsFn = Fn(Kind, Name, ScoreType) -> Option<(Kind, Name, Value)> + Send + Sync + 'static;
 
 fn initial_stats() -> &'static StatsFn {
     &summary
 }
 
-fn initial_output() -> Arc<OpenScope + Send + Sync> {
+fn initial_output() -> Arc<OutputDyn + Send + Sync> {
     NO_METRIC_OUTPUT.clone()
 }
 
 lazy_static! {
     static ref DEFAULT_AGGREGATE_STATS: RwLock<Arc<StatsFn>> = RwLock::new(Arc::new(initial_stats()));
 
-    static ref DEFAULT_AGGREGATE_OUTPUT: RwLock<Arc<OpenScope + Send + Sync>> = RwLock::new(initial_output());
+    static ref DEFAULT_AGGREGATE_OUTPUT: RwLock<Arc<OutputDyn + Send + Sync>> = RwLock::new(initial_output());
 }
 
 /// Create a new metric aggregator
-pub fn to_aggregate() -> MetricAggregator {
-    MetricAggregator::new()
+pub fn to_aggregate() -> Bucket {
+    Bucket::new()
 }
 
 /// Central aggregation structure.
 /// Maintains a list of metrics for enumeration when used as source.
 #[derive(Debug, Clone)]
-pub struct MetricAggregator {
+pub struct Bucket {
     attributes: Attributes,
-    inner: Arc<RwLock<InnerAggregator>>,
+    inner: Arc<RwLock<InnerBucket>>,
 }
 
 #[derive(Derivative)]
 #[derivative(Debug)]
-struct InnerAggregator {
-    metrics: BTreeMap<Namespace, Arc<Scoreboard>>,
+struct InnerBucket {
+    metrics: BTreeMap<Name, Arc<Scoreboard>>,
     period_start: TimeHandle,
     #[derivative(Debug = "ignore")]
-    stats: Option<Arc<Fn(Kind, Namespace, ScoreType)
-        -> Option<(Kind, Namespace, Value)> + Send + Sync + 'static>>,
+    stats: Option<Arc<Fn(Kind, Name, ScoreType)
+        -> Option<(Kind, Name, Value)> + Send + Sync + 'static>>,
     #[derivative(Debug = "ignore")]
-    output: Option<Arc<OpenScope + Send + Sync + 'static>>,
+    output: Option<Arc<OutputDyn + Send + Sync + 'static>>,
     publish_metadata: bool,
 }
 
 lazy_static! {
-    static ref PERIOD_LENGTH: Namespace = "_period_length".into();
+    static ref PERIOD_LENGTH: Name = "_period_length".into();
 }
 
-impl InnerAggregator {
+impl InnerBucket {
     /// Take a snapshot of aggregated values and reset them.
     /// Compute stats on captured values using assigned or default stats function.
     /// Write stats to assigned or default output.
-    pub fn flush_to(&mut self, publish_scope: &MetricInput, stats_fn: &StatsFn) {
+    pub fn flush_to(&mut self, publish_scope: &Input, stats_fn: &StatsFn) {
 
         let now = TimeHandle::now();
         let duration_seconds = self.period_start.elapsed_us() as f64 / 1_000_000.0;
         self.period_start = now;
 
-        let mut snapshot: Vec<(&Namespace, Kind, Vec<ScoreType>)> = self.metrics.iter()
+        let mut snapshot: Vec<(&Name, Kind, Vec<ScoreType>)> = self.metrics.iter()
             .flat_map(|(name, scores)| if let Some(values) = scores.reset(duration_seconds) {
                 Some((name, scores.metric_kind(), values))
             } else {
@@ -89,7 +89,7 @@ impl InnerAggregator {
                 for score in metric.2 {
                     let filtered = (stats_fn)(metric.1, metric.0.clone(), score);
                     if let Some((kind, name, value)) = filtered {
-                        let metric: WriteFn = publish_scope.define_metric(&name, kind);
+                        let metric: WriteFn = publish_scope.new_metric(name, kind);
                         (metric)(value)
                     }
                 }
@@ -99,18 +99,18 @@ impl InnerAggregator {
 
 }
 
-impl<S: AsRef<str>> From<S> for MetricAggregator {
-    fn from(name: S) -> MetricAggregator {
-        MetricAggregator::new().with_prefix(name.as_ref())
+impl<S: AsRef<str>> From<S> for Bucket {
+    fn from(name: S) -> Bucket {
+        Bucket::new().add_name(name.as_ref())
     }
 }
 
-impl MetricAggregator {
+impl Bucket {
     /// Build a new metric aggregation
-    pub fn new() -> MetricAggregator {
-        MetricAggregator {
+    pub fn new() -> Bucket {
+        Bucket {
             attributes: Attributes::default(),
-            inner: Arc::new(RwLock::new(InnerAggregator {
+            inner: Arc::new(RwLock::new(InnerBucket {
                 metrics: BTreeMap::new(),
                 period_start: TimeHandle::now(),
                 stats: None,
@@ -123,7 +123,7 @@ impl MetricAggregator {
     /// Set the default aggregated metrics statistics generator.
     pub fn set_default_stats<F>(func: F)
         where
-            F: Fn(Kind, Namespace, ScoreType) -> Option<(Kind, Namespace, Value)> + Send + Sync + 'static
+            F: Fn(Kind, Name, ScoreType) -> Option<(Kind, Name, Value)> + Send + Sync + 'static
     {
         *DEFAULT_AGGREGATE_STATS.write().unwrap() = Arc::new(func)
     }
@@ -134,7 +134,7 @@ impl MetricAggregator {
     }
 
     /// Install a new receiver for all aggregateed metrics, replacing any previous receiver.
-    pub fn set_default_output(default_config: impl OpenScope + Send + Sync + 'static) {
+    pub fn set_default_output(default_config: impl OutputDyn + Send + Sync + 'static) {
         *DEFAULT_AGGREGATE_OUTPUT.write().unwrap() = Arc::new(default_config);
     }
 
@@ -146,7 +146,7 @@ impl MetricAggregator {
     /// Set the default aggregated metrics statistics generator.
     pub fn set_stats<F>(&self, func: F)
         where
-            F: Fn(Kind, Namespace, ScoreType) -> Option<(Kind, Namespace, Value)> + Send + Sync + 'static
+            F: Fn(Kind, Name, ScoreType) -> Option<(Kind, Name, Value)> + Send + Sync + 'static
     {
         self.inner.write().expect("Aggregator").stats = Some(Arc::new(func))
     }
@@ -157,7 +157,7 @@ impl MetricAggregator {
     }
 
     /// Install a new receiver for all aggregated metrics, replacing any previous receiver.
-    pub fn set_output(&self, new_config: impl OpenScope + Send + Sync + 'static) {
+    pub fn set_output(&self, new_config: impl OutputDyn + Send + Sync + 'static) {
         self.inner.write().expect("Aggregator").output = Some(Arc::new(new_config))
     }
 
@@ -167,14 +167,14 @@ impl MetricAggregator {
     }
 
     /// Flush the aggregator scores using the specified scope and stats.
-    pub fn flush_to(&self, publish_scope: &MetricInput, stats_fn: &StatsFn) {
+    pub fn flush_to(&self, publish_scope: &Input, stats_fn: &StatsFn) {
         let mut inner = self.inner.write().expect("Aggregator");
         inner.flush_to(publish_scope, stats_fn);
     }
 
 //    /// Discard scores for ad-hoc metrics.
 //    pub fn cleanup(&self) {
-//        let orphans: Vec<Namespace> = self.inner.read().expect("Aggregator").metrics.iter()
+//        let orphans: Vec<Name> = self.inner.read().expect("Aggregator").metrics.iter()
 //            // is aggregator now the sole owner?
 //            // TODO use weak ref + impl Drop to mark abandoned metrics (see dispatch)
 //            .filter(|&(_k, v)| Arc::strong_count(v) == 1)
@@ -190,9 +190,9 @@ impl MetricAggregator {
 
 }
 
-impl MetricInput for MetricAggregator {
+impl Input for Bucket {
     /// Lookup or create a scoreboard for the requested metric.
-    fn define_metric(&self, name: &Namespace, kind: Kind) -> WriteFn {
+    fn new_metric(&self, name: Name, kind: Kind) -> WriteFn {
         let scoreb = self.inner
             .write()
             .expect("Aggregator")
@@ -204,12 +204,12 @@ impl MetricInput for MetricAggregator {
     }
 }
 
-impl WithAttributes for MetricAggregator {
+impl WithAttributes for Bucket {
     fn get_attributes(&self) -> &Attributes { &self.attributes }
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
-impl Flush for MetricAggregator {
+impl Flush for Bucket {
     /// Collect and reset aggregated data.
     /// Publish statistics
     fn flush(&self) -> error::Result<()> {
@@ -221,8 +221,8 @@ impl Flush for MetricAggregator {
         };
 
         let pub_scope = match &inner.output {
-            &Some(ref out) => out.open_scope(),
-            &None => DEFAULT_AGGREGATE_OUTPUT.read().unwrap().open_scope(),
+            &Some(ref out) => out.new_input_dyn(),
+            &None => DEFAULT_AGGREGATE_OUTPUT.read().unwrap().new_input_dyn(),
         };
 
         inner.flush_to(pub_scope.as_ref(), stats_fn.as_ref());
@@ -236,14 +236,14 @@ impl Flush for MetricAggregator {
 /// A predefined export strategy reporting all aggregated stats for all metric types.
 /// Resulting stats are named by appending a short suffix to each metric's name.
 #[allow(dead_code)]
-pub fn all_stats(kind: Kind, name: Namespace, score: ScoreType) -> Option<(Kind, Namespace, Value)> {
+pub fn all_stats(kind: Kind, name: Name, score: ScoreType) -> Option<(Kind, Name, Value)> {
     match score {
-        Count(hit) => Some((Counter, name.with_prefix("count"), hit)),
-        Sum(sum) => Some((kind, name.with_prefix("sum"), sum)),
-        Mean(mean) => Some((kind, name.with_prefix("mean"), mean.round() as Value)),
-        Max(max) => Some((Gauge, name.with_prefix("max"), max)),
-        Min(min) => Some((Gauge, name.with_prefix("min"), min)),
-        Rate(rate) => Some((Gauge, name.with_prefix("rate"), rate.round() as Value)),
+        Count(hit) => Some((Counter, name.add_name("count"), hit)),
+        Sum(sum) => Some((kind, name.add_name("sum"), sum)),
+        Mean(mean) => Some((kind, name.add_name("mean"), mean.round() as Value)),
+        Max(max) => Some((Gauge, name.add_name("max"), max)),
+        Min(min) => Some((Gauge, name.add_name("min"), min)),
+        Rate(rate) => Some((Gauge, name.add_name("rate"), rate.round() as Value)),
     }
 }
 
@@ -252,7 +252,7 @@ pub fn all_stats(kind: Kind, name: Namespace, score: ScoreType) -> Option<(Kind,
 /// Since there is only one stat per metric, there is no risk of collision
 /// and so exported stats copy their metric's name.
 #[allow(dead_code)]
-pub fn average(kind: Kind, name: Namespace, score: ScoreType) -> Option<(Kind, Namespace, Value)> {
+pub fn average(kind: Kind, name: Name, score: ScoreType) -> Option<(Kind, Name, Value)> {
     match kind {
         Marker => match score {
             Count(count) => Some((Counter, name, count)),
@@ -272,7 +272,7 @@ pub fn average(kind: Kind, name: Namespace, score: ScoreType) -> Option<(Kind, N
 /// Since there is only one stat per metric, there is no risk of collision
 /// and so exported stats copy their metric's name.
 #[allow(dead_code)]
-pub fn summary(kind: Kind, name: Namespace, score: ScoreType) -> Option<(Kind, Namespace, Value)> {
+pub fn summary(kind: Kind, name: Name, score: ScoreType) -> Option<(Kind, Name, Value)> {
     match kind {
         Marker => match score {
             Count(count) => Some((Counter, name, count)),
@@ -294,19 +294,19 @@ mod bench {
 
     use test;
     use core::*;
-    use aggregate::MetricAggregator;
+    use bucket::Bucket;
 
     #[bench]
     fn aggregate_marker(b: &mut test::Bencher) {
-        let sink = MetricAggregator::new();
-        let metric = sink.define_metric(&"event_a".into(), Kind::Marker);
+        let sink = Bucket::new();
+        let metric = sink.new_metric("event_a".into(), Kind::Marker);
         b.iter(|| test::black_box(metric.write(1)));
     }
 
     #[bench]
     fn aggregate_counter(b: &mut test::Bencher) {
-        let sink = MetricAggregator::new();
-        let metric = sink.define_metric(&"count_a".into(), Kind::Counter);
+        let sink = Bucket::new();
+        let metric = sink.new_metric("count_a".into(), Kind::Counter);
         b.iter(|| test::black_box(metric.write(1)));
     }
 
@@ -315,7 +315,7 @@ mod bench {
 #[cfg(test)]
 mod test {
     use core::*;
-    use aggregate::{MetricAggregator, all_stats, summary, average, StatsFn};
+    use bucket::{Bucket, all_stats, summary, average, StatsFn};
     use clock::{mock_clock_advance, mock_clock_reset};
     use map::StatsMap;
 
@@ -325,7 +325,7 @@ mod test {
     fn make_stats(stats_fn: &StatsFn) -> BTreeMap<String, Value> {
         mock_clock_reset();
 
-        let metrics = MetricAggregator::new().with_prefix("test");
+        let metrics = Bucket::new().add_name("test");
 
         let counter = metrics.counter("counter_a");
         let timer = metrics.timer("timer_a");

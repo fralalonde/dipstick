@@ -6,7 +6,7 @@ use clock::TimeHandle;
 use scheduler::{set_schedule, CancelHandle};
 use std::time::Duration;
 use std::sync::Arc;
-use std::ops::Deref;
+use std::ops;
 use text;
 use error;
 
@@ -73,7 +73,7 @@ impl Default for Buffering {
 /// Field access must go through `is_` and `get_` methods declared in sub-traits.
 #[derive(Debug, Clone, Default)]
 pub struct Attributes {
-    namespace: Namespace,
+    namespace: Name,
     sampling_rate: Sampling,
     buffering: Buffering,
 }
@@ -100,33 +100,31 @@ pub trait WithAttributes: Clone {
     }
 }
 
-/// Namespace operations support.
-pub trait WithPrefix {
+/// Name operations support.
+pub trait WithName {
     /// Return the namespace of the component.
-    fn get_namespace(&self) -> &Namespace;
+    fn get_namespace(&self) -> &Name;
 
     /// Join namespace and prepend in newly defined metrics.
-    fn with_prefix(&self, name: &str) -> Self;
+    fn add_name(&self, name: &str) -> Self;
 
     /// Append the specified name to the local namespace and return the concatenated result.
-    fn qualified_name(&self, metric_name: &Namespace) -> Namespace;
+    fn qualified_name(&self, metric_name: Name) -> Name;
 }
 
-impl<T: WithAttributes> WithPrefix for T {
-    fn get_namespace(&self) -> &Namespace {
+impl<T: WithAttributes> WithName for T {
+    fn get_namespace(&self) -> &Name {
         &self.get_attributes().namespace
     }
 
     /// Join namespace and prepend in newly defined metrics.
-    fn with_prefix(&self, name: &str) -> Self {
-        self.with_attributes(|new_attr| new_attr.namespace = new_attr.namespace.with_prefix(name))
+    fn add_name(&self, name: &str) -> Self {
+        self.with_attributes(|new_attr| new_attr.namespace = new_attr.namespace.add_name(name))
     }
 
     /// Append the specified name to the local namespace and return the concatenated result.
-    fn qualified_name(&self, metric_name: &Namespace) -> Namespace {
-        let mut full_name = self.get_attributes().namespace.clone();
-        full_name.extend(metric_name);
-        full_name
+    fn qualified_name(&self, name: Name) -> Name {
+        self.get_attributes().namespace.add_name(name)
     }
 }
 
@@ -170,49 +168,49 @@ pub trait WithBuffering: WithAttributes {
 /// Does _not_ include the metric's "short" name itself.
 /// Can be empty.
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd, Default)]
-pub struct Namespace {
+pub struct Name {
     inner: Vec<String>,
 }
 
-impl Namespace {
+impl Name {
 
-    /// Returns true if this namespace contains no elements.
-    pub fn is_empty(&self) -> bool {
-        self.inner.is_empty()
-    }
+//    /// Returns true if this namespace contains no elements.
+//    pub fn is_empty(&self) -> bool {
+//        self.inner.is_empty()
+//    }
 
-    /// Append a component to the name.
-    pub fn push(&mut self, name: impl Into<String>) {
-        self.inner.push(name.into())
-    }
+//    /// Append a component to the name.
+//    pub fn push(&mut self, name: impl Into<String>) {
+//        self.inner.push(name.into())
+//    }
 
     /// Concatenate with another namespace into a new one.
-    pub fn with_prefix(&self, prefix: &str) -> Self {
+    pub fn add_name(&self, name: impl Into<Name>) -> Self {
         let mut cloned = self.clone();
-        cloned.push(prefix);
+        cloned.inner.extend_from_slice(&name.into().inner);
         cloned
     }
 
     /// Returns a copy of this namespace with the second namespace appended.
     /// Both original namespaces stay untouched.
-    pub fn extend(&mut self, name: &Namespace) {
-        self.inner.extend_from_slice(&name.inner);
-    }
+//    pub fn extend(&mut self, name: &Name) {
+//        self.inner.extend_from_slice(&name.inner);
+//    }
 
     /// Returns true if the specified namespace is a subset or is equal to this namespace.
-    pub fn starts_with(&self, name: &Namespace) -> bool {
+    pub fn starts_with(&self, name: &Name) -> bool {
         (self.inner.len() >= name.inner.len()) && (name.inner[..] == self.inner[..name.inner.len()])
     }
 
-    /// Remove the last part of the namespace, returning it or None if namespace was empty.
-    pub fn pop(&mut self) -> Option<String> {
-        self.inner.pop()
-    }
+//    /// Remove the last part of the namespace, returning it or None if namespace was empty.
+//    pub fn pop(&mut self) -> Option<String> {
+//        self.inner.pop()
+//    }
 
-    /// Returns the number of substrings constituting this namespace.
-    pub fn len(&self) -> usize {
-        self.inner.len()
-    }
+//    /// Returns the number of substrings constituting this namespace.
+//    pub fn len(&self) -> usize {
+//        self.inner.len()
+//    }
 
     /// Combine name parts into a string.
     pub fn join(&self, separator: &str) -> String {
@@ -232,70 +230,85 @@ impl Namespace {
     }
 }
 
-impl<S: Into<String>> From<S> for Namespace {
-    fn from(name: S) -> Namespace {
+impl ops::Deref for Name {
+    type Target = Vec<String>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl ops::DerefMut for Name {
+
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
+impl<S: Into<String>> From<S> for Name {
+    fn from(name: S) -> Name {
         let name: String = name.into();
         if name.is_empty() {
-            Namespace::default()
+            Name::default()
         } else {
-            Namespace { inner: vec![name] }
+            Name { inner: vec![name] }
         }
     }
 }
 
 /// A function trait that opens a new metric capture scope.
-pub trait MetricOutput: OpenScope {
+pub trait Output: OutputDyn {
     /// Type of input scope provided by this output.
-    type Input: MetricInput + 'static;
+    type Input: Input + 'static;
 
-    /// Get an input scope for this metric output.
-    fn open(&self) -> Self::Input;
+    /// Open a new input scope from this output.
+    fn new_input(&self) -> Self::Input;
 }
 
-/// Wrap a MetricConfig in a non-generic trait.
-pub trait OpenScope {
-    /// Open a new metrics scope
-    fn open_scope(&self) -> Arc<MetricInput + Send + Sync + 'static>;
+/// Dynamic variant of the Output trait
+pub trait OutputDyn {
+    /// Open a new metric input with dynamic typing.
+    fn new_input_dyn(&self) -> Arc<Input + Send + Sync + 'static>;
 }
 
-/// Blanket impl that provides all MetricOuputs their "trait object flavor"
-impl<T: MetricOutput + Send + Sync + 'static> OpenScope for T {
-    fn open_scope(&self) -> Arc<MetricInput + Send + Sync + 'static> {
-        Arc::new(self.open())
+/// Blanket impl that provides Outputs their dynamic flavor.
+impl<T: Output + Send + Sync + 'static> OutputDyn for T {
+    fn new_input_dyn(&self) -> Arc<Input + Send + Sync + 'static> {
+        Arc::new(self.new_input())
     }
 }
 
 lazy_static! {
     /// The reference instance identifying an uninitialized metric config.
-    pub static ref NO_METRIC_OUTPUT: Arc<OpenScope + Send + Sync> = Arc::new(text::to_void());
+    pub static ref NO_METRIC_OUTPUT: Arc<OutputDyn + Send + Sync> = Arc::new(text::to_void());
 
     /// The reference instance identifying an uninitialized metric scope.
-    pub static ref NO_METRIC_SCOPE: Arc<MetricInput + Send + Sync> = NO_METRIC_OUTPUT.open_scope();
+    pub static ref NO_METRIC_SCOPE: Arc<Input + Send + Sync> = NO_METRIC_OUTPUT.new_input_dyn();
 }
 
 /// Define metrics, write values and flush them.
-pub trait MetricInput: Send + Sync + Flush {
+pub trait Input: Send + Sync + Flush {
     /// Define a metric of the specified type.
-    fn define_metric(&self, namespace: &Namespace, kind: Kind) -> WriteFn;
+    fn new_metric(&self, name: Name, kind: Kind) -> WriteFn;
 
     /// Define a counter.
     fn counter(&self, name: &str) -> Counter {
-        self.define_metric(&name.into(), Kind::Counter).into()
+        self.new_metric(name.into(), Kind::Counter).into()
     }
 
     /// Define a marker.
     fn marker(&self, name: &str) -> Marker {
-        self.define_metric(&name.into(), Kind::Marker).into()
+        self.new_metric(name.into(), Kind::Marker).into()
     }
 
     /// Define a timer.
     fn timer(&self, name: &str) -> Timer {
-        self.define_metric(&name.into(), Kind::Timer).into()
+        self.new_metric(name.into(), Kind::Timer).into()
     }
 
     /// Define a gauge.
     fn gauge(&self, name: &str) -> Gauge {
-        self.define_metric(&name.into(), Kind::Gauge).into()
+        self.new_metric(name.into(), Kind::Gauge).into()
     }
 }
 
@@ -345,7 +358,7 @@ impl WriteFn {
     }
 }
 
-impl Deref for WriteFn {
+impl ops::Deref for WriteFn {
     type Target = (Fn(Value) + Send + Sync);
 
     fn deref(&self) -> &Self::Target {
@@ -533,7 +546,7 @@ mod bench {
     use core::*;
     use clock::TimeHandle;
     use test;
-    use aggregate::MetricAggregator;
+    use bucket::Bucket;
 
     #[bench]
     fn get_instant(b: &mut test::Bencher) {
@@ -542,7 +555,7 @@ mod bench {
 
     #[bench]
     fn time_bench_direct_dispatch_event(b: &mut test::Bencher) {
-        let metrics = MetricAggregator::new();
+        let metrics = Bucket::new();
         let marker = metrics.marker("aaa");
         b.iter(|| test::black_box(marker.mark()));
     }
