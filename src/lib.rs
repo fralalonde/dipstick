@@ -64,13 +64,13 @@ mod socket;
 pub use socket::RetrySocket;
 
 //mod cache;
-//pub use cache::{add_cache, WithCache};
+//pub use cache::WithCache;
 
 mod multi;
 pub use multi::{MultiOutput, MultiInput, to_multi};
 
 mod async;
-pub use async::{AsyncInput, to_async};
+pub use async::{AsyncInput, AsyncOutput};
 
 mod scheduler;
 pub use scheduler::{set_schedule, CancelHandle};

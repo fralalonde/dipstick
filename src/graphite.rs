@@ -31,7 +31,7 @@ pub struct GraphiteOutput {
 
 impl Output for GraphiteOutput {
 
-    type Input = GraphiteInput;
+    type INPUT = GraphiteInput;
 
     fn new_input(&self) -> GraphiteInput {
         GraphiteInput {

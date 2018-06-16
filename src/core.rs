@@ -4,6 +4,8 @@
 
 use clock::TimeHandle;
 use scheduler::{set_schedule, CancelHandle};
+use async;
+
 use std::time::Duration;
 use std::sync::Arc;
 use std::ops;
@@ -174,16 +176,6 @@ pub struct Name {
 
 impl Name {
 
-//    /// Returns true if this namespace contains no elements.
-//    pub fn is_empty(&self) -> bool {
-//        self.inner.is_empty()
-//    }
-
-//    /// Append a component to the name.
-//    pub fn push(&mut self, name: impl Into<String>) {
-//        self.inner.push(name.into())
-//    }
-
     /// Concatenate with another namespace into a new one.
     pub fn add_name(&self, name: impl Into<Name>) -> Self {
         let mut cloned = self.clone();
@@ -191,26 +183,10 @@ impl Name {
         cloned
     }
 
-    /// Returns a copy of this namespace with the second namespace appended.
-    /// Both original namespaces stay untouched.
-//    pub fn extend(&mut self, name: &Name) {
-//        self.inner.extend_from_slice(&name.inner);
-//    }
-
     /// Returns true if the specified namespace is a subset or is equal to this namespace.
     pub fn starts_with(&self, name: &Name) -> bool {
         (self.inner.len() >= name.inner.len()) && (name.inner[..] == self.inner[..name.inner.len()])
     }
-
-//    /// Remove the last part of the namespace, returning it or None if namespace was empty.
-//    pub fn pop(&mut self) -> Option<String> {
-//        self.inner.pop()
-//    }
-
-//    /// Returns the number of substrings constituting this namespace.
-//    pub fn len(&self) -> usize {
-//        self.inner.len()
-//    }
 
     /// Combine name parts into a string.
     pub fn join(&self, separator: &str) -> String {
@@ -257,12 +233,18 @@ impl<S: Into<String>> From<S> for Name {
 }
 
 /// A function trait that opens a new metric capture scope.
-pub trait Output: OutputDyn {
+pub trait Output: OutputDyn + Send + Sync + 'static + Sized {
     /// Type of input scope provided by this output.
-    type Input: Input + 'static;
+    type INPUT: Input + 'static + Clone;
 
     /// Open a new input scope from this output.
-    fn new_input(&self) -> Self::Input;
+    fn new_input(&self) -> Self::INPUT;
+
+    /// Wrap this output with an asynchronous dispatch queue of specified length.
+    fn async(self, queue_length: usize) -> async::AsyncOutput {
+        async::AsyncOutput::new(self, queue_length)
+    }
+
 }
 
 /// Dynamic variant of the Output trait
@@ -310,6 +292,7 @@ pub trait Input: Send + Sync + Flush {
     fn gauge(&self, name: &str) -> Gauge {
         self.new_metric(name.into(), Kind::Gauge).into()
     }
+
 }
 
 /// Enable programmatic buffering of metrics output

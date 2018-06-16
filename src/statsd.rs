@@ -40,8 +40,8 @@ pub fn to_statsd<ADDR: ToSocketAddrs>(address: ADDR) -> error::Result<StatsdOutp
 }
 
 impl Output for StatsdOutput {
-    type Input = StatsdInput;
-    fn new_input(&self) -> Self::Input {
+    type INPUT = StatsdInput;
+    fn new_input(&self) -> Self::INPUT {
         StatsdInput {
             attributes: self.attributes.clone(),
             buffer: Arc::new(RwLock::new(InputBuffer {
