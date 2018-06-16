@@ -34,8 +34,8 @@ impl<W: Write + Send + Sync + 'static> WithAttributes for TextOutput<W> {
 }
 
 impl<W: Write + Send + Sync + 'static> Output for TextOutput<W> {
-    type Input = TextOutput<W>;
-    fn new_input(&self) -> Self::Input {
+    type INPUT = TextOutput<W>;
+    fn new_input(&self) -> Self::INPUT {
         self.clone()
     }
 }
@@ -90,9 +90,9 @@ impl<W: Write + Send + Sync + 'static> WithAttributes for BufferedTextOutput<W> 
 
 impl<W: Write + Send + Sync + 'static> Output for BufferedTextOutput<W> {
 
-    type Input = BufferedTextInput<W>;
+    type INPUT = BufferedTextInput<W>;
 
-    fn new_input(&self) -> Self::Input {
+    fn new_input(&self) -> Self::INPUT {
         BufferedTextInput {
             attributes: self.attributes.clone(),
             entries: Arc::new(RwLock::new(Vec::new())),
@@ -201,7 +201,7 @@ pub fn to_buffered_stdout() -> BufferedTextOutput<BufWriter<io::Stdout>> {
 pub struct Void {}
 
 impl Output for Void {
-    type Input = Void;
+    type INPUT = Void;
 
     fn new_input(&self) -> Void {
         self.clone()

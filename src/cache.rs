@@ -3,6 +3,10 @@
 use core::*;
 use std::sync::{Arc, RwLock};
 
+struct MetricCache<OUT> {
+    inner: RwLock<lru::LRUCache<Name, M>>
+}
+
 /// Cache metrics to prevent them from being re-defined on every use.
 /// Use of this should be transparent, this has no effect on the values.
 /// Stateful sinks (i.e. Aggregate) may naturally cache their definitions.

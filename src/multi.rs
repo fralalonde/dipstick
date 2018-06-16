@@ -17,9 +17,9 @@ pub fn to_multi() -> MultiOutput {
 }
 
 impl Output for MultiOutput {
-    type Input = MultiInput;
+    type INPUT = MultiInput;
 
-    fn new_input(&self) -> Self::Input {
+    fn new_input(&self) -> Self::INPUT {
         let inputs = self.outputs.iter().map(|out| out.new_input_dyn()).collect();
         MultiInput {
             attributes: self.attributes.clone(),

@@ -15,9 +15,9 @@ pub struct LogOutput {
 }
 
 impl Output for LogOutput {
-    type Input = LogOutput;
+    type INPUT = LogOutput;
 
-    fn new_input(&self) -> Self::Input {
+    fn new_input(&self) -> Self::INPUT {
         self.clone()
     }
 }
@@ -66,9 +66,9 @@ pub struct BufferedLogOutput {
 }
 
 impl Output for BufferedLogOutput {
-    type Input = BufferedLogInput;
+    type INPUT = BufferedLogInput;
 
-    fn new_input(&self) -> Self::Input {
+    fn new_input(&self) -> Self::INPUT {
         BufferedLogInput {
             attributes: self.attributes.clone(),
             entries: Arc::new(RwLock::new(Vec::new())),
