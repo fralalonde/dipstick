@@ -1,69 +1,82 @@
 //! Cache metric definitions.
 
 use core::*;
+use error;
 use std::sync::{Arc, RwLock};
 
-struct MetricCache<OUT> {
-    inner: RwLock<lru::LRUCache<Name, M>>
+/// Output wrapper caching frequently defined metrics
+#[derive(Clone)]
+pub struct CacheOutput {
+    attributes: Attributes,
+    target: Arc<OutputDyn + Send + Sync + 'static>,
+    cache: Arc<RwLock<lru::LRUCache<Name, WriteFn>>>,
 }
 
-/// Cache metrics to prevent them from being re-defined on every use.
-/// Use of this should be transparent, this has no effect on the values.
-/// Stateful sinks (i.e. Aggregate) may naturally cache their definitions.
-pub trait WithCache
-where
-    Self: Sized,
-{
-    /// Cache metrics to prevent them from being re-defined on every use.
-    fn with_cache(&self, cache_size: usize) -> Self;
-}
-
-// TODO add selfmetrics cache stats
-
-/// Add a caching decorator to a metric definition function.
-pub fn add_cache<M>(cache_size: usize, next: DefineMetricFn<M>) -> DefineMetricFn<M>
-where
-    M: Clone + Send + Sync + 'static,
-{
-    let cache: RwLock<lru::LRUCache<Name, M>> =
-        RwLock::new(lru::LRUCache::with_capacity(cache_size));
-    Arc::new(move |name, kind, rate| {
-        let mut cache = cache.write().expect("Metric Cache");
-
-        // FIXME lookup should use straight &str
-        if let Some(value) = cache.get(name) {
-            return value.clone();
+impl CacheOutput {
+    /// Wrap new inputs with an asynchronous metric write & flush dispatcher.
+    pub fn new<OUT: OutputDyn + Send + Sync + 'static>(target: OUT, max_size: usize) -> Self {
+        CacheOutput {
+            attributes: Attributes::default(),
+            target: Arc::new(target),
+            cache: Arc::new(RwLock::new(lru::LRUCache::with_capacity(max_size)))
         }
-
-        let new_metric: M = (next)(name, kind, rate);
-        cache.insert(name.clone(), new_metric.clone());
-        new_metric
-    })
+    }
 }
+
+impl WithAttributes for CacheOutput {
+    fn get_attributes(&self) -> &Attributes { &self.attributes }
+    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
+}
+
+impl Output for CacheOutput {
+    type INPUT = CacheInput;
+    fn new_input(&self) -> CacheInput {
+        let target = self.target.new_input_dyn();
+        CacheInput {
+            attributes: self.attributes.clone(),
+            target,
+            cache: self.cache.clone(),
+        }
+    }
+}
+
+/// Input wrapper caching frequently defined metrics
+#[derive(Clone)]
+pub struct CacheInput {
+    attributes: Attributes,
+    target: Arc<Input + Send + Sync + 'static>,
+    cache: Arc<RwLock<lru::LRUCache<Name, WriteFn>>>,
+}
+
+impl WithAttributes for CacheInput {
+    fn get_attributes(&self) -> &Attributes { &self.attributes }
+    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
+}
+
+impl Input for CacheInput {
+    fn new_metric(&self, name: Name, kind: Kind) -> WriteFn {
+        let name = self.qualified_name(name);
+        let mut cache = self.cache.write().expect("Cache Lock");
+        cache.get(&name)
+            .map(|found| found.clone())
+            .unwrap_or_else(|| {
+                let new_metric = self.target.new_metric(name.clone(), kind);
+                // FIXME (perf) having to take another write lock for cache miss is dumb
+                let mut cache_miss = self.cache.write().expect("Cache Lock");
+                cache_miss.insert(name, new_metric.clone());
+                new_metric
+            })
+    }
+}
+
+impl Flush for CacheInput {
+    fn flush(&self) -> error::Result<()> {
+        self.target.flush()
+    }
+}
+
 
 mod lru {
-    // The MIT License (MIT)
-    //
-    // Copyright (c) 2016 Christian W. Briones
-    //
-    // Permission is hereby granted, free of charge, to any person obtaining a copy
-    // of this software and associated documentation files (the "Software"), to deal
-    // in the Software without restriction, including without limitation the rights
-    // to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-    // copies of the Software, and to permit persons to whom the Software is
-    // furnished to do so, subject to the following conditions:
-    //
-    // The above copyright notice and this permission notice shall be included in all
-    // copies or substantial portions of the Software.
-    //
-    // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-    // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-    // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-    // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-    // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-    // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-    // SOFTWARE.
-
     //! A fixed-size cache with LRU expiration criteria.
     //! Stored values will be held onto as long as there is space.
     //! When space runs out, the oldest unused value will get evicted to make room for a new value.

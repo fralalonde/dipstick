@@ -9,14 +9,14 @@ use std::sync::{Arc, RwLock, Weak};
 use atomic_refcell::*;
 
 lazy_static! {
-    /// Root of the default metrics dispatch, usable by all libraries and apps.
+    /// Root of the default metrics proxy, usable by all libraries and apps.
     /// Libraries should create their metrics into sub subspaces of this.
-    /// Applications should configure on startup where the dispatched metrics should go.
+    /// Applications should configure on startup where the proxyed metrics should go.
     /// Exceptionally, one can create its own InputProxy root, separate from this one.
     pub static ref ROOT_PROXY: InputProxy = InputProxy::new();
 }
 
-/// A dynamically dispatched metric.
+/// A dynamically proxyed metric.
 #[derive(Derivative)]
 #[derivative(Debug)]
 struct ProxiedMetric {
@@ -24,25 +24,25 @@ struct ProxiedMetric {
     name: Name,
     kind: Kind,
 
-    // the metric trait object to dispatch metric values to
+    // the metric trait object to proxy metric values to
     // the second part can be up to namespace.len() + 1 if this metric was individually targeted
     // 0 if no target assigned
     #[derivative(Debug = "ignore")]
     target: (AtomicRefCell<(WriteFn, usize)>),
 
-    // a reference to the the parent dispatcher to remove the metric from when it is dropped
+    // a reference to the the parent proxyer to remove the metric from when it is dropped
     #[derivative(Debug = "ignore")]
-    dispatch: Arc<RwLock<InnerProxy>>,
+    proxy: Arc<RwLock<InnerProxy>>,
 }
 
 /// Dispatcher weak ref does not prevent dropping but still needs to be cleaned out.
 impl Drop for ProxiedMetric {
     fn drop(&mut self) {
-        self.dispatch.write().expect("Dispatch Lock").drop_metric(&self.name)
+        self.proxy.write().expect("Dispatch Lock").drop_metric(&self.name)
     }
 }
 
-/// A dynamic dispatch point for app and lib metrics.
+/// A dynamic proxy point for app and lib metrics.
 /// Decouples metrics definition from backend configuration.
 /// Allows defining metrics before a concrete type has been selected.
 /// Allows replacing metrics backend on the fly at runtime.
@@ -140,11 +140,11 @@ impl InnerProxy {
 
 impl InputProxy {
 
-    /// Create a new "private" metric dispatch root. This is usually not what you want.
-    /// Since this dispatch will not be part of the standard dispatch tree,
+    /// Create a new "private" metric proxy root. This is usually not what you want.
+    /// Since this proxy will not be part of the standard proxy tree,
     /// it will need to be configured independently and since downstream code may not know about
-    /// its existence this may never happen and metrics will not be dispatched anywhere.
-    /// If you want to use the standard dispatch tree, use #metric_dispatch() instead.
+    /// its existence this may never happen and metrics will not be proxyed anywhere.
+    /// If you want to use the standard proxy tree, use #metric_proxy() instead.
     pub fn new() -> Self {
         InputProxy {
             attributes: Attributes::default(),
@@ -152,13 +152,13 @@ impl InputProxy {
         }
     }
 
-    /// Replace target for this dispatch and it's children.
+    /// Replace target for this proxy and it's children.
     pub fn set_target<IS: Input + Send + Sync + 'static>(&self, target: IS) {
         let mut inner = self.inner.write().expect("Dispatch Lock");
         inner.set_target(self.get_namespace().clone(), Arc::new(target));
     }
 
-    /// Replace target for this dispatch and it's children.
+    /// Replace target for this proxy and it's children.
     pub fn unset_target(&self) {
         let mut inner = self.inner.write().expect("Dispatch Lock");
         inner.unset_target(self.get_namespace());
@@ -173,7 +173,7 @@ impl<S: AsRef<str>> From<S> for InputProxy {
 }
 
 impl Input for InputProxy {
-    /// Lookup or create a dispatch stub for the requested metric.
+    /// Lookup or create a proxy stub for the requested metric.
     fn new_metric(&self, name: Name, kind: Kind) -> WriteFn {
         let name = self.qualified_name(name);
         let mut inner = self.inner.write().expect("Dispatch Lock");
@@ -192,7 +192,7 @@ impl Input for InputProxy {
                     name,
                     kind,
                     target: AtomicRefCell::new((metric_object, target_namespace_length)),
-                    dispatch: self.inner.clone(),
+                    proxy: self.inner.clone(),
                 });
                 inner.metrics.insert(name2, Arc::downgrade(&proxy));
                 proxy
@@ -221,14 +221,14 @@ mod bench {
     use bucket::Bucket;
 
     #[bench]
-    fn dispatch_marker_to_aggregate(b: &mut test::Bencher) {
+    fn proxy_marker_to_aggregate(b: &mut test::Bencher) {
         ROOT_PROXY.set_target(Bucket::new());
         let metric = ROOT_PROXY.marker("event_a");
         b.iter(|| test::black_box(metric.mark()));
     }
 
     #[bench]
-    fn dispatch_marker_to_void(b: &mut test::Bencher) {
+    fn proxy_marker_to_void(b: &mut test::Bencher) {
         let metric = ROOT_PROXY.marker("event_a");
         b.iter(|| test::black_box(metric.mark()));
     }
