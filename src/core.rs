@@ -5,6 +5,7 @@
 use clock::TimeHandle;
 use scheduler::{set_schedule, CancelHandle};
 use async;
+use cache;
 
 use std::time::Duration;
 use std::sync::Arc;
@@ -126,6 +127,7 @@ impl<T: WithAttributes> WithName for T {
 
     /// Append the specified name to the local namespace and return the concatenated result.
     fn qualified_name(&self, name: Name) -> Name {
+        // FIXME (perf) store name in reverse to prepend with an actual push() to the vec
         self.get_attributes().namespace.add_name(name)
     }
 }
@@ -245,6 +247,10 @@ pub trait Output: OutputDyn + Send + Sync + 'static + Sized {
         async::AsyncOutput::new(self, queue_length)
     }
 
+    /// Wrap this output with an asynchronous dispatch queue of specified length.
+    fn cache(self, max_size: usize) -> cache::CacheOutput {
+        cache::CacheOutput::new(self, max_size)
+    }
 }
 
 /// Dynamic variant of the Output trait

@@ -63,8 +63,8 @@ pub use map::StatsMap;
 mod socket;
 pub use socket::RetrySocket;
 
-//mod cache;
-//pub use cache::WithCache;
+mod cache;
+pub use cache::{CacheInput,CacheOutput};
 
 mod multi;
 pub use multi::{MultiOutput, MultiInput, to_multi};

@@ -152,19 +152,19 @@ mod bench {
     use test;
 
     #[bench]
-    fn bench_score_update_marker(b: &mut test::Bencher) {
+    fn update_marker(b: &mut test::Bencher) {
         let metric = Scoreboard::new(Marker);
         b.iter(|| test::black_box(metric.update(1)));
     }
 
     #[bench]
-    fn bench_score_update_count(b: &mut test::Bencher) {
+    fn update_count(b: &mut test::Bencher) {
         let metric = Scoreboard::new(Counter);
         b.iter(|| test::black_box(metric.update(4)));
     }
 
     #[bench]
-    fn bench_score_empty_snapshot(b: &mut test::Bencher) {
+    fn empty_snapshot(b: &mut test::Bencher) {
         let metric = Scoreboard::new(Counter);
         let scores = &mut Scoreboard::blank();
         b.iter(|| test::black_box(metric.snapshot(scores)));

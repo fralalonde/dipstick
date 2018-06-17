@@ -107,6 +107,7 @@ impl WithAttributes for AsyncInput {
 
 impl Input for AsyncInput {
     fn new_metric(&self, name: Name, kind:Kind) -> WriteFn {
+        let name = self.qualified_name(name);
         let target_metric = self.target.new_metric(name, kind);
         let sender = self.sender.clone();
         WriteFn::new(move |value| {
