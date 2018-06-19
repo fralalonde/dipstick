@@ -1,6 +1,6 @@
 //! Send metrics to a statsd server.
 
-use core::{Input, Output, Value, WriteFn, Attributes, WithAttributes, Kind,
+use core::{Input, Output, Value, Metric, Attributes, WithAttributes, Kind,
            Flush, Counter, Marker, Name, WithSamplingRate, WithName, WithBuffering, Sampling};
 use pcg32;
 use error;
@@ -75,7 +75,7 @@ pub struct StatsdInput {
 }
 
 impl Input for StatsdInput {
-    fn new_metric(&self, name: Name, kind: Kind) -> WriteFn {
+    fn new_metric(&self, name: Name, kind: Kind) -> Metric {
         let mut prefix = self.qualified_name(name).join(".");
         prefix.push(':');
 
@@ -98,14 +98,14 @@ impl Input for StatsdInput {
             suffix.push_str(&format!{"|@{}", float_rate});
             let int_sampling_rate = pcg32::to_int_rate(float_rate);
 
-            WriteFn::new(move |value| {
+            Metric::new(move |value| {
                 if pcg32::accept_sample(int_sampling_rate) {
                     let mut buffer = buffer.write().expect("InputBuffer");
                     buffer.write(&prefix, &suffix, scale, value)
                 }
             })
         } else {
-            WriteFn::new(move |value| {
+            Metric::new(move |value| {
                 let mut buffer = buffer.write().expect("InputBuffer");
                 buffer.write(&prefix, &suffix, scale, value)
             })

@@ -7,7 +7,7 @@ use std::time::Duration;
 use dipstick::*;
 
 fn main() {
-    let metrics = Bucket::new().add_name("test");
+    let metrics = to_bucket().add_name("test");
 
     // Bucket::set_default_output(to_stdout());
     metrics.set_output(to_stdout());

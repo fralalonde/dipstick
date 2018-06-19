@@ -1,6 +1,6 @@
 //! Dispatch metrics to multiple sinks.
 
-use core::{Output, Input, Name, WithName, OutputDyn, Kind, WriteFn, Flush, WithAttributes, Attributes};
+use core::{Output, Input, Name, WithName, OutputDyn, Kind, Metric, Flush, WithAttributes, Attributes};
 use error;
 use std::sync::Arc;
 
@@ -58,10 +58,10 @@ pub struct MultiInput {
 }
 
 impl Input for MultiInput {
-    fn new_metric(&self, name: Name, kind: Kind) -> WriteFn {
+    fn new_metric(&self, name: Name, kind: Kind) -> Metric {
         let ref name = self.qualified_name(name);
-        let write_fns: Vec<WriteFn> = self.inputs.iter().map(move |input| input.new_metric(name.clone(), kind)).collect();
-        WriteFn::new(move |value| for w in &write_fns {
+        let write_fns: Vec<Metric> = self.inputs.iter().map(move |input| input.new_metric(name.clone(), kind)).collect();
+        Metric::new(move |value| for w in &write_fns {
             (w)(value)
         })
     }

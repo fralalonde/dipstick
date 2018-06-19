@@ -9,7 +9,7 @@ use dipstick::*;
 use std::time::Duration;
 
 // undeclared root (un-prefixed) metrics
-metrics!(<Bucket> pub AGGREGATE = to_aggregate() => {
+metrics!(<Bucket> pub AGGREGATE = to_bucket() => {
     // create counter "some_counter"
     pub Counter ROOT_COUNTER: "root_counter";
     // create gauge "root_gauge"

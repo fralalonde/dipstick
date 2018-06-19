@@ -9,13 +9,13 @@ use dipstick::*;
 
 fn main() {
     // for this demo, print metric values to the console
-    let app_metrics = to_stdout();
+    let app_metrics = to_stdout().new_input();
 
     // metrics can be predefined by type and name
     let counter = app_metrics.counter("counter_a");
     let timer = app_metrics.timer("timer_b");
 
-    // metrics can also be declared and used ad-hoc
+    // metrics can also be declared and used ad-hoc (use output.cache() if this happens often)
     app_metrics.counter("just_once").count(4);
 
     // metric names can be prepended with a common prefix

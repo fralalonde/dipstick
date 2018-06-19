@@ -1,7 +1,7 @@
 //! Queue metrics for write on a separate thread,
 //! Metrics definitions are still synchronous.
 //! If queue size is exceeded, calling code reverts to blocking.
-use core::{Input, Value, WriteFn, Name, Kind, Flush, Marker, WithName, OutputDyn, Output,
+use core::{Input, Value, Metric, Name, Kind, Flush, Marker, WithName, OutputDyn, Output,
            WithAttributes, Attributes};
 
 use bucket::Bucket;
@@ -87,7 +87,7 @@ impl Output for AsyncOutput {
 /// This is only `pub` because `error` module needs to know about it.
 /// Async commands should be of no concerns to applications.
 pub enum AsyncCmd {
-    Write(WriteFn, Value),
+    Write(Metric, Value),
     Flush(Arc<Input + Send + Sync + 'static>),
 }
 
@@ -106,11 +106,11 @@ impl WithAttributes for AsyncInput {
 }
 
 impl Input for AsyncInput {
-    fn new_metric(&self, name: Name, kind:Kind) -> WriteFn {
+    fn new_metric(&self, name: Name, kind:Kind) -> Metric {
         let name = self.qualified_name(name);
         let target_metric = self.target.new_metric(name, kind);
         let sender = self.sender.clone();
-        WriteFn::new(move |value| {
+        Metric::new(move |value| {
             if let Err(e) = sender.send(AsyncCmd::Write(target_metric.clone(), value)) {
                 SEND_FAILED.mark();
                 debug!("Failed to send async metrics: {}", e);
