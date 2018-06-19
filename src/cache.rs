@@ -9,7 +9,7 @@ use std::sync::{Arc, RwLock};
 pub struct CacheOutput {
     attributes: Attributes,
     target: Arc<OutputDyn + Send + Sync + 'static>,
-    cache: Arc<RwLock<lru::LRUCache<Name, WriteFn>>>,
+    cache: Arc<RwLock<lru::LRUCache<Name, Metric>>>,
 }
 
 impl CacheOutput {
@@ -45,7 +45,7 @@ impl Output for CacheOutput {
 pub struct CacheInput {
     attributes: Attributes,
     target: Arc<Input + Send + Sync + 'static>,
-    cache: Arc<RwLock<lru::LRUCache<Name, WriteFn>>>,
+    cache: Arc<RwLock<lru::LRUCache<Name, Metric>>>,
 }
 
 impl WithAttributes for CacheInput {
@@ -54,18 +54,19 @@ impl WithAttributes for CacheInput {
 }
 
 impl Input for CacheInput {
-    fn new_metric(&self, name: Name, kind: Kind) -> WriteFn {
+    fn new_metric(&self, name: Name, kind: Kind) -> Metric {
         let name = self.qualified_name(name);
-        let mut cache = self.cache.write().expect("Cache Lock");
-        cache.get(&name)
-            .map(|found| found.clone())
-            .unwrap_or_else(|| {
-                let new_metric = self.target.new_metric(name.clone(), kind);
-                // FIXME (perf) having to take another write lock for cache miss is dumb
-                let mut cache_miss = self.cache.write().expect("Cache Lock");
-                cache_miss.insert(name, new_metric.clone());
-                new_metric
-            })
+        let lookup = {
+            let mut cache = self.cache.write().expect("Cache Lock");
+            cache.get(&name).map(|found| found.clone())
+        };
+        lookup.unwrap_or_else(|| {
+            let new_metric = self.target.new_metric(name.clone(), kind);
+            // FIXME (perf) having to take another write lock for a cache miss
+            let mut cache_miss = self.cache.write().expect("Cache Lock");
+            cache_miss.insert(name, new_metric.clone());
+            new_metric
+        })
     }
 }
 
@@ -75,6 +76,19 @@ impl Flush for CacheInput {
     }
 }
 
+
+impl CacheInput {
+    /// Create and increment an ad-hoc counter.
+    pub fn count(&self, name: &str, value: Value) {
+        self.counter(name).count(value)
+    }
+
+    /// Create and increment an ad-hoc marker.
+    pub fn mark(&self, name: &str) {
+        self.marker(name).mark()
+    }
+
+}
 
 mod lru {
     //! A fixed-size cache with LRU expiration criteria.

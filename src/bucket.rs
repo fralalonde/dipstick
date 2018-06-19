@@ -1,6 +1,6 @@
 //! Maintain aggregated metrics for deferred reporting,
 //!
-use core::{Kind, Value, Name, WithName, NO_METRIC_OUTPUT, Input, Flush, OutputDyn, WriteFn, WithAttributes, Attributes};
+use core::{Kind, Value, Name, WithName, NO_METRIC_OUTPUT, Input, Flush, OutputDyn, Metric, WithAttributes, Attributes};
 use clock::TimeHandle;
 use core::Kind::*;
 use error;
@@ -28,8 +28,8 @@ lazy_static! {
     static ref DEFAULT_AGGREGATE_OUTPUT: RwLock<Arc<OutputDyn + Send + Sync>> = RwLock::new(initial_output());
 }
 
-/// Create a new metric aggregator
-pub fn to_aggregate() -> Bucket {
+/// Create a new metric aggregating bucket.
+pub fn to_bucket() -> Bucket {
     Bucket::new()
 }
 
@@ -89,7 +89,7 @@ impl InnerBucket {
                 for score in metric.2 {
                     let filtered = (stats_fn)(metric.1, metric.0.clone(), score);
                     if let Some((kind, name, value)) = filtered {
-                        let metric: WriteFn = publish_scope.new_metric(name, kind);
+                        let metric: Metric = publish_scope.new_metric(name, kind);
                         (metric)(value)
                     }
                 }
@@ -192,7 +192,7 @@ impl Bucket {
 
 impl Input for Bucket {
     /// Lookup or create a scoreboard for the requested metric.
-    fn new_metric(&self, name: Name, kind: Kind) -> WriteFn {
+    fn new_metric(&self, name: Name, kind: Kind) -> Metric {
         let scoreb = self.inner
             .write()
             .expect("Aggregator")
@@ -200,7 +200,7 @@ impl Input for Bucket {
             .entry(self.qualified_name(name))
             .or_insert_with(|| Arc::new(Scoreboard::new(kind)))
             .clone();
-        WriteFn::new(move |value| scoreb.update(value))
+        Metric::new(move |value| scoreb.update(value))
     }
 }
 

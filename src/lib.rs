@@ -31,17 +31,17 @@ pub use core::{Value, Kind, Name, WithName, Marker, Timer, Counter, Gauge, Input
 pub mod macros;
 
 pub mod proxy;
-pub use proxy::{InputProxy, ROOT_PROXY};
+pub use proxy::{InputProxy, ROOT_PROXY, to_proxy};
 
 mod bucket;
-pub use bucket::{Bucket, to_aggregate, summary, all_stats, average};
+pub use bucket::{Bucket, to_bucket, summary, all_stats, average};
 
 mod text;
-pub use text::{to_buffered_stdout, to_stdout, TextOutput, BufferedTextOutput, BufferedTextInput};
+pub use text::{to_stdout, TextOutput, TextInput};
 pub use text::{to_void, Void};
 
 mod logging;
-pub use logging::{to_buffered_log, to_log, LogOutput, BufferedLogOutput, BufferedLogInput};
+pub use logging::{to_log, LogOutput, LogInput};
 
 mod pcg32;
 

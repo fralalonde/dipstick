@@ -1,5 +1,5 @@
-//! A sample application continuously aggregating metrics,
-//! printing the summary stats every three seconds
+// metrics are printed at the end of every cycle as scope is dropped
+// use scope.flush_on_drop(false) and scope.flush() to control flushing if required
 
 extern crate dipstick;
 
@@ -9,13 +9,13 @@ use std::thread::sleep;
 use dipstick::*;
 
 fn main() {
-    let output = to_buffered_stdout();
+    let output = to_stdout().with_buffering(Buffering::Unlimited);
 
     loop {
         // add counts forever, non-stop
         println!("\n------- open scope");
 
-        let metrics = output.new_input_dyn();
+        let metrics = output.new_input();
 
         let counter = metrics.counter("counter_a");
         let timer = metrics.timer("timer_a");
@@ -41,8 +41,5 @@ fn main() {
         sleep(Duration::from_millis(1000));
 
         println!("------- close scope: ");
-
-        // scope metrics are printed at the end of every cycle as scope is dropped
-        // use scope.flush_on_drop(false) and scope.flush() to control flushing if required
     }
 }

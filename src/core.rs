@@ -53,12 +53,18 @@ impl Default for Sampling {
 }
 
 /// A metrics buffering strategy.
+/// All strategies other than `Unbuffered` are applied as a best-effort, meaning that the buffer
+/// may be flushed at any moment before reaching the limit, for any or no reason in particular.
 #[derive(Debug, Clone, Copy)]
 pub enum Buffering {
     /// No buffering is performed (default).
     Unbuffered,
+
     /// A buffer of maximum specified size is used.
     BufferSize(usize),
+
+    /// Buffer as much as possible.
+    Unlimited,
 }
 
 impl Default for Buffering {
@@ -157,8 +163,8 @@ pub trait WithBuffering: WithAttributes {
     /// Is this component using buffering?
     fn is_buffering(&self) -> bool {
         match self.get_buffering() {
-            Buffering::Unbuffered => true,
-            _ => false
+            Buffering::Unbuffered => false,
+            _ => true
         }
     }
 
@@ -277,7 +283,7 @@ lazy_static! {
 /// Define metrics, write values and flush them.
 pub trait Input: Send + Sync + Flush {
     /// Define a metric of the specified type.
-    fn new_metric(&self, name: Name, kind: Kind) -> WriteFn;
+    fn new_metric(&self, name: Name, kind: Kind) -> Metric;
 
     /// Define a counter.
     fn counter(&self, name: &str) -> Counter {
@@ -327,16 +333,16 @@ impl<T: Flush + Send + Sync + Clone + 'static> ScheduleFlush for T {
     }
 }
 
-/// A function that writes to a certain metric input.
+/// A metric is actually a function that knows to write a metric value to a metric output.
 #[derive(Clone)]
-pub struct WriteFn {
+pub struct Metric {
     inner: Arc<Fn(Value) + Send + Sync>
 }
 
-impl WriteFn {
+impl Metric {
     /// Utility constructor
-    pub fn new<F: Fn(Value) + Send + Sync + 'static>(wfn: F) -> WriteFn    {
-        WriteFn { inner: Arc::new(wfn) }
+    pub fn new<F: Fn(Value) + Send + Sync + 'static>(wfn: F) -> Metric {
+        Metric { inner: Arc::new(wfn) }
     }
 
     /// Some may prefer the `metric.write(value)` form to the `(metric)(value)` form.
@@ -347,7 +353,7 @@ impl WriteFn {
     }
 }
 
-impl ops::Deref for WriteFn {
+impl ops::Deref for Metric {
     type Target = (Fn(Value) + Send + Sync);
 
     fn deref(&self) -> &Self::Target {
@@ -362,7 +368,7 @@ impl ops::Deref for WriteFn {
 #[derivative(Debug)]
 pub struct Marker {
     #[derivative(Debug = "ignore")]
-    write: WriteFn,
+    write: Metric,
 }
 
 impl Marker {
@@ -377,7 +383,7 @@ impl Marker {
 #[derivative(Debug)]
 pub struct Counter {
     #[derivative(Debug = "ignore")]
-    write: WriteFn,
+    write: Metric,
 }
 
 impl Counter {
@@ -392,7 +398,7 @@ impl Counter {
 #[derivative(Debug)]
 pub struct Gauge {
     #[derivative(Debug = "ignore")]
-    write: WriteFn,
+    write: Metric,
 }
 
 impl Gauge {
@@ -412,7 +418,7 @@ impl Gauge {
 #[derivative(Debug)]
 pub struct Timer {
     #[derivative(Debug = "ignore")]
-    write: WriteFn,
+    write: Metric,
 }
 
 impl Timer {
@@ -454,26 +460,26 @@ impl Timer {
     }
 }
 
-impl From<WriteFn> for Gauge {
-    fn from(wfn: WriteFn) -> Gauge {
+impl From<Metric> for Gauge {
+    fn from(wfn: Metric) -> Gauge {
         Gauge { write: wfn }
     }
 }
 
-impl From<WriteFn> for Timer {
-    fn from(wfn: WriteFn) -> Timer {
+impl From<Metric> for Timer {
+    fn from(wfn: Metric) -> Timer {
         Timer { write: wfn }
     }
 }
 
-impl From<WriteFn> for Counter {
-    fn from(wfn: WriteFn) -> Counter {
+impl From<Metric> for Counter {
+    fn from(wfn: Metric) -> Counter {
         Counter { write: wfn }
     }
 }
 
-impl From<WriteFn> for Marker {
-    fn from(wfn: WriteFn) -> Marker {
+impl From<Metric> for Marker {
+    fn from(wfn: Metric) -> Marker {
         Marker { write: wfn }
     }
 }

@@ -59,7 +59,7 @@ pub struct GraphiteInput {
 
 impl Input for GraphiteInput {
     /// Define a metric of the specified type.
-    fn new_metric(&self, name: Name, kind: Kind) -> WriteFn {
+    fn new_metric(&self, name: Name, kind: Kind) -> Metric {
         let mut prefix = self.qualified_name(name).join(".");
         prefix.push(' ');
 
@@ -71,7 +71,7 @@ impl Input for GraphiteInput {
 
         let buffer = self.buffer.clone();
         let metric = GraphiteMetric { prefix, scale };
-        WriteFn::new(move |value| {
+        Metric::new(move |value| {
             if let Err(err) = buffer.write(&metric, value) {
                 debug!("Graphite buffer write failed: {}", err);
                 SEND_ERR.mark();

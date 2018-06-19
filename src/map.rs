@@ -1,4 +1,4 @@
-use core::{Value, WriteFn, Kind, Name, Input, Flush};
+use core::{Value, Metric, Kind, Name, Input, Flush};
 use std::sync::{Arc, RwLock};
 use std::collections::BTreeMap;
 
@@ -17,10 +17,10 @@ impl StatsMap {
 }
 
 impl Input for StatsMap {
-    fn new_metric(&self, name: Name, _kind: Kind) -> WriteFn {
+    fn new_metric(&self, name: Name, _kind: Kind) -> Metric {
         let write_to = self.inner.clone();
         let name: String = name.join(".");
-        WriteFn::new(move |value| {
+        Metric::new(move |value| {
             let _previous = write_to.write().expect("StatsMap").insert(name.clone(), value);
         })
     }

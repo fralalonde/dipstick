@@ -1,50 +1,10 @@
-use core::{Name, WithName, Value, WriteFn, Kind, Output, Input, Flush, WithAttributes, Attributes};
+use core::{Name, WithName, Value, Metric, Kind, Output, Input, Flush, WithAttributes, Attributes, WithBuffering};
 use error;
 use std::sync::{RwLock, Arc};
 use text;
 use std::io::Write;
 
 use log;
-
-/// Unbuffered metrics log output.
-#[derive(Clone)]
-pub struct LogOutput {
-    attributes: Attributes,
-    format_fn: Arc<Fn(&Name, Kind) -> Vec<String> + Send + Sync>,
-    print_fn: Arc<Fn(&mut Vec<u8>, &[String], Value) -> error::Result<()> + Send + Sync>,
-}
-
-impl Output for LogOutput {
-    type INPUT = LogOutput;
-
-    fn new_input(&self) -> Self::INPUT {
-        self.clone()
-    }
-}
-
-impl WithAttributes for LogOutput {
-    fn get_attributes(&self) -> &Attributes { &self.attributes }
-    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
-}
-
-impl Input for LogOutput {
-    fn new_metric(&self, name: Name, kind: Kind) -> WriteFn {
-        let name = self.qualified_name(name);
-        let template = (self.format_fn)(&name, kind);
-
-        let print_fn = self.print_fn.clone();
-        WriteFn::new(move |value| {
-            let mut buf: Vec<u8> = Vec::with_capacity(32);
-            match (print_fn)(&mut buf, &template, value) {
-                Ok(()) => log!(log::Level::Debug, "{:?}", &buf),
-                Err(err) => debug!("{}", err),
-            }
-
-        })
-    }
-}
-
-impl Flush for LogOutput {}
 
 /// Write metric values to the standard log using `info!`.
 // TODO parameterize log level
@@ -56,20 +16,19 @@ pub fn to_log() -> LogOutput {
     }
 }
 
-
 /// Buffered metrics log output.
 #[derive(Clone)]
-pub struct BufferedLogOutput {
+pub struct LogOutput {
     attributes: Attributes,
     format_fn: Arc<Fn(&Name, Kind) -> Vec<String> + Send + Sync>,
-    buffer_print_fn: Arc<Fn(&mut Vec<u8>, &[String], Value) -> error::Result<()> + Send + Sync>,
+    print_fn: Arc<Fn(&mut Vec<u8>, &[String], Value) -> error::Result<()> + Send + Sync>,
 }
 
-impl Output for BufferedLogOutput {
-    type INPUT = BufferedLogInput;
+impl Output for LogOutput {
+    type INPUT = LogInput;
 
     fn new_input(&self) -> Self::INPUT {
-        BufferedLogInput {
+        LogInput {
             attributes: self.attributes.clone(),
             entries: Arc::new(RwLock::new(Vec::new())),
             output: self.clone(),
@@ -77,68 +36,78 @@ impl Output for BufferedLogOutput {
     }
 }
 
-impl WithAttributes for BufferedLogOutput {
+impl WithAttributes for LogOutput {
     fn get_attributes(&self) -> &Attributes { &self.attributes }
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
+
+impl WithBuffering for LogOutput {}
 
 /// The scope-local input for buffered log metrics output.
 #[derive(Clone)]
-pub struct BufferedLogInput {
+pub struct LogInput {
     attributes: Attributes,
     entries: Arc<RwLock<Vec<Vec<u8>>>>,
-    output: BufferedLogOutput,
+    output: LogOutput,
 }
 
-impl WithAttributes for BufferedLogInput {
+impl WithAttributes for LogInput {
     fn get_attributes(&self) -> &Attributes { &self.attributes }
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
-impl Input for BufferedLogInput {
-    fn new_metric(&self, name: Name, kind: Kind) -> WriteFn {
+impl WithBuffering for LogInput {}
+
+impl Input for LogInput {
+    fn new_metric(&self, name: Name, kind: Kind) -> Metric {
         let name = self.qualified_name(name);
         let template = (self.output.format_fn)(&name, kind);
 
-        let print_fn = self.output.buffer_print_fn.clone();
+        let print_fn = self.output.print_fn.clone();
         let entries = self.entries.clone();
 
-        WriteFn::new(move |value| {
-            let mut buffer = Vec::with_capacity(32);
-            match (print_fn)(&mut buffer, &template, value) {
-                Ok(()) => {
-                    let mut entries = entries.write().expect("TextOutput");
-                    entries.push(buffer.into())
-                },
-                Err(err) => debug!("Could not format buffered log metric: {}", err),
-            }
-
-        })
+        if self.is_buffering() {
+            Metric::new(move |value| {
+                let mut buffer = Vec::with_capacity(32);
+                match (print_fn)(&mut buffer, &template, value) {
+                    Ok(()) => {
+                        let mut entries = entries.write().expect("TextOutput");
+                        entries.push(buffer.into())
+                    },
+                    Err(err) => debug!("Could not format buffered log metric: {}", err),
+                }
+            })
+        } else {
+            Metric::new(move |value| {
+                let mut buffer = Vec::with_capacity(32);
+                match (print_fn)(&mut buffer, &template, value) {
+                    Ok(()) => log!(log::Level::Debug, "{:?}", &buffer),
+                    Err(err) => debug!("Could not format buffered log metric: {}", err),
+                }
+            })
+        }
     }
 }
 
-impl Flush for BufferedLogInput {
+impl Flush for LogInput {
     fn flush(&self) -> error::Result<()> {
         let mut entries = self.entries.write().expect("Metrics TextBuffer");
-        let mut buf: Vec<u8> = Vec::with_capacity(32 * entries.len());
-        for entry in entries.drain(..) {
-            writeln!(&mut buf, "{:?}", &entry)?;
+        if !entries.is_empty() {
+            let mut buf: Vec<u8> = Vec::with_capacity(32 * entries.len());
+            for entry in entries.drain(..) {
+                writeln!(&mut buf, "{:?}", &entry)?;
+            }
+            log!(log::Level::Debug, "{:?}", &buf);
         }
-        log!(log::Level::Debug, "{:?}", &buf);
         Ok(())
     }
 }
 
-/// Record metric values to the standard log using `info!`.
-/// Values are buffered until #flush is called
-/// Buffered operation requires locking.
-/// If thread latency is a concern you may wish to also use #with_async_queue.
-// TODO parameterize log level
-pub fn to_buffered_log() -> BufferedLogOutput {
-    BufferedLogOutput {
-        attributes: Attributes::default(),
-        format_fn: Arc::new(text::format_name),
-        buffer_print_fn: Arc::new(text::print_name_value_line),
+impl Drop for LogInput {
+    fn drop(&mut self) {
+        if let Err(e) = self.flush() {
+            warn!("Could not flush log metrics on Drop. {}", e)
+        }
     }
 }
 

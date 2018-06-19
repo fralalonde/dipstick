@@ -1,6 +1,6 @@
 //! Decouple metric definition from configuration with trait objects.
 
-use core::{Name, WithName, Kind, Input, WriteFn, NO_METRIC_OUTPUT, Flush, WithAttributes, Attributes};
+use core::{Name, WithName, Kind, Input, Metric, NO_METRIC_OUTPUT, Flush, WithAttributes, Attributes};
 use error;
 
 use std::collections::{HashMap, BTreeMap};
@@ -16,6 +16,11 @@ lazy_static! {
     pub static ref ROOT_PROXY: InputProxy = InputProxy::new();
 }
 
+/// Return the root metric proxy.
+pub fn to_proxy() -> InputProxy {
+    ROOT_PROXY.clone()
+}
+
 /// A dynamically proxyed metric.
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -28,7 +33,7 @@ struct ProxiedMetric {
     // the second part can be up to namespace.len() + 1 if this metric was individually targeted
     // 0 if no target assigned
     #[derivative(Debug = "ignore")]
-    target: (AtomicRefCell<(WriteFn, usize)>),
+    target: (AtomicRefCell<(Metric, usize)>),
 
     // a reference to the the parent proxyer to remove the metric from when it is dropped
     #[derivative(Debug = "ignore")]
@@ -58,6 +63,7 @@ struct InnerProxy {
     // last part of the namespace is the metric's name
     metrics: BTreeMap<Name, Weak<ProxiedMetric>>,
 }
+
 impl InnerProxy {
 
     fn new() -> Self {
@@ -174,7 +180,7 @@ impl<S: AsRef<str>> From<S> for InputProxy {
 
 impl Input for InputProxy {
     /// Lookup or create a proxy stub for the requested metric.
-    fn new_metric(&self, name: Name, kind: Kind) -> WriteFn {
+    fn new_metric(&self, name: Name, kind: Kind) -> Metric {
         let name = self.qualified_name(name);
         let mut inner = self.inner.write().expect("Dispatch Lock");
         let proxy = inner
@@ -197,7 +203,7 @@ impl Input for InputProxy {
                 inner.metrics.insert(name2, Arc::downgrade(&proxy));
                 proxy
             });
-        WriteFn::new(move |value| (proxy.target.borrow().0)(value))
+        Metric::new(move |value| (proxy.target.borrow().0)(value))
     }
 }
 
