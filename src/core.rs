@@ -3,13 +3,13 @@
 //! Application-facing types are in the `app` module.
 
 use clock::TimeHandle;
-use scheduler::{set_schedule, CancelHandle};
-use async;
+use queue;
+use raw_queue;
 use cache;
 
-use std::time::Duration;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::ops;
+use std::rc::Rc;
 use text;
 use error;
 
@@ -240,19 +240,38 @@ impl<S: Into<String>> From<S> for Name {
     }
 }
 
+lazy_static! {
+    /// The reference instance identifying an uninitialized metric config.
+    pub static ref NO_METRIC_OUTPUT: Arc<OutputDyn + Send + Sync> = Arc::new(text::to_void());
+
+    /// The reference instance identifying an uninitialized metric scope.
+    pub static ref NO_METRIC_SCOPE: Arc<Input + Send + Sync> = NO_METRIC_OUTPUT.new_input_dyn();
+}
+
 /// A function trait that opens a new metric capture scope.
 pub trait Output: OutputDyn + Send + Sync + 'static + Sized {
     /// Type of input scope provided by this output.
-    type INPUT: Input + 'static + Clone;
+    type INPUT: Input + Send + Sync + 'static + Clone;
 
     /// Open a new input scope from this output.
     fn new_input(&self) -> Self::INPUT;
 
-    /// Wrap this output with an asynchronous dispatch queue of specified length.
-    fn async(self, queue_length: usize) -> async::AsyncOutput {
-        async::AsyncOutput::new(self, queue_length)
-    }
+}
 
+/// Wrap this output behind an asynchronous metrics dispatch queue.
+/// This is not strictly required for multi threading since the provided inputs
+/// are already Send + Sync but might be desired to lower the latency
+pub trait Async: OutputDyn + Send + Sync + 'static + Sized {
+    /// Wrap this output with an asynchronous dispatch queue of specified length.
+    fn async(self, queue_length: usize) -> queue::QueueOutput {
+        queue::QueueOutput::new(self, queue_length)
+    }
+}
+
+/// Wrap an output with a metric definition cache.
+/// This is useless if all metrics are statically declared but can provide performance
+/// benefits if some metrics are dynamically defined at runtime.
+pub trait Cache: OutputDyn + Send + Sync + 'static + Sized {
     /// Wrap this output with an asynchronous dispatch queue of specified length.
     fn cache(self, max_size: usize) -> cache::CacheOutput {
         cache::CacheOutput::new(self, max_size)
@@ -270,14 +289,6 @@ impl<T: Output + Send + Sync + 'static> OutputDyn for T {
     fn new_input_dyn(&self) -> Arc<Input + Send + Sync + 'static> {
         Arc::new(self.new_input())
     }
-}
-
-lazy_static! {
-    /// The reference instance identifying an uninitialized metric config.
-    pub static ref NO_METRIC_OUTPUT: Arc<OutputDyn + Send + Sync> = Arc::new(text::to_void());
-
-    /// The reference instance identifying an uninitialized metric scope.
-    pub static ref NO_METRIC_SCOPE: Arc<Input + Send + Sync> = NO_METRIC_OUTPUT.new_input_dyn();
 }
 
 /// Define metrics, write values and flush them.
@@ -312,24 +323,6 @@ pub trait Input: Send + Sync {
 
 }
 
-/// Enable background periodical publication of metrics
-pub trait ScheduleFlush {
-    /// Start a thread dedicated to flushing this scope at regular intervals.
-    fn flush_every(&self, period: Duration) -> CancelHandle;
-}
-
-impl<T: Input + Send + Sync + Clone + 'static> ScheduleFlush for T {
-    /// Start a thread dedicated to flushing this scope at regular intervals.
-    fn flush_every(&self, period: Duration) -> CancelHandle {
-        let scope = self.clone();
-        set_schedule(period, move || {
-            if let Err(err) = scope.flush() {
-                error!("Could not flush metrics: {}", err);
-            }
-        })
-    }
-}
-
 /// A metric is actually a function that knows to write a metric value to a metric output.
 #[derive(Clone)]
 pub struct Metric {
@@ -346,17 +339,130 @@ impl Metric {
     /// This shouldn't matter as metrics should be of type Counter, Marker, etc.
     #[inline]
     pub fn write(&self, value: Value) {
-        (self)(value)
+        (self.inner)(value)
     }
 }
 
-impl ops::Deref for Metric {
-    type Target = (Fn(Value) + Send + Sync);
+/// A function trait that opens a new metric capture scope.
+pub trait RawOutput: RawOutputDyn + Send + Sync + 'static + Sized {
+    /// Type of input scope provided by this output.
+    type INPUT: RawInput + 'static  ;
 
+    /// Open a new input scope from this output.
+    fn new_raw_input(&self) -> Self::INPUT;
+}
+
+/// Wrap this raw output behind an asynchronous metrics dispatch queue.
+pub trait RawAsync: RawOutput + Sized {
+    /// Wrap this output with an asynchronous dispatch queue of specified length.
+    fn async(self, queue_length: usize) -> raw_queue::QueueRawOutput {
+        raw_queue::QueueRawOutput::new(self, queue_length)
+    }
+}
+
+/// Dynamic variant of the RawOutput trait
+pub trait RawOutputDyn {
+    /// Open a new metric input with dynamic typing.
+    fn new_raw_input_dyn(&self) -> RawInputBox;
+}
+
+/// Blanket impl that provides RawOutputs their dynamic flavor.
+impl<T: RawOutput + Send + Sync + 'static> RawOutputDyn for T {
+    fn new_raw_input_dyn(&self) -> RawInputBox {
+        RawInputBox (Rc::new(self.new_raw_input()))
+    }
+}
+
+/// Provide thread-safe locking to RawInput implementers.
+#[derive(Clone)]
+pub struct LockingInputBox {
+    attributes: Attributes,
+    inner: Arc<Mutex<RawInputBox>>
+}
+
+impl WithAttributes for LockingInputBox {
+    fn get_attributes(&self) -> &Attributes { &self.attributes }
+    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
+}
+
+impl Input for LockingInputBox {
+
+    fn new_metric(&self, name: Name, kind: Kind) -> Metric {
+        let name = self.qualified_name(name);
+        let raw_metric = self.inner.lock().expect("RawInput Lock").new_metric(name, kind);
+        let mutex = self.inner.clone();
+        Metric::new(move |value| {
+            let _guard = mutex.lock().expect("RawMetric Lock");
+            raw_metric.write(value)
+        } )
+    }
+
+    fn flush(&self) -> error::Result<()> {
+        self.inner.lock().expect("RawInput Lock").flush()
+    }
+}
+
+/// Blanket impl that provides RawOutputs their dynamic flavor.
+impl<T: RawOutput + Send + Sync + 'static> Output for T {
+    type INPUT = LockingInputBox;
+
+    fn new_input(&self) -> Self::INPUT {
+        LockingInputBox {
+            attributes: Attributes::default(),
+            inner: Arc::new(Mutex::new(RawInputBox (Rc::new(self.new_raw_input()))))
+        }
+    }
+}
+
+
+/// Define metrics, write values and flush them.
+pub trait RawInput {
+    /// Define a metric of the specified type.
+    fn new_metric(&self, name: Name, kind: Kind) -> RawMetric;
+
+    /// Flush does nothing by default.
+    fn flush(&self) -> error::Result<()> {
+        Ok(())
+    }
+}
+
+/// Wrap a RawInput to make it Send + Sync, allowing it to travel the world of threads.
+/// Obviously, it should only still be used from a single thread, which RawAsync does.
+#[derive(Clone)]
+pub struct RawInputBox ( Rc<RawInput + 'static> );
+
+unsafe impl Send for RawInputBox {}
+unsafe impl Sync for RawInputBox {}
+
+impl ops::Deref for RawInputBox {
+    type Target = RawInput + 'static;
     fn deref(&self) -> &Self::Target {
-        self.inner.as_ref()
+        Rc::as_ref(&self.0)
     }
 }
+
+/// A raw metric is just like a Metric, but bound to a single thread (not Send nor Sync)
+
+pub struct RawMetric {
+    inner: Box<Fn(Value)>
+}
+
+impl RawMetric {
+    /// Utility constructor
+    pub fn new<F: Fn(Value) + 'static>(wfn: F) -> RawMetric {
+        RawMetric { inner: Box::new(wfn) }
+    }
+
+    /// Some may prefer the `metric.write(value)` form to the `(metric)(value)` form.
+    /// This shouldn't matter as metrics should be of type Counter, Marker, etc.
+    #[inline]
+    pub fn write(&self, value: Value) {
+        (self.inner)(value)
+    }
+}
+
+unsafe impl Send for RawMetric {}
+unsafe impl Sync for RawMetric {}
 
 /// A monotonic counter metric.
 /// Since value is only ever increased by one, no value parameter is provided,
@@ -365,13 +471,13 @@ impl ops::Deref for Metric {
 #[derivative(Debug)]
 pub struct Marker {
     #[derivative(Debug = "ignore")]
-    write: Metric,
+    inner: Metric,
 }
 
 impl Marker {
     /// Record a single event occurence.
     pub fn mark(&self) {
-        (self.write)(1)
+        self.inner.write(1)
     }
 }
 
@@ -380,13 +486,13 @@ impl Marker {
 #[derivative(Debug)]
 pub struct Counter {
     #[derivative(Debug = "ignore")]
-    write: Metric,
+    inner: Metric,
 }
 
 impl Counter {
     /// Record a value count.
     pub fn count<V: ToPrimitive>(&self, count: V) {
-        (self.write)(count.to_u64().unwrap())
+        self.inner.write(count.to_u64().unwrap())
     }
 }
 
@@ -395,13 +501,13 @@ impl Counter {
 #[derivative(Debug)]
 pub struct Gauge {
     #[derivative(Debug = "ignore")]
-    write: Metric,
+    inner: Metric,
 }
 
 impl Gauge {
     /// Record a value point for this gauge.
     pub fn value<V: ToPrimitive>(&self, value: V) {
-        (self.write)(value.to_u64().unwrap())
+        self.inner.write(value.to_u64().unwrap())
     }
 }
 
@@ -415,14 +521,14 @@ impl Gauge {
 #[derivative(Debug)]
 pub struct Timer {
     #[derivative(Debug = "ignore")]
-    write: Metric,
+    inner: Metric,
 }
 
 impl Timer {
     /// Record a microsecond interval for this timer
     /// Can be used in place of start()/stop() if an external time interval source is used
     pub fn interval_us<V: ToPrimitive>(&self, interval_us: V) -> V {
-        (self.write)(interval_us.to_u64().unwrap());
+        self.inner.write(interval_us.to_u64().unwrap());
         interval_us
     }
 
@@ -459,78 +565,28 @@ impl Timer {
 
 impl From<Metric> for Gauge {
     fn from(wfn: Metric) -> Gauge {
-        Gauge { write: wfn }
+        Gauge { inner: wfn }
     }
 }
 
 impl From<Metric> for Timer {
     fn from(wfn: Metric) -> Timer {
-        Timer { write: wfn }
+        Timer { inner: wfn }
     }
 }
 
 impl From<Metric> for Counter {
     fn from(wfn: Metric) -> Counter {
-        Counter { write: wfn }
+        Counter { inner: wfn }
     }
 }
 
 impl From<Metric> for Marker {
     fn from(wfn: Metric) -> Marker {
-        Marker { write: wfn }
+        Marker { inner: wfn }
     }
 }
 
-///// A function trait that writes to or flushes a certain scope.
-////#[derive(Clone)]
-//pub struct CommandFn<M> {
-//    inner: Arc<Fn(Command<M>) + Send + Sync + 'static>
-//}
-//
-//impl<M> Clone for CommandFn<M> {
-//    fn clone(&self) -> CommandFn<M> {
-//        CommandFn {
-//            inner: self.inner.clone()
-//        }
-//    }
-//}
-
-///// An method dispatching command enum to manipulate metric scopes.
-///// Replaces a potential `Writer` trait that would have methods `write` and `flush`.
-///// Using a command pattern allows buffering, async queuing and inline definition of writers.
-//pub enum Command<'a, M: 'a> {
-//    /// Write the value for the metric.
-//    /// Takes a reference to minimize overhead in single-threaded scenarios.
-//    Write(&'a M, Value),
-//
-//    /// Flush the scope buffer, if applicable.
-//    Flush,
-//}
-//
-///// Create a new metric scope based on the provided scope function.
-//pub fn command_fn<M, F>(scope_fn: F) -> CommandFn<M>
-//where
-//    F: Fn(Command<M>) + Send + Sync + 'static,
-//{
-//    CommandFn {
-//        inner: Arc::new(scope_fn)
-//    }
-//}
-//
-//impl<M> CommandFn<M> {
-//    /// Write a value to this scope.
-//    #[inline]
-//    pub fn write(&self, metric: &M, value: Value) {
-//        (self.inner)(Write(metric, value))
-//    }
-//
-//    /// Flush this scope.
-//    /// Has no effect if scope is unbuffered.
-//    #[inline]
-//    pub fn flush(&self) {
-//        (self.inner)(Flush)
-//    }
-//}
 
 #[cfg(feature = "bench")]
 mod bench {

@@ -117,7 +117,7 @@ mod test {
     fn test_to_log() {
         let c = super::to_log().new_input_dyn();
         let m = c.new_metric("test".into(), Kind::Marker);
-        (m)(33);
+        m.write(33);
     }
 
 }

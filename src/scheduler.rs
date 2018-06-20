@@ -1,5 +1,7 @@
 //! Task scheduling facilities.
 
+use core::Input;
+
 use std::time::Duration;
 use std::thread;
 use std::sync::Arc;
@@ -42,4 +44,24 @@ where
         operation();
     });
     handle
+}
+
+
+
+/// Enable background periodical publication of metrics
+pub trait ScheduleFlush {
+    /// Start a thread dedicated to flushing this scope at regular intervals.
+    fn flush_every(&self, period: Duration) -> CancelHandle;
+}
+
+impl<T: Input + Send + Sync + Clone + 'static> ScheduleFlush for T {
+    /// Start a thread dedicated to flushing this scope at regular intervals.
+    fn flush_every(&self, period: Duration) -> CancelHandle {
+        let scope = self.clone();
+        set_schedule(period, move || {
+            if let Err(err) = scope.flush() {
+                error!("Could not flush metrics: {}", err);
+            }
+        })
+    }
 }

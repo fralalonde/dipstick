@@ -5,7 +5,9 @@ use std::error;
 use std::fmt::{self, Display, Formatter};
 use std::result;
 use std::sync::mpsc;
-use async;
+use queue;
+use raw_queue;
+
 use self::Error::*;
 
 /// Any error that may result from dipstick usage.
@@ -14,7 +16,9 @@ pub enum Error {
     /// A generic I/O error.
     IO(io::Error),
     /// An error from the async metric queue.
-    Async(mpsc::SendError<async::AsyncCmd>)
+    Async(mpsc::SendError<queue::QueueCmd>),
+    /// An error from the async metric queue.
+    RawAsync(mpsc::SendError<raw_queue::RawQueueCmd>)
 }
 
 impl Display for Error {
@@ -22,6 +26,7 @@ impl Display for Error {
         match *self {
             IO(ref err) => err.fmt(formatter),
             Async(ref err) => err.fmt(formatter),
+            RawAsync(ref err) => err.fmt(formatter),
         }
     }
 }
@@ -31,6 +36,7 @@ impl error::Error for Error {
         match *self {
             IO(ref err) => err.description(),
             Async(ref err) => err.description(),
+            RawAsync(ref err) => err.description(),
         }
     }
 
@@ -38,6 +44,7 @@ impl error::Error for Error {
         match *self {
             IO(ref err) => Some(err),
             Async(ref err) => Some(err),
+            RawAsync(ref err) => Some(err),
         }
     }
 }
@@ -51,8 +58,14 @@ impl From<io::Error> for Error {
     }
 }
 
-impl From<mpsc::SendError<async::AsyncCmd>> for Error {
-    fn from(err: mpsc::SendError<async::AsyncCmd>) -> Self {
+impl From<mpsc::SendError<queue::QueueCmd>> for Error {
+    fn from(err: mpsc::SendError<queue::QueueCmd>) -> Self {
         Async(err)
+    }
+}
+
+impl From<mpsc::SendError<raw_queue::RawQueueCmd>> for Error {
+    fn from(err: mpsc::SendError<raw_queue::RawQueueCmd>) -> Self {
+        RawAsync(err)
     }
 }
