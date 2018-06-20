@@ -7,13 +7,11 @@ use dipstick::*;
 use std::time::Duration;
 
 fn main() {
-    //    badlog::init(Some("info"));
-
     let metrics =
         to_graphite("localhost:2003")
             .expect("Connecting")
             .add_name("my_app")
-            .new_input_dyn();
+            .new_input();
 
     loop {
         metrics.counter("counter_a").count(123);

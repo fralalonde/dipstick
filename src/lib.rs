@@ -10,8 +10,9 @@ extern crate test;
 #[macro_use]
 extern crate log;
 
-#[macro_use]
-extern crate derivative;
+//#[macro_use]
+//extern crate derivative;
+
 #[macro_use]
 extern crate lazy_static;
 extern crate atomic_refcell;

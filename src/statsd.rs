@@ -20,14 +20,6 @@ metrics! {
     }
 }
 
-/// Key of a statsd metric.
-#[derive(Debug, Clone)]
-pub struct StatsdOutput {
-    attributes: Attributes,
-    socket: Arc<UdpSocket>,
-}
-
-
 /// Send metrics to a statsd server at the address and port provided.
 pub fn to_statsd<ADDR: ToSocketAddrs>(address: ADDR) -> error::Result<StatsdOutput> {
     let socket = Arc::new(UdpSocket::bind("0.0.0.0:0")?);
@@ -38,6 +30,14 @@ pub fn to_statsd<ADDR: ToSocketAddrs>(address: ADDR) -> error::Result<StatsdOutp
         attributes: Attributes::default(),
         socket,
     })
+}
+
+/// Statsd output holds a UDP client socket to a statsd host.
+/// The output's connection is shared between all inputs originating from it.
+#[derive(Debug, Clone)]
+pub struct StatsdOutput {
+    attributes: Attributes,
+    socket: Arc<UdpSocket>,
 }
 
 impl Output for StatsdOutput {
