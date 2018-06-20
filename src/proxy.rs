@@ -203,7 +203,7 @@ impl Input for InputProxy {
                 inner.metrics.insert(name2, Arc::downgrade(&proxy));
                 proxy
             });
-        Metric::new(move |value| (proxy.target.borrow().0)(value))
+        Metric::new(move |value| proxy.target.borrow().0.write(value))
     }
 
     fn flush(&self) -> error::Result<()> {

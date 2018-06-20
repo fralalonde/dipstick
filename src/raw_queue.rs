@@ -1,8 +1,8 @@
 //! Queue metrics for write on a separate thread,
-//! Metrics definitions are still synchronous.
+//! RawMetrics definitions are still synchronous.
 //! If queue size is exceeded, calling code reverts to blocking.
-use core::{Input, Value, Metric, Name, Kind, Marker, WithName, OutputDyn, Output,
-           WithAttributes, Attributes};
+use core::{Value, RawMetric, Name, Kind, Marker, WithName, RawOutputDyn,
+           WithAttributes, Attributes, Input, Output, Metric, RawInputBox};
 
 use bucket::Bucket;
 use error;
@@ -13,20 +13,20 @@ use std::sync::mpsc;
 use std::thread;
 
 metrics!{
-    <Bucket> DIPSTICK_METRICS.add_name("async_queue") => {
+    <Bucket> DIPSTICK_METRICS.add_name("raw_async_queue") => {
         /// Maybe queue was full?
         Marker SEND_FAILED: "send_failed";
     }
 }
 
-fn new_async_channel(length: usize) -> Arc<mpsc::SyncSender<AsyncCmd>> {
-    let (sender, receiver) = mpsc::sync_channel::<AsyncCmd>(length);
+fn new_async_channel(length: usize) -> Arc<mpsc::SyncSender<RawQueueCmd>> {
+    let (sender, receiver) = mpsc::sync_channel::<RawQueueCmd>(length);
     thread::spawn(move || {
         let mut done = false;
         while !done {
             match receiver.recv() {
-                Ok(AsyncCmd::Write(wfn, value)) => (wfn)(value),
-                Ok(AsyncCmd::Flush(input)) => if let Err(e) = input.flush() {
+                Ok(RawQueueCmd::Write(wfn, value)) => wfn.write(value),
+                Ok(RawQueueCmd::Flush(input)) => if let Err(e) = input.flush() {
                     debug!("Could not asynchronously flush metrics: {}", e);
                 },
                 Err(e) => {
@@ -42,16 +42,16 @@ fn new_async_channel(length: usize) -> Arc<mpsc::SyncSender<AsyncCmd>> {
 
 /// Wrap new inputs with an asynchronous metric write & flush dispatcher.
 #[derive(Clone)]
-pub struct AsyncOutput {
+pub struct QueueRawOutput {
     attributes: Attributes,
-    target: Arc<OutputDyn + Send + Sync + 'static>,
-    sender: Arc<mpsc::SyncSender<AsyncCmd>>,
+    target: Arc<RawOutputDyn + Send + Sync + 'static>,
+    sender: Arc<mpsc::SyncSender<RawQueueCmd>>,
 }
 
-impl AsyncOutput {
+impl QueueRawOutput {
     /// Wrap new inputs with an asynchronous metric write & flush dispatcher.
-    pub fn new<OUT: OutputDyn + Send + Sync + 'static>(target: OUT, queue_length: usize) -> Self {
-        AsyncOutput {
+    pub fn new<OUT: RawOutputDyn + Send + Sync + 'static>(target: OUT, queue_length: usize) -> Self {
+        QueueRawOutput {
             attributes: Attributes::default(),
             target: Arc::new(target),
             sender: new_async_channel(queue_length),
@@ -59,59 +59,54 @@ impl AsyncOutput {
     }
 }
 
-impl WithAttributes for AsyncOutput {
+impl WithAttributes for QueueRawOutput {
     fn get_attributes(&self) -> &Attributes { &self.attributes }
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
-impl Output for AsyncOutput {
-    type INPUT = AsyncInput;
+impl Output for QueueRawOutput {
+    type INPUT = QueueRawInput;
 
     /// Wrap new inputs with an asynchronous metric write & flush dispatcher.
     fn new_input(&self) -> Self::INPUT {
-        let target_input = self.target.new_input_dyn();
-        AsyncInput {
+        let target_input = self.target.new_raw_input_dyn();
+        QueueRawInput {
             attributes: self.attributes.clone(),
             sender: self.sender.clone(),
-            target: target_input,
+            target: Arc::new(target_input),
         }
-    }
-
-    fn async(self, _queue_length: usize) -> Self {
-        warn!("Ignoring async on async");
-        self
     }
 
 }
 
 /// This is only `pub` because `error` module needs to know about it.
 /// Async commands should be of no concerns to applications.
-pub enum AsyncCmd {
-    Write(Metric, Value),
-    Flush(Arc<Input + Send + Sync + 'static>),
+pub enum RawQueueCmd {
+    Write(Arc<RawMetric>, Value),
+    Flush(Arc<RawInputBox>),
 }
 
 /// A metric input wrapper that sends writes & flushes over a Rust sync channel.
 /// Commands are executed by a background thread.
 #[derive(Clone)]
-pub struct AsyncInput {
+pub struct QueueRawInput {
     attributes: Attributes,
-    sender: Arc<mpsc::SyncSender<AsyncCmd>>,
-    target: Arc<Input + Send + Sync + 'static>,
+    sender: Arc<mpsc::SyncSender<RawQueueCmd>>,
+    target: Arc<RawInputBox>,
 }
 
-impl WithAttributes for AsyncInput {
+impl WithAttributes for QueueRawInput {
     fn get_attributes(&self) -> &Attributes { &self.attributes }
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
-impl Input for AsyncInput {
+impl Input for QueueRawInput {
     fn new_metric(&self, name: Name, kind:Kind) -> Metric {
         let name = self.qualified_name(name);
-        let target_metric = self.target.new_metric(name, kind);
+        let target_metric = Arc::new(self.target.new_metric(name, kind));
         let sender = self.sender.clone();
         Metric::new(move |value| {
-            if let Err(e) = sender.send(AsyncCmd::Write(target_metric.clone(), value)) {
+            if let Err(e) = sender.send(RawQueueCmd::Write(target_metric.clone(), value)) {
                 SEND_FAILED.mark();
                 debug!("Failed to send async metrics: {}", e);
             }
@@ -119,7 +114,7 @@ impl Input for AsyncInput {
     }
 
     fn flush(&self) -> error::Result<()> {
-        if let Err(e) = self.sender.send(AsyncCmd::Flush(self.target.clone())) {
+        if let Err(e) = self.sender.send(RawQueueCmd::Flush(self.target.clone())) {
             SEND_FAILED.mark();
             debug!("Failed to flush async metrics: {}", e);
             Err(e.into())

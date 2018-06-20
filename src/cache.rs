@@ -74,6 +74,8 @@ impl Input for CacheInput {
     }
 }
 
+impl Async for CacheOutput {}
+
 impl CacheInput {
     /// Create and increment an ad-hoc counter.
     pub fn count(&self, name: &str, value: Value) {

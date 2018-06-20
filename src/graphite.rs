@@ -2,6 +2,7 @@
 
 use core::*;
 use bucket::*;
+
 use error;
 use self_metrics::DIPSTICK_METRICS;
 
@@ -49,6 +50,11 @@ impl WithAttributes for GraphiteOutput {
     fn get_attributes(&self) -> &Attributes { &self.attributes }
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
+
+impl WithBuffering for GraphiteOutput {}
+
+impl Cache for GraphiteOutput {}
+impl Async for GraphiteOutput {}
 
 /// Graphite Input
 #[derive(Debug, Clone)]
@@ -98,18 +104,6 @@ pub fn to_graphite<A: ToSocketAddrs + Debug + Clone>(address: A) -> error::Resul
         attributes: Attributes::default(),
         socket,
         buffered: false
-    })
-}
-
-/// Send metrics to a graphite server at the address and port provided.
-pub fn to_buffered_graphite<A: ToSocketAddrs + Debug + Clone>(address: A) -> error::Result<GraphiteOutput> {
-    debug!("Connecting to graphite {:?}", address);
-    let socket = Arc::new(RwLock::new(RetrySocket::new(address.clone())?));
-
-    Ok(GraphiteOutput {
-        attributes: Attributes::default(),
-        socket,
-        buffered: true
     })
 }
 
@@ -210,7 +204,7 @@ mod bench {
 
     #[bench]
     pub fn unbuffered_graphite(b: &mut test::Bencher) {
-        let sd = to_graphite("localhost:8125").unwrap().new_input_dyn();
+        let sd = to_graphite("localhost:2003").unwrap().new_input();
         let timer = sd.new_metric("timer".into(), Kind::Timer);
 
         b.iter(|| test::black_box(timer.write(2000)));
@@ -218,7 +212,7 @@ mod bench {
 
     #[bench]
     pub fn buffered_graphite(b: &mut test::Bencher) {
-        let sd = to_buffered_graphite("localhost:8125").unwrap().new_input_dyn();
+        let sd = to_graphite("localhost:2003").unwrap().with_buffering(Buffering::BufferSize(65465)).new_input();
         let timer = sd.new_metric("timer".into(), Kind::Timer);
 
         b.iter(|| test::black_box(timer.write(2000)));

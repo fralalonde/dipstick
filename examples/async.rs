@@ -13,7 +13,7 @@ use dipstick::*;
 use std::thread;
 
 metrics!{
-    <AsyncInput> ZUG = to_stdout().async(10).new_input() => {
+    <QueueRawInput> ZUG = to_stdout().async(10).new_input() => {
         Counter COUNTER: "counter_a";
         Marker EVENT: "event_c";
     }

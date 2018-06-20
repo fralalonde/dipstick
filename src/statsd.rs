@@ -1,7 +1,8 @@
 //! Send metrics to a statsd server.
 
 use core::{Input, Output, Value, Metric, Attributes, WithAttributes, Kind,
-           Counter, Marker, Name, WithSamplingRate, WithName, WithBuffering, Sampling};
+           Counter, Marker, Name, WithSamplingRate, WithName, WithBuffering, Sampling, Cache, Async};
+
 use pcg32;
 use error;
 use self_metrics::DIPSTICK_METRICS;
@@ -53,19 +54,20 @@ impl Output for StatsdOutput {
     }
 }
 
-impl WithBuffering for StatsdOutput {}
-
-impl WithSamplingRate for StatsdOutput {}
-
 impl WithAttributes for StatsdOutput {
     fn get_attributes(&self) -> &Attributes {
         &self.attributes
     }
-
     fn mut_attributes(&mut self) -> &mut Attributes {
         &mut self.attributes
     }
 }
+
+impl WithBuffering for StatsdOutput {}
+impl WithSamplingRate for StatsdOutput {}
+
+impl Cache for StatsdOutput {}
+impl Async for StatsdOutput {}
 
 /// Metrics input for statsd.
 #[derive(Clone)]

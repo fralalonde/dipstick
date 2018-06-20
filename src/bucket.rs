@@ -90,7 +90,7 @@ impl InnerBucket {
                     let filtered = (stats_fn)(metric.1, metric.0.clone(), score);
                     if let Some((kind, name, value)) = filtered {
                         let metric: Metric = publish_scope.new_metric(name, kind);
-                        (metric)(value)
+                        metric.write(value)
                     }
                 }
             }
