@@ -14,6 +14,8 @@ use std::io::Write;
 use std::fmt::Debug;
 
 use socket::RetrySocket;
+use std::rc::Rc;
+use std::cell::{RefCell, RefMut};
 
 metrics!{
     <Bucket> DIPSTICK_METRICS.add_name("graphite") => {
@@ -23,6 +25,20 @@ metrics!{
     }
 }
 
+/// Send metrics to a graphite server at the address and port provided.
+pub fn to_graphite<A: ToSocketAddrs + Debug + Clone>(address: A) -> error::Result<GraphiteOutput> {
+    debug!("Connecting to graphite {:?}", address);
+    let socket = Arc::new(RwLock::new(RetrySocket::new(address.clone())?));
+
+    Ok(GraphiteOutput {
+        attributes: Attributes::default(),
+        socket,
+        buffered: false
+    })
+}
+
+/// Graphite output holds a socket to a graphite server.
+/// The connection is shared between all graphite inputs originating from it.
 #[derive(Clone, Debug)]
 pub struct GraphiteOutput {
     attributes: Attributes,
@@ -30,18 +46,15 @@ pub struct GraphiteOutput {
     buffered: bool,
 }
 
-impl Output for GraphiteOutput {
+impl RawOutput for GraphiteOutput {
 
     type INPUT = GraphiteInput;
 
-    fn new_input(&self) -> GraphiteInput {
+    fn new_raw_input(&self) -> GraphiteInput {
         GraphiteInput {
             attributes: self.attributes.clone(),
-            buffer: ScopeBuffer {
-                buffer: Arc::new(RwLock::new(String::new())),
-                socket: self.socket.clone(),
-                buffered: self.buffered,
-            }
+            buffer: Rc::new(RefCell::new(String::new())),
+            socket: self.socket.clone(),
         }
     }
 }
@@ -60,12 +73,13 @@ impl Async for GraphiteOutput {}
 #[derive(Debug, Clone)]
 pub struct GraphiteInput {
     attributes: Attributes,
-    buffer: ScopeBuffer,
+    buffer: Rc<RefCell<String>>,
+    socket: Arc<RwLock<RetrySocket>>,
 }
 
-impl Input for GraphiteInput {
+impl RawInput for GraphiteInput {
     /// Define a metric of the specified type.
-    fn new_metric(&self, name: Name, kind: Kind) -> Metric {
+    fn new_metric(&self, name: Name, kind: Kind) -> RawMetric {
         let mut prefix = self.qualified_name(name).join(".");
         prefix.push(' ');
 
@@ -75,92 +89,52 @@ impl Input for GraphiteInput {
             _ => 1,
         };
 
-        let buffer = self.buffer.clone();
+        let cloned = self.clone();
         let metric = GraphiteMetric { prefix, scale };
-        Metric::new(move |value| {
-            if let Err(err) = buffer.write(&metric, value) {
-                debug!("Graphite buffer write failed: {}", err);
-                SEND_ERR.mark();
-            }
-        })
+
+        if self.is_buffering() {
+            RawMetric::new(move |value| {
+                if let Err(err) = cloned.buf_write(&metric, value) {
+                    debug!("Graphite buffer write failed: {}", err);
+                    SEND_ERR.mark();
+                }
+            })
+        } else {
+            RawMetric::new(move |value| {
+                if let Err(err) = cloned.buf_write(&metric, value).and_then(|_| cloned.flush()) {
+                    debug!("Graphite buffer write failed: {}", err);
+                    SEND_ERR.mark();
+                }
+
+            })
+        }
     }
 
     fn flush(&self) -> error::Result<()> {
-        self.buffer.flush()
+        let buf = self.buffer.borrow_mut();
+        self.flush_inner(buf)
     }
 }
 
-impl WithAttributes for GraphiteInput {
-    fn get_attributes(&self) -> &Attributes { &self.attributes }
-    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
-}
-
-/// Send metrics to a graphite server at the address and port provided.
-pub fn to_graphite<A: ToSocketAddrs + Debug + Clone>(address: A) -> error::Result<GraphiteOutput> {
-    debug!("Connecting to graphite {:?}", address);
-    let socket = Arc::new(RwLock::new(RetrySocket::new(address.clone())?));
-
-    Ok(GraphiteOutput {
-        attributes: Attributes::default(),
-        socket,
-        buffered: false
-    })
-}
-
-/// Its hard to see how a single scope could get more metrics than this.
-// TODO make configurable?
-const BUFFER_FLUSH_THRESHOLD: usize = 65_536;
-
-/// Key of a graphite metric.
-#[derive(Debug, Clone)]
-pub struct GraphiteMetric {
-    prefix: String,
-    scale: u64,
-}
-
-/// Wrap string buffer & socket as one.
-#[derive(Debug, Clone)]
-struct ScopeBuffer {
-    buffer: Arc<RwLock<String>>,
-    socket: Arc<RwLock<RetrySocket>>,
-    buffered: bool,
-}
-
-/// Any remaining buffered data is flushed on Drop.
-impl Drop for ScopeBuffer {
-    fn drop(&mut self) {
-        if let Err(err) = self.flush() {
-            warn!("Could not flush graphite metrics upon Drop: {}", err)
-        }
-    }
-}
-
-impl ScopeBuffer {
-    fn write(&self, metric: &GraphiteMetric, value: Value) -> error::Result<()> {
+impl GraphiteInput {
+    fn buf_write(&self, metric: &GraphiteMetric, value: Value) -> error::Result<()> {
         let scaled_value = value / metric.scale;
         let value_str = scaled_value.to_string();
 
         let start = SystemTime::now();
+        let mut buf = self.buffer.borrow_mut();
         match start.duration_since(UNIX_EPOCH) {
             Ok(timestamp) => {
-                let mut buf = self.buffer.write().expect("Locking graphite buffer");
-
                 buf.push_str(&metric.prefix);
                 buf.push_str(&value_str);
                 buf.push(' ');
-                buf.push_str(timestamp.as_secs().to_string().as_ref());
+                buf.push_str(&timestamp.as_secs().to_string());
                 buf.push('\n');
 
                 if buf.len() > BUFFER_FLUSH_THRESHOLD {
                     TRESHOLD_EXCEEDED.mark();
-                    warn!(
-                        "Flushing metrics scope buffer to graphite because its size exceeds \
-                         the threshold of {} bytes. ",
-                        BUFFER_FLUSH_THRESHOLD
-                    );
-                    self.flush_inner(&mut buf)?;
-                } else if !self.buffered {
-                    self.flush_inner(&mut buf)?;
+                    warn!("Graphite Buffer Size Exceeded: {}", BUFFER_FLUSH_THRESHOLD);
+                    self.flush_inner(buf)?;
                 }
             }
             Err(e) => {
@@ -170,10 +144,10 @@ impl ScopeBuffer {
         Ok(())
     }
 
-    fn flush_inner(&self, buf: &mut String) -> error::Result<()> {
+    fn flush_inner(&self, mut buf: RefMut<String>) -> error::Result<()> {
         if buf.is_empty() { return Ok(()) }
 
-        let mut sock = self.socket.write().expect("Locking graphite socket");
+        let mut sock = self.socket.write().expect("Lock Graphite Socket");
         match sock.write_all(buf.as_bytes()) {
             Ok(()) => {
                 buf.clear();
@@ -187,11 +161,34 @@ impl ScopeBuffer {
                 Err(e.into())
             }
         }
-    }
 
-    fn flush(&self) -> error::Result<()> {
-        let mut buf = self.buffer.write().expect("Locking graphite buffer");
-        self.flush_inner(&mut buf)
+    }
+}
+
+impl WithAttributes for GraphiteInput {
+    fn get_attributes(&self) -> &Attributes { &self.attributes }
+    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
+}
+
+impl WithBuffering for GraphiteInput {}
+
+/// Its hard to see how a single scope could get more metrics than this.
+// TODO make configurable?
+const BUFFER_FLUSH_THRESHOLD: usize = 65_536;
+
+/// Key of a graphite metric.
+#[derive(Debug, Clone)]
+pub struct GraphiteMetric {
+    prefix: String,
+    scale: u64,
+}
+
+/// Any remaining buffered data is flushed on Drop.
+impl Drop for GraphiteInput {
+    fn drop(&mut self) {
+        if let Err(err) = self.flush() {
+            warn!("Could not flush graphite metrics upon Drop: {}", err)
+        }
     }
 }
 
@@ -204,7 +201,7 @@ mod bench {
 
     #[bench]
     pub fn unbuffered_graphite(b: &mut test::Bencher) {
-        let sd = to_graphite("localhost:2003").unwrap().new_input();
+        let sd = to_graphite("localhost:2003").unwrap().new_raw_input();
         let timer = sd.new_metric("timer".into(), Kind::Timer);
 
         b.iter(|| test::black_box(timer.write(2000)));
@@ -212,7 +209,7 @@ mod bench {
 
     #[bench]
     pub fn buffered_graphite(b: &mut test::Bencher) {
-        let sd = to_graphite("localhost:2003").unwrap().with_buffering(Buffering::BufferSize(65465)).new_input();
+        let sd = to_graphite("localhost:2003").unwrap().with_buffering(Buffering::BufferSize(65465)).new_raw_input();
         let timer = sd.new_metric("timer".into(), Kind::Timer);
 
         b.iter(|| test::black_box(timer.write(2000)));

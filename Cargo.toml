@@ -20,7 +20,7 @@ travis-ci = { repository = "fralalonde/dipstick", branch = "master" }
 [dependencies]
 log = "0.4"
 lazy_static = "1.0"
-derivative = "1.0"
+#derivative = "1.0"
 atomic_refcell = "0.1"
 skeptic = { version = "0.13", optional = true }
 num = { version = "0.1", default-features = false }

@@ -46,8 +46,6 @@ where
     handle
 }
 
-
-
 /// Enable background periodical publication of metrics
 pub trait ScheduleFlush {
     /// Start a thread dedicated to flushing this scope at regular intervals.
