@@ -3,29 +3,33 @@
 #[macro_use]
 extern crate dipstick;
 
+#[macro_use]
+extern crate lazy_static;
+
 use std::thread::sleep;
 use std::time::Duration;
 use dipstick::*;
 
-fn main() {
-    let metrics = to_stdout().async(10).new_input().add_name("async");
+use std::thread;
 
-    let counter = metrics.counter("counter_a");
-    let timer = metrics.timer("timer_b");
-
-    let subsystem_metrics = metrics.add_name("subsystem");
-    let event = subsystem_metrics.marker("event_c");
-    let gauge = subsystem_metrics.gauge("gauge_d");
-
-    loop {
-        // report some metric values from our "application" loop
-        counter.count(11);
-        gauge.value(22);
-
-        metrics.counter("ad_hoc").count(4);
-
-        event.mark();
-        time!(timer, sleep(Duration::from_millis(5)));
-        timer.time(|| sleep(Duration::from_millis(5)));
+metrics!{
+    <AsyncInput> ZUG = to_stdout().async(10).new_input() => {
+        Counter COUNTER: "counter_a";
+        Marker EVENT: "event_c";
     }
+}
+
+fn main() {
+    for _ in 0..4 {
+        thread::spawn(move || {
+            loop {
+                // report some metric values from our "application" loop
+                COUNTER.count(11);
+                EVENT.mark();
+                sleep(Duration::from_millis(5));
+            }
+        });
+    }
+    sleep(Duration::from_secs(500000));
+
 }

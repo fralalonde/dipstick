@@ -78,17 +78,15 @@ impl Input for GraphiteInput {
             }
         })
     }
+
+    fn flush(&self) -> error::Result<()> {
+        self.buffer.flush()
+    }
 }
 
 impl WithAttributes for GraphiteInput {
     fn get_attributes(&self) -> &Attributes { &self.attributes }
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
-}
-
-impl Flush for GraphiteInput {
-    fn flush(&self) -> error::Result<()> {
-        self.buffer.flush()
-    }
 }
 
 /// Send metrics to a graphite server at the address and port provided.

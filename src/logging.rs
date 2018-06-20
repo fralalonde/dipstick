@@ -1,4 +1,4 @@
-use core::{Name, WithName, Value, Metric, Kind, Output, Input, Flush, WithAttributes, Attributes, WithBuffering};
+use core::{Name, WithName, Value, Metric, Kind, Output, Input, WithAttributes, Attributes, WithBuffering};
 use error;
 use std::sync::{RwLock, Arc};
 use text;
@@ -87,9 +87,7 @@ impl Input for LogInput {
             })
         }
     }
-}
 
-impl Flush for LogInput {
     fn flush(&self) -> error::Result<()> {
         let mut entries = self.entries.write().expect("Metrics TextBuffer");
         if !entries.is_empty() {

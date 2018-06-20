@@ -1,4 +1,4 @@
-use core::{Value, Metric, Kind, Name, Input, Flush};
+use core::{Value, Metric, Kind, Name, Input};
 use std::sync::{Arc, RwLock};
 use std::collections::BTreeMap;
 
@@ -25,8 +25,6 @@ impl Input for StatsMap {
         })
     }
 }
-
-impl Flush for StatsMap {}
 
 impl From<StatsMap> for BTreeMap<String, Value> {
     fn from(map: StatsMap) -> Self {

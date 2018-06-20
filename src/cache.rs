@@ -68,14 +68,11 @@ impl Input for CacheInput {
             new_metric
         })
     }
-}
 
-impl Flush for CacheInput {
     fn flush(&self) -> error::Result<()> {
         self.target.flush()
     }
 }
-
 
 impl CacheInput {
     /// Create and increment an ad-hoc counter.

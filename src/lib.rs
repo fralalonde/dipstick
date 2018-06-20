@@ -24,7 +24,7 @@ pub mod error;
 pub use error::{Error, Result};
 
 pub mod core;
-pub use core::{Value, Kind, Name, WithName, Marker, Timer, Counter, Gauge, Input, Flush,
+pub use core::{Value, Kind, Name, WithName, Marker, Timer, Counter, Gauge, Input,
                Output, NO_METRIC_OUTPUT, OutputDyn, ScheduleFlush, WithSamplingRate, Sampling, WithBuffering, Buffering};
 
 #[macro_use]
