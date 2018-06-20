@@ -281,9 +281,14 @@ lazy_static! {
 }
 
 /// Define metrics, write values and flush them.
-pub trait Input: Send + Sync + Flush {
+pub trait Input: Send + Sync {
     /// Define a metric of the specified type.
     fn new_metric(&self, name: Name, kind: Kind) -> Metric;
+
+    /// Flush does nothing by default.
+    fn flush(&self) -> error::Result<()> {
+        Ok(())
+    }
 
     /// Define a counter.
     fn counter(&self, name: &str) -> Counter {
@@ -307,21 +312,13 @@ pub trait Input: Send + Sync + Flush {
 
 }
 
-/// Enable programmatic buffering of metrics output
-pub trait Flush {
-    /// Flush does nothing by default.
-    fn flush(&self) -> error::Result<()> {
-        Ok(())
-    }
-}
-
 /// Enable background periodical publication of metrics
 pub trait ScheduleFlush {
     /// Start a thread dedicated to flushing this scope at regular intervals.
     fn flush_every(&self, period: Duration) -> CancelHandle;
 }
 
-impl<T: Flush + Send + Sync + Clone + 'static> ScheduleFlush for T {
+impl<T: Input + Send + Sync + Clone + 'static> ScheduleFlush for T {
     /// Start a thread dedicated to flushing this scope at regular intervals.
     fn flush_every(&self, period: Duration) -> CancelHandle {
         let scope = self.clone();

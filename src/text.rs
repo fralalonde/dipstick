@@ -1,7 +1,7 @@
 //! Standard stateless metric outputs.
 
 // TODO parameterize templates
-use core::{Name, WithName, Value, Metric, Kind, Output, Input, Flush, WithAttributes, Attributes, WithBuffering};
+use core::{Name, WithName, Value, Metric, Kind, Output, Input, WithAttributes, Attributes, WithBuffering};
 use error;
 use std::sync::{RwLock, Arc};
 use std::io::{Write,  self};
@@ -128,9 +128,7 @@ impl<W: Write + Send + Sync + 'static> Input for TextInput<W> {
             })
         }
     }
-}
 
-impl<W: Write + Send + Sync + 'static> Flush for TextInput<W> {
     fn flush(&self) -> error::Result<()> {
         let mut entries = self.entries.write().expect("Metrics TextBuffer");
         if !entries.is_empty() {
@@ -169,8 +167,6 @@ impl Input for Void {
         Metric::new(|_value| {})
     }
 }
-
-impl Flush for Void {}
 
 /// Discard all metric values sent to it.
 pub fn to_void() -> Void {

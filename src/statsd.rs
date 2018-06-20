@@ -1,7 +1,7 @@
 //! Send metrics to a statsd server.
 
 use core::{Input, Output, Value, Metric, Attributes, WithAttributes, Kind,
-           Flush, Counter, Marker, Name, WithSamplingRate, WithName, WithBuffering, Sampling};
+           Counter, Marker, Name, WithSamplingRate, WithName, WithBuffering, Sampling};
 use pcg32;
 use error;
 use self_metrics::DIPSTICK_METRICS;
@@ -111,9 +111,7 @@ impl Input for StatsdInput {
             })
         }
     }
-}
 
-impl Flush for StatsdInput {
     fn flush(&self) -> error::Result<()> {
         let mut buffer = self.buffer.write().expect("InputBuffer");
         Ok(buffer.flush()?)

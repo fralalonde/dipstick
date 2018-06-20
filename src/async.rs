@@ -1,7 +1,7 @@
 //! Queue metrics for write on a separate thread,
 //! Metrics definitions are still synchronous.
 //! If queue size is exceeded, calling code reverts to blocking.
-use core::{Input, Value, Metric, Name, Kind, Flush, Marker, WithName, OutputDyn, Output,
+use core::{Input, Value, Metric, Name, Kind, Marker, WithName, OutputDyn, Output,
            WithAttributes, Attributes};
 
 use bucket::Bucket;
@@ -117,9 +117,7 @@ impl Input for AsyncInput {
             }
         })
     }
-}
 
-impl Flush for AsyncInput {
     fn flush(&self) -> error::Result<()> {
         if let Err(e) = self.sender.send(AsyncCmd::Flush(self.target.clone())) {
             SEND_FAILED.mark();
@@ -130,3 +128,4 @@ impl Flush for AsyncInput {
         }
     }
 }
+

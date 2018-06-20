@@ -1,6 +1,6 @@
 //! Decouple metric definition from configuration with trait objects.
 
-use core::{Name, WithName, Kind, Input, Metric, NO_METRIC_OUTPUT, Flush, WithAttributes, Attributes};
+use core::{Name, WithName, Kind, Input, Metric, NO_METRIC_OUTPUT, WithAttributes, Attributes};
 use error;
 
 use std::collections::{HashMap, BTreeMap};
@@ -205,9 +205,7 @@ impl Input for InputProxy {
             });
         Metric::new(move |value| (proxy.target.borrow().0)(value))
     }
-}
 
-impl Flush for InputProxy {
     fn flush(&self) -> error::Result<()> {
         self.inner.write().expect("Dispatch Lock").flush(self.get_namespace())
     }

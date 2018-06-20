@@ -1,6 +1,6 @@
 //! Maintain aggregated metrics for deferred reporting,
 //!
-use core::{Kind, Value, Name, WithName, NO_METRIC_OUTPUT, Input, Flush, OutputDyn, Metric, WithAttributes, Attributes};
+use core::{Kind, Value, Name, WithName, NO_METRIC_OUTPUT, Input, OutputDyn, Metric, WithAttributes, Attributes};
 use clock::TimeHandle;
 use core::Kind::*;
 use error;
@@ -202,14 +202,7 @@ impl Input for Bucket {
             .clone();
         Metric::new(move |value| scoreb.update(value))
     }
-}
 
-impl WithAttributes for Bucket {
-    fn get_attributes(&self) -> &Attributes { &self.attributes }
-    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
-}
-
-impl Flush for Bucket {
     /// Collect and reset aggregated data.
     /// Publish statistics
     fn flush(&self) -> error::Result<()> {
@@ -231,6 +224,11 @@ impl Flush for Bucket {
         // source.cleanup();
         pub_scope.flush()
     }
+}
+
+impl WithAttributes for Bucket {
+    fn get_attributes(&self) -> &Attributes { &self.attributes }
+    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
 /// A predefined export strategy reporting all aggregated stats for all metric types.
