@@ -18,7 +18,7 @@ use std::rc::Rc;
 use std::cell::{RefCell, RefMut};
 
 metrics!{
-    <Bucket> DIPSTICK_METRICS.add_name("graphite") => {
+    <Bucket> DIPSTICK_METRICS.add_prefix("graphite") => {
         Marker SEND_ERR: "send_failed";
         Marker TRESHOLD_EXCEEDED: "bufsize_exceeded";
         Counter SENT_BYTES: "sent_bytes";
@@ -26,7 +26,7 @@ metrics!{
 }
 
 /// Send metrics to a graphite server at the address and port provided.
-pub fn to_graphite<A: ToSocketAddrs + Debug + Clone>(address: A) -> error::Result<GraphiteOutput> {
+pub fn output_graphite<A: ToSocketAddrs + Debug + Clone>(address: A) -> error::Result<GraphiteOutput> {
     debug!("Connecting to graphite {:?}", address);
     let socket = Arc::new(RwLock::new(RetrySocket::new(address.clone())?));
 
@@ -79,7 +79,7 @@ pub struct GraphiteInput {
 
 impl RawInput for GraphiteInput {
     /// Define a metric of the specified type.
-    fn new_metric(&self, name: Name, kind: Kind) -> RawMetric {
+    fn new_metric_raw(&self, name: Name, kind: Kind) -> RawMetric {
         let mut prefix = self.qualified_name(name).join(".");
         prefix.push(' ');
 
@@ -101,7 +101,7 @@ impl RawInput for GraphiteInput {
             })
         } else {
             RawMetric::new(move |value| {
-                if let Err(err) = cloned.buf_write(&metric, value).and_then(|_| cloned.flush()) {
+                if let Err(err) = cloned.buf_write(&metric, value).and_then(|_| cloned.flush_raw()) {
                     debug!("Graphite buffer write failed: {}", err);
                     SEND_ERR.mark();
                 }
@@ -110,7 +110,7 @@ impl RawInput for GraphiteInput {
         }
     }
 
-    fn flush(&self) -> error::Result<()> {
+    fn flush_raw(&self) -> error::Result<()> {
         let buf = self.buffer.borrow_mut();
         self.flush_inner(buf)
     }
@@ -186,7 +186,7 @@ pub struct GraphiteMetric {
 /// Any remaining buffered data is flushed on Drop.
 impl Drop for GraphiteInput {
     fn drop(&mut self) {
-        if let Err(err) = self.flush() {
+        if let Err(err) = self.flush_raw() {
             warn!("Could not flush graphite metrics upon Drop: {}", err)
         }
     }
@@ -201,16 +201,16 @@ mod bench {
 
     #[bench]
     pub fn unbuffered_graphite(b: &mut test::Bencher) {
-        let sd = to_graphite("localhost:2003").unwrap().new_raw_input();
-        let timer = sd.new_metric("timer".into(), Kind::Timer);
+        let sd = output_graphite("localhost:2003").unwrap().new_raw_input();
+        let timer = sd.new_metric_raw("timer".into(), Kind::Timer);
 
         b.iter(|| test::black_box(timer.write(2000)));
     }
 
     #[bench]
     pub fn buffered_graphite(b: &mut test::Bencher) {
-        let sd = to_graphite("localhost:2003").unwrap().with_buffering(Buffering::BufferSize(65465)).new_raw_input();
-        let timer = sd.new_metric("timer".into(), Kind::Timer);
+        let sd = output_graphite("localhost:2003").unwrap().with_buffering(Buffering::BufferSize(65465)).new_raw_input();
+        let timer = sd.new_metric_raw("timer".into(), Kind::Timer);
 
         b.iter(|| test::black_box(timer.write(2000)));
     }

@@ -9,7 +9,7 @@ use std::thread::sleep;
 use dipstick::*;
 
 fn main() {
-    let output = to_stdout().with_buffering(Buffering::Unlimited);
+    let output = output_stdout().with_buffering(Buffering::Unlimited);
 
     loop {
         // add counts forever, non-stop

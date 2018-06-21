@@ -9,7 +9,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 /// Write metric values to stdout using `println!`.
-pub fn to_stdout() -> TextOutput<io::Stdout> {
+pub fn output_stdout() -> TextOutput<io::Stdout> {
     TextOutput {
         attributes: Attributes::default(),
         inner: Arc::new(RwLock::new(io::stdout())),
@@ -100,7 +100,7 @@ impl<W: Write + Send + Sync + 'static> WithAttributes for TextInput<W> {
 impl<W: Write + Send + Sync + 'static> WithBuffering for TextInput<W> {}
 
 impl<W: Write + Send + Sync + 'static> RawInput for TextInput<W> {
-    fn new_metric(&self, name: Name, kind: Kind) -> RawMetric {
+    fn new_metric_raw(&self, name: Name, kind: Kind) -> RawMetric {
         let name = self.qualified_name(name);
         let template = (self.output.format_fn)(&name, kind);
 
@@ -135,7 +135,7 @@ impl<W: Write + Send + Sync + 'static> RawInput for TextInput<W> {
         }
     }
 
-    fn flush(&self) -> error::Result<()> {
+    fn flush_raw(&self) -> error::Result<()> {
         let mut entries = self.entries.borrow_mut();
         if !entries.is_empty() {
             let mut output = self.output.inner.write().expect("TextOutput");
@@ -150,33 +150,10 @@ impl<W: Write + Send + Sync + 'static> RawInput for TextInput<W> {
 
 impl<W: Write + Send + Sync + 'static> Drop for TextInput<W> {
     fn drop(&mut self) {
-        if let Err(e) = self.flush() {
+        if let Err(e) = self.flush_raw() {
             warn!("Could not flush text metrics on Drop. {}", e)
         }
     }
-}
-
-/// Discard metrics output.
-#[derive(Clone)]
-pub struct Void {}
-
-impl RawOutput for Void {
-    type INPUT = Void;
-
-    fn new_raw_input(&self) -> Void {
-        self.clone()
-    }
-}
-
-impl RawInput for Void {
-    fn new_metric(&self, _name: Name, _kind: Kind) -> RawMetric {
-        RawMetric::new(|_value| {})
-    }
-}
-
-/// Discard all metric values sent to it.
-pub fn to_void() -> Void {
-    Void {}
 }
 
 #[cfg(test)]
@@ -185,14 +162,7 @@ mod test {
 
     #[test]
     fn sink_print() {
-        let c = super::to_stdout().new_input_dyn();
-        let m = c.new_metric("test".into(), Kind::Marker);
-        m.write(33);
-    }
-
-    #[test]
-    fn test_to_void() {
-        let c = super::to_void().new_input_dyn();
+        let c = super::output_stdout().new_input_dyn();
         let m = c.new_metric("test".into(), Kind::Marker);
         m.write(33);
     }

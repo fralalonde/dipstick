@@ -135,7 +135,7 @@ mod test {
     use bucket::Bucket;
     use self_metrics::*;
 
-    metrics!(<Bucket> DIPSTICK_METRICS.add_name("test_prefix") => {
+    metrics!(<Bucket> DIPSTICK_METRICS.add_prefix("test_prefix") => {
         Marker M1: "failed";
         Marker M2: "success";
         Counter C1: "failed";

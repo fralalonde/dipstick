@@ -135,7 +135,7 @@ timer.interval_us(123_456);
 Related metrics can share a namespace:
 ```rust,skt-run
 let app_metrics = metric_scope(to_stdout());
-let db_metrics = app_metrics.add_name("database");
+let db_metrics = app_metrics.add_prefix("database");
 let _db_timer = db_metrics.timer("db_timer");
 let _db_counter = db_metrics.counter("db_counter");
 ```

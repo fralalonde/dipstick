@@ -203,7 +203,7 @@ mod legacy_test {
     use self_metrics::*;
     use deprecated::*;
 
-    metrics!(<Aggregate> TEST_METRICS = DIPSTICK_METRICS.add_name("test_prefix"));
+    metrics!(<Aggregate> TEST_METRICS = DIPSTICK_METRICS.add_prefix("test_prefix"));
 
     app_marker!(<Aggregate> TEST_METRICS => {
         M1: "failed",

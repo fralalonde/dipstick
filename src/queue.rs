@@ -13,7 +13,7 @@ use std::sync::mpsc;
 use std::thread;
 
 metrics!{
-    <Bucket> DIPSTICK_METRICS.add_name("async_queue") => {
+    <Bucket> DIPSTICK_METRICS.add_prefix("async_queue") => {
         /// Maybe queue was full?
         Marker SEND_FAILED: "send_failed";
     }

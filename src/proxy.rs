@@ -5,6 +5,7 @@ use error;
 
 use std::collections::{HashMap, BTreeMap};
 use std::sync::{Arc, RwLock, Weak};
+use std::fmt;
 
 use atomic_refcell::*;
 
@@ -17,13 +18,12 @@ lazy_static! {
 }
 
 /// Return the root metric proxy.
-pub fn to_proxy() -> InputProxy {
+pub fn input_proxy() -> InputProxy {
     ROOT_PROXY.clone()
 }
 
 /// A dynamically proxyed metric.
-#[derive(Derivative)]
-#[derivative(Debug)]
+#[derive(Debug)]
 struct ProxiedMetric {
     // basic info for this metric, needed to recreate new corresponding trait object if target changes
     name: Name,
@@ -32,11 +32,9 @@ struct ProxiedMetric {
     // the metric trait object to proxy metric values to
     // the second part can be up to namespace.len() + 1 if this metric was individually targeted
     // 0 if no target assigned
-    #[derivative(Debug = "ignore")]
     target: (AtomicRefCell<(Metric, usize)>),
 
     // a reference to the the parent proxyer to remove the metric from when it is dropped
-    #[derivative(Debug = "ignore")]
     proxy: Arc<RwLock<InnerProxy>>,
 }
 
@@ -51,7 +49,7 @@ impl Drop for ProxiedMetric {
 /// Decouples metrics definition from backend configuration.
 /// Allows defining metrics before a concrete type has been selected.
 /// Allows replacing metrics backend on the fly at runtime.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct InputProxy {
     attributes: Attributes,
     inner: Arc<RwLock<InnerProxy>>,
@@ -62,6 +60,13 @@ struct InnerProxy {
     targets: HashMap<Name, Arc<Input + Send + Sync>>,
     // last part of the namespace is the metric's name
     metrics: BTreeMap<Name, Weak<ProxiedMetric>>,
+}
+
+impl fmt::Debug for InnerProxy {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "metrics: {:?}", self.metrics.keys())?;
+        write!(f, "targets: {:?}", self.targets.keys())
+    }
 }
 
 impl InnerProxy {
@@ -174,7 +179,7 @@ impl InputProxy {
 
 impl<S: AsRef<str>> From<S> for InputProxy {
     fn from(name: S) -> InputProxy {
-        InputProxy::new().add_name(name.as_ref())
+        InputProxy::new().add_prefix(name.as_ref())
     }
 }
 

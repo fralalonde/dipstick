@@ -3,16 +3,10 @@
 
 extern crate dipstick;
 
-use std::time::Duration;
 use dipstick::*;
 
 fn main() {
-    let metrics = input_bucket().add_prefix("test");
-
-    // Bucket::set_default_output(to_stdout());
-    metrics.set_output(output_stdout());
-
-    metrics.flush_every(Duration::from_secs(3));
+    let metrics = input_bucket();
 
     let counter = metrics.counter("counter_a");
     let timer = metrics.timer("timer_a");

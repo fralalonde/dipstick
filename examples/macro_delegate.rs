@@ -37,7 +37,7 @@ metrics!(LIB_METRICS => {
 });
 
 fn main() {
-    ROOT_PROXY.set_target(to_stdout().new_input());
+    ROOT_PROXY.set_target(output_stdout().new_input());
 
     loop {
         ROOT_COUNTER.count(123);

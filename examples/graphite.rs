@@ -8,9 +8,9 @@ use std::time::Duration;
 
 fn main() {
     let metrics =
-        to_graphite("localhost:2003")
-            .expect("Connecting")
-            .add_name("my_app")
+        output_graphite("localhost:2003")
+            .expect("Connected")
+            .add_prefix("my_app")
             .new_input();
 
     loop {

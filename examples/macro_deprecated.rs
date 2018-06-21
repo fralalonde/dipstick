@@ -18,13 +18,13 @@
 //#[ignore(deprecated)]
 //app_metrics!(
 //    MultiOutput, SAME_TYPE = to_multi()
-//        .with_output(to_stdout().add_name("yeah"))
-//        .with_output(to_stdout().add_name("ouch"))
+//        .with_output(to_stdout().add_prefix("yeah"))
+//        .with_output(to_stdout().add_prefix("ouch"))
 //);
 //
 //#[ignore(deprecated)]
 //app_metrics!(
-//    MultiOutput, MUTANT_CHILD = SAME_TYPE.add_name("super").add_name("duper")
+//    MultiOutput, MUTANT_CHILD = SAME_TYPE.add_prefix("super").add_prefix("duper")
 //);
 
 fn main() {
