@@ -9,7 +9,7 @@ use dipstick::*;
 
 fn main() {
     // for this demo, print metric values to the console
-    let app_metrics = to_stdout().new_input();
+    let app_metrics = output_stdout().new_input();
 
     // metrics can be predefined by type and name
     let counter = app_metrics.counter("counter_a");
@@ -19,7 +19,7 @@ fn main() {
     app_metrics.counter("just_once").count(4);
 
     // metric names can be prepended with a common prefix
-    let prefixed_metrics = app_metrics.add_name("subsystem");
+    let prefixed_metrics = app_metrics.add_prefix("subsystem");
     let event = prefixed_metrics.marker("event_c");
     let gauge = prefixed_metrics.gauge("gauge_d");
 

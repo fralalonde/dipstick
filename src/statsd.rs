@@ -14,14 +14,14 @@ use std::sync::{Arc, RwLock};
 pub use std::net::ToSocketAddrs;
 
 metrics! {
-    <Bucket> DIPSTICK_METRICS.add_name("statsd") => {
+    <Bucket> DIPSTICK_METRICS.add_prefix("statsd") => {
         Marker SEND_ERR: "send_failed";
         Counter SENT_BYTES: "sent_bytes";
     }
 }
 
 /// Send metrics to a statsd server at the address and port provided.
-pub fn to_statsd<ADDR: ToSocketAddrs>(address: ADDR) -> error::Result<StatsdOutput> {
+pub fn output_statsd<ADDR: ToSocketAddrs>(address: ADDR) -> error::Result<StatsdOutput> {
     let socket = Arc::new(UdpSocket::bind("0.0.0.0:0")?);
     socket.set_nonblocking(true)?;
     socket.connect(address)?;
@@ -204,7 +204,7 @@ mod bench {
 
     #[bench]
     pub fn timer_statsd(b: &mut test::Bencher) {
-        let sd = to_statsd("localhost:8125").unwrap().new_input_dyn();
+        let sd = output_statsd("localhost:8125").unwrap().new_input_dyn();
         let timer = sd.new_metric("timer".into(), Kind::Timer);
 
         b.iter(|| test::black_box(timer.write(2000)));

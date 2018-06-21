@@ -8,7 +8,7 @@ use log;
 
 /// Write metric values to the standard log using `info!`.
 // TODO parameterize log level
-pub fn to_log() -> LogOutput {
+pub fn output_log() -> LogOutput {
     LogOutput {
         attributes: Attributes::default(),
         format_fn: Arc::new(text::format_name),
@@ -115,7 +115,7 @@ mod test {
 
     #[test]
     fn test_to_log() {
-        let c = super::to_log().new_input_dyn();
+        let c = super::output_log().new_input_dyn();
         let m = c.new_metric("test".into(), Kind::Marker);
         m.write(33);
     }

@@ -1,6 +1,7 @@
 //! Maintain aggregated metrics for deferred reporting,
 //!
-use core::{Kind, Value, Name, WithName, NO_METRIC_OUTPUT, Input, OutputDyn, Metric, WithAttributes, Attributes};
+use core::{Kind, Value, Name, WithName, output_none, Input, Metric, WithAttributes, Attributes,
+           RawInput, RawMetric, RawOutputDyn};
 use clock::TimeHandle;
 use core::Kind::*;
 use error;
@@ -10,26 +11,28 @@ use scores::ScoreType::*;
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
+use std::fmt;
+use std::borrow::Borrow;
 
 /// A function type to transform aggregated scores into publishable statistics.
 pub type StatsFn = Fn(Kind, Name, ScoreType) -> Option<(Kind, Name, Value)> + Send + Sync + 'static;
 
 fn initial_stats() -> &'static StatsFn {
-    &summary
+    &stats_summary
 }
 
-fn initial_output() -> Arc<OutputDyn + Send + Sync> {
-    NO_METRIC_OUTPUT.clone()
+fn initial_output() -> Arc<RawOutputDyn + Send + Sync> {
+    Arc::new(output_none())
 }
 
 lazy_static! {
     static ref DEFAULT_AGGREGATE_STATS: RwLock<Arc<StatsFn>> = RwLock::new(Arc::new(initial_stats()));
 
-    static ref DEFAULT_AGGREGATE_OUTPUT: RwLock<Arc<OutputDyn + Send + Sync>> = RwLock::new(initial_output());
+    static ref DEFAULT_AGGREGATE_OUTPUT: RwLock<Arc<RawOutputDyn + Send + Sync>> = RwLock::new(initial_output());
 }
 
 /// Create a new metric aggregating bucket.
-pub fn to_bucket() -> Bucket {
+pub fn input_bucket() -> Bucket {
     Bucket::new()
 }
 
@@ -41,17 +44,20 @@ pub struct Bucket {
     inner: Arc<RwLock<InnerBucket>>,
 }
 
-#[derive(Derivative)]
-#[derivative(Debug)]
 struct InnerBucket {
     metrics: BTreeMap<Name, Arc<Scoreboard>>,
     period_start: TimeHandle,
-    #[derivative(Debug = "ignore")]
     stats: Option<Arc<Fn(Kind, Name, ScoreType)
         -> Option<(Kind, Name, Value)> + Send + Sync + 'static>>,
-    #[derivative(Debug = "ignore")]
-    output: Option<Arc<OutputDyn + Send + Sync + 'static>>,
+    output: Option<Arc<RawOutputDyn + Send + Sync + 'static>>,
     publish_metadata: bool,
+}
+
+impl fmt::Debug for InnerBucket {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "metrics: {:?}", self.metrics)?;
+        write!(f, "period_start: {:?}", self.period_start)
+    }
 }
 
 lazy_static! {
@@ -59,10 +65,38 @@ lazy_static! {
 }
 
 impl InnerBucket {
+
+    pub fn flush(&mut self) -> error::Result<()> {
+        let stats_fn = match self.stats {
+            Some(ref stats_fn) => stats_fn.clone(),
+            None => DEFAULT_AGGREGATE_STATS.read().unwrap().clone(),
+        };
+
+        let pub_scope = match self.output {
+            Some(ref out) => out.new_raw_input_dyn(),
+            None => output_none().new_raw_input_dyn(),
+        };
+
+        self.flush_to(pub_scope.borrow(), stats_fn.as_ref());
+
+        // all metrics published!
+        // purge: if bucket is the last owner of the metric, remove it
+        // TODO parameterize whether to keep ad-hoc metrics after publish
+        let mut purged = self.metrics.clone();
+        self.metrics.iter()
+            .filter(|&(_k, v)| Arc::strong_count(v) == 1)
+            .map(|(k, _v)| k)
+            .for_each(|k| {purged.remove(k);});
+        self.metrics = purged;
+
+        pub_scope.flush_raw()
+
+    }
+
     /// Take a snapshot of aggregated values and reset them.
     /// Compute stats on captured values using assigned or default stats function.
     /// Write stats to assigned or default output.
-    pub fn flush_to(&mut self, publish_scope: &Input, stats_fn: &StatsFn) {
+    pub fn flush_to(&mut self, publish_scope: &RawInput, stats_fn: &StatsFn) {
 
         let now = TimeHandle::now();
         let duration_seconds = self.period_start.elapsed_us() as f64 / 1_000_000.0;
@@ -89,7 +123,7 @@ impl InnerBucket {
                 for score in metric.2 {
                     let filtered = (stats_fn)(metric.1, metric.0.clone(), score);
                     if let Some((kind, name, value)) = filtered {
-                        let metric: Metric = publish_scope.new_metric(name, kind);
+                        let metric: RawMetric = publish_scope.new_metric_raw(name, kind);
                         metric.write(value)
                     }
                 }
@@ -101,7 +135,7 @@ impl InnerBucket {
 
 impl<S: AsRef<str>> From<S> for Bucket {
     fn from(name: S) -> Bucket {
-        Bucket::new().add_name(name.as_ref())
+        Bucket::new().add_prefix(name.as_ref())
     }
 }
 
@@ -134,7 +168,7 @@ impl Bucket {
     }
 
     /// Install a new receiver for all aggregateed metrics, replacing any previous receiver.
-    pub fn set_default_output(default_config: impl OutputDyn + Send + Sync + 'static) {
+    pub fn set_default_output(default_config: impl RawOutputDyn + Send + Sync + 'static) {
         *DEFAULT_AGGREGATE_OUTPUT.write().unwrap() = Arc::new(default_config);
     }
 
@@ -157,7 +191,7 @@ impl Bucket {
     }
 
     /// Install a new receiver for all aggregated metrics, replacing any previous receiver.
-    pub fn set_output(&self, new_config: impl OutputDyn + Send + Sync + 'static) {
+    pub fn set_output(&self, new_config: impl RawOutputDyn + Send + Sync + 'static) {
         self.inner.write().expect("Aggregator").output = Some(Arc::new(new_config))
     }
 
@@ -167,26 +201,10 @@ impl Bucket {
     }
 
     /// Flush the aggregator scores using the specified scope and stats.
-    pub fn flush_to(&self, publish_scope: &Input, stats_fn: &StatsFn) {
+    pub fn flush_to(&self, publish_scope: &RawInput, stats_fn: &StatsFn) {
         let mut inner = self.inner.write().expect("Aggregator");
         inner.flush_to(publish_scope, stats_fn);
     }
-
-//    /// Discard scores for ad-hoc metrics.
-//    pub fn cleanup(&self) {
-//        let orphans: Vec<Name> = self.inner.read().expect("Aggregator").metrics.iter()
-//            // is aggregator now the sole owner?
-//            // TODO use weak ref + impl Drop to mark abandoned metrics (see dispatch)
-//            .filter(|&(_k, v)| Arc::strong_count(v) == 1)
-//            .map(|(k, _v)| k.to_string())
-//            .collect();
-//        if !orphans.is_empty() {
-//            let remover = &mut self.inner.write().unwrap().metrics;
-//            orphans.iter().for_each(|k| {
-//                remover.remove(k);
-//            });
-//        }
-//    }
 
 }
 
@@ -207,22 +225,7 @@ impl Input for Bucket {
     /// Publish statistics
     fn flush(&self) -> error::Result<()> {
         let mut inner = self.inner.write().expect("Aggregator");
-
-        let stats_fn = match &inner.stats {
-            &Some(ref stats_fn) => stats_fn.clone(),
-            &None => DEFAULT_AGGREGATE_STATS.read().unwrap().clone(),
-        };
-
-        let pub_scope = match &inner.output {
-            &Some(ref out) => out.new_input_dyn(),
-            &None => DEFAULT_AGGREGATE_OUTPUT.read().unwrap().new_input_dyn(),
-        };
-
-        inner.flush_to(pub_scope.as_ref(), stats_fn.as_ref());
-
-        // TODO parameterize whether to keep ad-hoc metrics after publish
-        // source.cleanup();
-        pub_scope.flush()
+        inner.flush()
     }
 }
 
@@ -234,14 +237,14 @@ impl WithAttributes for Bucket {
 /// A predefined export strategy reporting all aggregated stats for all metric types.
 /// Resulting stats are named by appending a short suffix to each metric's name.
 #[allow(dead_code)]
-pub fn all_stats(kind: Kind, name: Name, score: ScoreType) -> Option<(Kind, Name, Value)> {
+pub fn stats_all(kind: Kind, name: Name, score: ScoreType) -> Option<(Kind, Name, Value)> {
     match score {
-        Count(hit) => Some((Counter, name.add_name("count"), hit)),
-        Sum(sum) => Some((kind, name.add_name("sum"), sum)),
-        Mean(mean) => Some((kind, name.add_name("mean"), mean.round() as Value)),
-        Max(max) => Some((Gauge, name.add_name("max"), max)),
-        Min(min) => Some((Gauge, name.add_name("min"), min)),
-        Rate(rate) => Some((Gauge, name.add_name("rate"), rate.round() as Value)),
+        Count(hit) => Some((Counter, name.concat("count"), hit)),
+        Sum(sum) => Some((kind, name.concat("sum"), sum)),
+        Mean(mean) => Some((kind, name.concat("mean"), mean.round() as Value)),
+        Max(max) => Some((Gauge, name.concat("max"), max)),
+        Min(min) => Some((Gauge, name.concat("min"), min)),
+        Rate(rate) => Some((Gauge, name.concat("rate"), rate.round() as Value)),
     }
 }
 
@@ -250,7 +253,7 @@ pub fn all_stats(kind: Kind, name: Name, score: ScoreType) -> Option<(Kind, Name
 /// Since there is only one stat per metric, there is no risk of collision
 /// and so exported stats copy their metric's name.
 #[allow(dead_code)]
-pub fn average(kind: Kind, name: Name, score: ScoreType) -> Option<(Kind, Name, Value)> {
+pub fn stats_average(kind: Kind, name: Name, score: ScoreType) -> Option<(Kind, Name, Value)> {
     match kind {
         Marker => match score {
             Count(count) => Some((Counter, name, count)),
@@ -270,7 +273,7 @@ pub fn average(kind: Kind, name: Name, score: ScoreType) -> Option<(Kind, Name, 
 /// Since there is only one stat per metric, there is no risk of collision
 /// and so exported stats copy their metric's name.
 #[allow(dead_code)]
-pub fn summary(kind: Kind, name: Name, score: ScoreType) -> Option<(Kind, Name, Value)> {
+pub fn stats_summary(kind: Kind, name: Name, score: ScoreType) -> Option<(Kind, Name, Value)> {
     match kind {
         Marker => match score {
             Count(count) => Some((Counter, name, count)),
@@ -313,7 +316,7 @@ mod bench {
 #[cfg(test)]
 mod test {
     use core::*;
-    use bucket::{Bucket, all_stats, summary, average, StatsFn};
+    use bucket::{Bucket, stats_all, stats_summary, stats_average, StatsFn};
     use clock::{mock_clock_advance, mock_clock_reset};
     use map::StatsMap;
 
@@ -323,7 +326,7 @@ mod test {
     fn make_stats(stats_fn: &StatsFn) -> BTreeMap<String, Value> {
         mock_clock_reset();
 
-        let metrics = Bucket::new().add_name("test");
+        let metrics = Bucket::new().add_prefix("test");
 
         let counter = metrics.counter("counter_a");
         let timer = metrics.timer("timer_a");
@@ -353,7 +356,7 @@ mod test {
 
     #[test]
     fn external_aggregate_all_stats() {
-        let map = make_stats(&all_stats);
+        let map = make_stats(&stats_all);
 
         assert_eq!(map["test.counter_a.count"], 2);
         assert_eq!(map["test.counter_a.sum"], 30);
@@ -377,7 +380,7 @@ mod test {
 
     #[test]
     fn external_aggregate_summary() {
-        let map = make_stats(&summary);
+        let map = make_stats(&stats_summary);
 
         assert_eq!(map["test.counter_a"], 30);
         assert_eq!(map["test.timer_a"], 30_000_000);
@@ -387,7 +390,7 @@ mod test {
 
     #[test]
     fn external_aggregate_average() {
-        let map = make_stats(&average);
+        let map = make_stats(&stats_average);
 
         assert_eq!(map["test.counter_a"], 15);
         assert_eq!(map["test.timer_a"], 15_000_000);

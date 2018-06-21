@@ -7,7 +7,7 @@ use std::time::Duration;
 use dipstick::*;
 
 fn main() {
-    let metrics = to_stdout().cache(5).new_input().add_name("cache");
+    let metrics = output_stdout().cache(5).new_input().add_prefix("cache");
 
     loop {
         // report some ad-hoc metric values from our "application" loop

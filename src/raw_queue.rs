@@ -2,7 +2,7 @@
 //! RawMetrics definitions are still synchronous.
 //! If queue size is exceeded, calling code reverts to blocking.
 use core::{Value, RawMetric, Name, Kind, Marker, WithName, RawOutputDyn,
-           WithAttributes, Attributes, Input, Output, Metric, RawInputBox};
+           WithAttributes, Attributes, Input, Output, Metric, UnsafeInput};
 
 use bucket::Bucket;
 use error;
@@ -13,7 +13,7 @@ use std::sync::mpsc;
 use std::thread;
 
 metrics!{
-    <Bucket> DIPSTICK_METRICS.add_name("raw_async_queue") => {
+    <Bucket> DIPSTICK_METRICS.add_prefix("raw_async_queue") => {
         /// Maybe queue was full?
         Marker SEND_FAILED: "send_failed";
     }
@@ -26,7 +26,7 @@ fn new_async_channel(length: usize) -> Arc<mpsc::SyncSender<RawQueueCmd>> {
         while !done {
             match receiver.recv() {
                 Ok(RawQueueCmd::Write(wfn, value)) => wfn.write(value),
-                Ok(RawQueueCmd::Flush(input)) => if let Err(e) = input.flush() {
+                Ok(RawQueueCmd::Flush(input)) => if let Err(e) = input.flush_raw() {
                     debug!("Could not asynchronously flush metrics: {}", e);
                 },
                 Err(e) => {
@@ -39,6 +39,7 @@ fn new_async_channel(length: usize) -> Arc<mpsc::SyncSender<RawQueueCmd>> {
     });
     Arc::new(sender)
 }
+
 
 /// Wrap new inputs with an asynchronous metric write & flush dispatcher.
 #[derive(Clone)]
@@ -69,7 +70,7 @@ impl Output for QueueRawOutput {
 
     /// Wrap new inputs with an asynchronous metric write & flush dispatcher.
     fn new_input(&self) -> Self::INPUT {
-        let target_input = self.target.new_raw_input_dyn();
+        let target_input = UnsafeInput::new(self.target.new_raw_input_dyn());
         QueueRawInput {
             attributes: self.attributes.clone(),
             sender: self.sender.clone(),
@@ -83,7 +84,7 @@ impl Output for QueueRawOutput {
 /// Async commands should be of no concerns to applications.
 pub enum RawQueueCmd {
     Write(Arc<RawMetric>, Value),
-    Flush(Arc<RawInputBox>),
+    Flush(Arc<UnsafeInput>),
 }
 
 /// A metric input wrapper that sends writes & flushes over a Rust sync channel.
@@ -92,7 +93,7 @@ pub enum RawQueueCmd {
 pub struct QueueRawInput {
     attributes: Attributes,
     sender: Arc<mpsc::SyncSender<RawQueueCmd>>,
-    target: Arc<RawInputBox>,
+    target: Arc<UnsafeInput>,
 }
 
 impl WithAttributes for QueueRawInput {
@@ -103,7 +104,7 @@ impl WithAttributes for QueueRawInput {
 impl Input for QueueRawInput {
     fn new_metric(&self, name: Name, kind:Kind) -> Metric {
         let name = self.qualified_name(name);
-        let target_metric = Arc::new(self.target.new_metric(name, kind));
+        let target_metric = Arc::new(self.target.new_metric_raw(name, kind));
         let sender = self.sender.clone();
         Metric::new(move |value| {
             if let Err(e) = sender.send(RawQueueCmd::Write(target_metric.clone(), value)) {

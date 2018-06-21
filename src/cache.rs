@@ -76,19 +76,6 @@ impl Input for CacheInput {
 
 impl Async for CacheOutput {}
 
-impl CacheInput {
-    /// Create and increment an ad-hoc counter.
-    pub fn count(&self, name: &str, value: Value) {
-        self.counter(name).count(value)
-    }
-
-    /// Create and increment an ad-hoc marker.
-    pub fn mark(&self, name: &str) {
-        self.marker(name).mark()
-    }
-
-}
-
 mod lru {
     //! A fixed-size cache with LRU expiration criteria.
     //! Stored values will be held onto as long as there is space.

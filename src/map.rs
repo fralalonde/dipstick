@@ -1,34 +1,41 @@
-use core::{Value, Metric, Kind, Name, Input};
-use std::sync::{Arc, RwLock};
+use core::{Value, RawMetric, Kind, Name, RawInput};
+use std::rc::Rc;
+use std::cell::RefCell;
 use std::collections::BTreeMap;
+
+/// Create a new StatsMap input to capture metrics to a map
+pub fn output_map() -> StatsMap {
+    StatsMap::new()
+}
 
 /// A HashMap wrapper to receive metrics or stats values.
 /// Every received value for a metric replaces the previous one (if any).
 #[derive(Clone)]
 pub struct StatsMap {
-    inner: Arc<RwLock<BTreeMap<String, Value>>>,
+    inner: Rc<RefCell<BTreeMap<String, Value>>>,
 }
 
 impl StatsMap {
     /// Create a new StatsMap.
     pub fn new() -> Self {
-        StatsMap { inner: Arc::new(RwLock::new(BTreeMap::new())) }
+        StatsMap { inner: Rc::new(RefCell::new(BTreeMap::new())) }
     }
 }
 
-impl Input for StatsMap {
-    fn new_metric(&self, name: Name, _kind: Kind) -> Metric {
+impl RawInput for StatsMap {
+    fn new_metric_raw(&self, name: Name, _kind: Kind) -> RawMetric {
         let write_to = self.inner.clone();
         let name: String = name.join(".");
-        Metric::new(move |value| {
-            let _previous = write_to.write().expect("StatsMap").insert(name.clone(), value);
+        RawMetric::new(move |value| {
+            let _previous = write_to.borrow_mut().insert(name.clone(), value);
         })
     }
 }
 
 impl From<StatsMap> for BTreeMap<String, Value> {
     fn from(map: StatsMap) -> Self {
-        let z = Arc::try_unwrap(map.inner).expect("StatsMap");
-        z.into_inner().expect("StatsMap")
+        // FIXME this is is possibly a full map copy, for nothing.
+        // into_inner() is what we'd really want here but would require some `unsafe`
+        map.inner.borrow().clone()
     }
 }

@@ -6,12 +6,12 @@ use clock::TimeHandle;
 use queue;
 use raw_queue;
 use cache;
+use error;
 
 use std::sync::{Arc, Mutex};
 use std::ops;
 use std::rc::Rc;
-use text;
-use error;
+use std::fmt;
 
 // TODO define an 'AsValue' trait + impl for supported number types, then drop 'num' crate
 pub use num::ToPrimitive;
@@ -115,7 +115,7 @@ pub trait WithName {
     fn get_namespace(&self) -> &Name;
 
     /// Join namespace and prepend in newly defined metrics.
-    fn add_name(&self, name: &str) -> Self;
+    fn add_prefix(&self, name: &str) -> Self;
 
     /// Append the specified name to the local namespace and return the concatenated result.
     fn qualified_name(&self, metric_name: Name) -> Name;
@@ -127,14 +127,14 @@ impl<T: WithAttributes> WithName for T {
     }
 
     /// Join namespace and prepend in newly defined metrics.
-    fn add_name(&self, name: &str) -> Self {
-        self.with_attributes(|new_attr| new_attr.namespace = new_attr.namespace.add_name(name))
+    fn add_prefix(&self, name: &str) -> Self {
+        self.with_attributes(|new_attr| new_attr.namespace = new_attr.namespace.concat(name))
     }
 
     /// Append the specified name to the local namespace and return the concatenated result.
     fn qualified_name(&self, name: Name) -> Name {
         // FIXME (perf) store name in reverse to prepend with an actual push() to the vec
-        self.get_attributes().namespace.add_name(name)
+        self.get_attributes().namespace.concat(name)
     }
 }
 
@@ -185,7 +185,7 @@ pub struct Name {
 impl Name {
 
     /// Concatenate with another namespace into a new one.
-    pub fn add_name(&self, name: impl Into<Name>) -> Self {
+    pub fn concat(&self, name: impl Into<Name>) -> Self {
         let mut cloned = self.clone();
         cloned.inner.extend_from_slice(&name.into().inner);
         cloned
@@ -242,7 +242,7 @@ impl<S: Into<String>> From<S> for Name {
 
 lazy_static! {
     /// The reference instance identifying an uninitialized metric config.
-    pub static ref NO_METRIC_OUTPUT: Arc<OutputDyn + Send + Sync> = Arc::new(text::to_void());
+    pub static ref NO_METRIC_OUTPUT: Arc<OutputDyn + Send + Sync> = Arc::new(output_none());
 
     /// The reference instance identifying an uninitialized metric scope.
     pub static ref NO_METRIC_SCOPE: Arc<Input + Send + Sync> = NO_METRIC_OUTPUT.new_input_dyn();
@@ -280,7 +280,7 @@ pub trait Cache: OutputDyn + Send + Sync + 'static + Sized {
 
 /// Dynamic variant of the Output trait
 pub trait OutputDyn {
-    /// Open a new metric input with dynamic typing.
+    /// Open a new metric input with dynamic trait typing.
     fn new_input_dyn(&self) -> Arc<Input + Send + Sync + 'static>;
 }
 
@@ -292,7 +292,7 @@ impl<T: Output + Send + Sync + 'static> OutputDyn for T {
 }
 
 /// Define metrics, write values and flush them.
-pub trait Input: Send + Sync {
+pub trait Input {
     /// Define a metric of the specified type.
     fn new_metric(&self, name: Name, kind: Kind) -> Metric;
 
@@ -321,12 +321,28 @@ pub trait Input: Send + Sync {
         self.new_metric(name.into(), Kind::Gauge).into()
     }
 
+    /// Create and increment an ad-hoc counter.
+    fn count(&self, name: &str, value: Value) {
+        self.counter(name).count(value)
+    }
+
+    /// Create and increment an ad-hoc marker.
+    fn mark(&self, name: &str) {
+        self.marker(name).mark()
+    }
+
 }
 
 /// A metric is actually a function that knows to write a metric value to a metric output.
 #[derive(Clone)]
 pub struct Metric {
     inner: Arc<Fn(Value) + Send + Sync>
+}
+
+impl fmt::Debug for Metric {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Arc<Fn(Value) + Send + Sync>")
+    }
 }
 
 impl Metric {
@@ -363,13 +379,13 @@ pub trait RawAsync: RawOutput + Sized {
 /// Dynamic variant of the RawOutput trait
 pub trait RawOutputDyn {
     /// Open a new metric input with dynamic typing.
-    fn new_raw_input_dyn(&self) -> RawInputBox;
+    fn new_raw_input_dyn(&self) -> Rc<RawInput + 'static>;
 }
 
 /// Blanket impl that provides RawOutputs their dynamic flavor.
 impl<T: RawOutput + Send + Sync + 'static> RawOutputDyn for T {
-    fn new_raw_input_dyn(&self) -> RawInputBox {
-        RawInputBox (Rc::new(self.new_raw_input()))
+    fn new_raw_input_dyn(&self) -> Rc<RawInput + 'static> {
+        Rc::new(self.new_raw_input())
     }
 }
 
@@ -377,7 +393,7 @@ impl<T: RawOutput + Send + Sync + 'static> RawOutputDyn for T {
 #[derive(Clone)]
 pub struct LockingInputBox {
     attributes: Attributes,
-    inner: Arc<Mutex<RawInputBox>>
+    inner: Arc<Mutex<UnsafeInput>>
 }
 
 impl WithAttributes for LockingInputBox {
@@ -389,7 +405,7 @@ impl Input for LockingInputBox {
 
     fn new_metric(&self, name: Name, kind: Kind) -> Metric {
         let name = self.qualified_name(name);
-        let raw_metric = self.inner.lock().expect("RawInput Lock").new_metric(name, kind);
+        let raw_metric = self.inner.lock().expect("RawInput Lock").new_metric_raw(name, kind);
         let mutex = self.inner.clone();
         Metric::new(move |value| {
             let _guard = mutex.lock().expect("RawMetric Lock");
@@ -398,7 +414,7 @@ impl Input for LockingInputBox {
     }
 
     fn flush(&self) -> error::Result<()> {
-        self.inner.lock().expect("RawInput Lock").flush()
+        self.inner.lock().expect("RawInput Lock").flush_raw()
     }
 }
 
@@ -409,32 +425,46 @@ impl<T: RawOutput + Send + Sync + 'static> Output for T {
     fn new_input(&self) -> Self::INPUT {
         LockingInputBox {
             attributes: Attributes::default(),
-            inner: Arc::new(Mutex::new(RawInputBox (Rc::new(self.new_raw_input()))))
+            inner: Arc::new(Mutex::new(UnsafeInput(self.new_raw_input_dyn())))
         }
     }
 }
 
-
 /// Define metrics, write values and flush them.
 pub trait RawInput {
     /// Define a metric of the specified type.
-    fn new_metric(&self, name: Name, kind: Kind) -> RawMetric;
+    fn new_metric_raw(&self, name: Name, kind: Kind) -> RawMetric;
 
     /// Flush does nothing by default.
-    fn flush(&self) -> error::Result<()> {
+    fn flush_raw(&self) -> error::Result<()> {
         Ok(())
     }
 }
 
+/// Blanket impl that provides RawOutputs their dynamic flavor.
+impl<T: Input + Send + Sync + 'static> RawInput for T {
+    fn new_metric_raw(&self, name: Name, kind: Kind) -> RawMetric {
+        let raw = self.new_metric(name, kind);
+        RawMetric::new(move |value| raw.write(value))
+    }
+}
+
 /// Wrap a RawInput to make it Send + Sync, allowing it to travel the world of threads.
-/// Obviously, it should only still be used from a single thread, which RawAsync does.
+/// Obviously, it should only still be used from a single thread or dragons may occur.
 #[derive(Clone)]
-pub struct RawInputBox ( Rc<RawInput + 'static> );
+pub struct UnsafeInput(Rc<RawInput + 'static> );
 
-unsafe impl Send for RawInputBox {}
-unsafe impl Sync for RawInputBox {}
+unsafe impl Send for UnsafeInput {}
+unsafe impl Sync for UnsafeInput {}
 
-impl ops::Deref for RawInputBox {
+impl UnsafeInput {
+    /// Wrap a dynamic RawInput to make it Send + Sync.
+    pub fn new(input: Rc<RawInput + 'static>) -> Self {
+        UnsafeInput(input)
+    }
+}
+
+impl ops::Deref for UnsafeInput {
     type Target = RawInput + 'static;
     fn deref(&self) -> &Self::Target {
         Rc::as_ref(&self.0)
@@ -445,6 +475,12 @@ impl ops::Deref for RawInputBox {
 
 pub struct RawMetric {
     inner: Box<Fn(Value)>
+}
+
+impl fmt::Debug for RawMetric {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Box<Fn(Value)>")
+    }
 }
 
 impl RawMetric {
@@ -467,10 +503,8 @@ unsafe impl Sync for RawMetric {}
 /// A monotonic counter metric.
 /// Since value is only ever increased by one, no value parameter is provided,
 /// preventing programming errors.
-#[derive(Derivative)]
-#[derivative(Debug)]
+#[derive(Debug)]
 pub struct Marker {
-    #[derivative(Debug = "ignore")]
     inner: Metric,
 }
 
@@ -482,10 +516,8 @@ impl Marker {
 }
 
 /// A counter that sends values to the metrics backend
-#[derive(Derivative)]
-#[derivative(Debug)]
+#[derive(Debug)]
 pub struct Counter {
-    #[derivative(Debug = "ignore")]
     inner: Metric,
 }
 
@@ -497,10 +529,8 @@ impl Counter {
 }
 
 /// A gauge that sends values to the metrics backend
-#[derive(Derivative)]
-#[derivative(Debug)]
+#[derive(Debug)]
 pub struct Gauge {
-    #[derivative(Debug = "ignore")]
     inner: Metric,
 }
 
@@ -517,10 +547,8 @@ impl Gauge {
 /// - with the time(Fn) methodhich wraps a closure with start() and stop() calls.
 /// - with start() and stop() methodsrapping around the operation to time
 /// - with the interval_us() method, providing an externally determined microsecond interval
-#[derive(Derivative)]
-#[derivative(Debug)]
+#[derive(Debug)]
 pub struct Timer {
-    #[derivative(Debug = "ignore")]
     inner: Metric,
 }
 
@@ -587,6 +615,40 @@ impl From<Metric> for Marker {
     }
 }
 
+/// Discard metrics output.
+#[derive(Clone)]
+pub struct VoidOutput {}
+
+impl RawOutput for VoidOutput {
+    type INPUT = VoidOutput;
+    fn new_raw_input(&self) -> VoidOutput {
+        VoidOutput {}
+    }
+}
+
+impl RawInput for VoidOutput {
+    fn new_metric_raw(&self, _name: Name, _kind: Kind) -> RawMetric {
+        RawMetric::new(|_value| {})
+    }
+}
+
+/// Discard all metric values sent to it.
+pub fn output_none() -> VoidOutput {
+    VoidOutput {}
+}
+
+#[cfg(test)]
+mod test {
+    use core::*;
+
+    #[test]
+    fn test_to_void() {
+        let c = output_none().new_input();
+        let m = c.new_metric("test".into(), Kind::Marker);
+        m.write(33);
+    }
+
+}
 
 #[cfg(feature = "bench")]
 mod bench {
@@ -608,4 +670,3 @@ mod bench {
         b.iter(|| test::black_box(marker.mark()));
     }
 }
-

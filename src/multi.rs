@@ -12,7 +12,7 @@ pub struct MultiOutput {
 }
 
 /// Create a new multi-output.
-pub fn to_multi() -> MultiOutput {
+pub fn output_multi() -> MultiOutput {
     MultiOutput::new()
 }
 
@@ -38,7 +38,7 @@ impl MultiOutput {
     }
 
     /// Returns a clone of the dispatch with the new output added to the list.
-    pub fn with_output<O: OutputDyn + Send + Sync + 'static>(&self, out: O) -> Self {
+    pub fn with_output<OUT: OutputDyn + Send + Sync + 'static>(&self, out: OUT) -> Self {
         let mut cloned = self.clone();
         cloned.outputs.push(Arc::new(out));
         cloned
@@ -50,11 +50,33 @@ impl WithAttributes for MultiOutput {
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
+/// Create a new multi-output.
+pub fn input_multi() -> MultiInput {
+    MultiInput::new()
+}
+
 /// Dispatch metric values to a list of inputs.
 #[derive(Clone)]
 pub struct MultiInput {
     attributes: Attributes,
     inputs: Vec<Arc<Input + Send + Sync>>,
+}
+
+impl MultiInput {
+    /// Create a new multi input dispatcher with no inputs configured.
+    pub fn new() -> Self {
+        MultiInput {
+            attributes: Attributes::default(),
+            inputs: vec![],
+        }
+    }
+
+    /// Returns a clone of the dispatch with the new output added to the list.
+    pub fn with_input<IN: Input + Send + Sync + 'static>(&self, input: IN) -> Self {
+        let mut cloned = self.clone();
+        cloned.inputs.push(Arc::new(input));
+        cloned
+    }
 }
 
 impl Input for MultiInput {
