@@ -11,33 +11,33 @@ use std::time::Duration;
 // undeclared root (un-prefixed) metrics
 metrics! {
     // create counter "some_counter"
-    pub Counter ROOT_COUNTER: "root_counter";
+    pub ROOT_COUNTER: Counter = "root_counter";
     // create counter "root_counter"
-    pub Gauge ROOT_GAUGE: "root_gauge";
+    pub ROOT_GAUGE: Gauge = "root_gauge";
     // create counter "root_timer"
-    pub Timer ROOT_TIMER: "root_timer";
+    pub ROOT_TIMER: Timer = "root_timer";
 }
 
 // public source
 metrics!(pub PUB_METRICS = "pub_lib_prefix" => {
     // create counter "lib_prefix.some_counter"
-    pub Counter PUB_COUNTER: "some_counter";
+    pub PUB_COUNTER: Counter = "some_counter";
 });
 
 // declare mod source
 metrics!(pub LIB_METRICS = "mod_lib_prefix" => {
     // create counter "mod_lib_prefix.some_counter"
-    pub Counter SOME_COUNTER: "some_counter";
+    pub SOME_COUNTER: Counter = "some_counter";
 });
 
 // reuse declared source
 metrics!(LIB_METRICS => {
     // create counter "mod_lib_prefix.another_counter"
-    Counter ANOTHER_COUNTER: "another_counter";
+    ANOTHER_COUNTER: Counter = "another_counter";
 });
 
 fn main() {
-    ROOT_PROXY.set_target(output_stdout().new_input());
+    Proxy::set_default_target(output_stdout().new_input());
 
     loop {
         ROOT_COUNTER.count(123);

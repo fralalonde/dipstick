@@ -18,117 +18,123 @@ macro_rules! time {
 /// Metrics can be used from anywhere (public), does not need to declare metrics in this block.
 #[macro_export]
 macro_rules! metrics {
-    // TYPED
-    // public, no metrics
-    ($(#[$attr:meta])* pub $METRIC_ID:ident = $e:expr $(;)*) => {
-        lazy_static! { $(#[$attr])* pub static ref $METRIC_ID: ProxyInput = $e.into(); }
+    // BRANCH NODE - public type decl
+    ($(#[$attr:meta])* pub $IDENT:ident: $TYPE:ty = $e:expr => { $($BRANCH:tt)*} $($REST:tt)*) => {
+        lazy_static! { $(#[$attr])* pub static ref $IDENT: $TYPE = $e.into(); }
+        __in_context!{ $IDENT; $TYPE; $($BRANCH)* }
+        metrics!{ $($REST)* }
     };
-    // public, some metrics
-    ($(#[$attr:meta])* pub $METRIC_ID:ident = $e:expr => { $($REMAINING:tt)+ }) => {
-        lazy_static! { $(#[$attr])* pub static ref $METRIC_ID: ProxyInput = $e.into(); }
-        __metrics_block!($METRIC_ID; $($REMAINING)*);
+
+    // BRANCH NODE - private typed decl
+    ($(#[$attr:meta])* $IDENT:ident: $TYPE:ty = $e:expr => { $($BRANCH:tt)* } $($REST:tt)*) => {
+        lazy_static! { $(#[$attr])* static ref $IDENT: $TYPE = $e.into(); }
+        __in_context!{ $IDENT; $TYPE; $($BRANCH)* }
+        metrics!{ $($REST)* }
     };
-    // private, no metrics
-    ($(#[$attr:meta])* $METRIC_ID:ident = $e:expr $(;)*) => {
-        lazy_static! { $(#[$attr])* static ref $METRIC_ID: ProxyInput = $e.into(); }
+
+    // BRANCH NODE - public untyped decl
+    ($(#[$attr:meta])* pub $IDENT:ident = $e:expr => { $($BRANCH:tt)* } $($REST:tt)*) => {
+        lazy_static! { $(#[$attr])* pub static ref $IDENT: Proxy = $e.into(); }
+        __in_context!{ $IDENT; Proxy; $($BRANCH)* }
+        metrics!{ $($REST)* }
     };
-    // private, some metrics
-    ($(#[$attr:meta])* $METRIC_ID:ident = $e:expr => { $($REMAINING:tt)+ }) => {
-        lazy_static! { $(#[$attr])* static ref $METRIC_ID: ProxyInput = $e.into(); }
-        __metrics_block!($METRIC_ID; $($REMAINING)*);
+
+    // BRANCH NODE - private untyped decl
+    ($(#[$attr:meta])* $IDENT:ident = $e:expr => { $($BRANCH:tt)* } $($REST:tt)*) => {
+        lazy_static! { $(#[$attr])* static ref $IDENT: Proxy = $e.into(); }
+        __in_context!{ $IDENT; Proxy; $($BRANCH)* }
+        metrics!{ $($REST)* }
     };
-    // no identifier, expression + some metrics
-    ($e:expr => { $($REMAINING:tt)+ }) => {
-        __metrics_block!($e; $($REMAINING)*);
+
+    // BRANCH NODE - untyped expr
+    ($e:expr => { $($BRANCH:tt)+ } $($REST:tt)*) => {
+        __in_context!{ $e; Proxy; $($BRANCH)* }
+        metrics!{ $($REST)* }
     };
-    // just metrics
-    ($(#[$attr:meta])* pub $METRIC_ID:ident: $TY:ty = $METRIC_NAME:expr; $($REMAINING:tt)*) => {
-        __metrics_block!(input_proxy(); $(#[$attr])* pub static ref $METRIC_ID: $TY = $METRIC_NAME; $($REMAINING)* );
+
+    // LEAF NODE - public typed decl
+    ($(#[$attr:meta])* pub $IDENT:ident: $TYPE:ty = $e:expr; $($REST:tt)*) => {
+        __in_context!{ input_proxy(); Proxy; $(#[$attr])* pub $IDENT: $TYPE = $e; }
+        metrics!{ $($REST)* }
     };
-    // just metrics
-    ($(#[$attr:meta])* $METRIC_ID:ident: $TY:ty = $METRIC_NAME:expr; $($REMAINING:tt)*) => {
-        __metrics_block!(input_proxy(); $(#[$attr])* static ref $METRIC_ID: $TY = $METRIC_NAME; $($REMAINING)* );
+
+    // LEAF NODE - private typed decl
+    ($(#[$attr:meta])* $IDENT:ident: $TYPE:ty = $e:expr; $($REST:tt)*) => {
+        __in_context!{ input_proxy(); Proxy; $(#[$attr])* $IDENT: $TYPE = $e; }
+        metrics!{ $($REST)* }
     };
+
+    // END NODE
+    () => ()
 }
 
 /// Internal macro required to abstract over pub/non-pub versions of the macro
 #[macro_export]
 #[doc(hidden)]
-macro_rules! __metrics_block {
-    // public metric
-    ($INPUT:expr;
-    $(#[$attr:meta])* pub $METRIC_ID:ident: $TY:ty = $METRIC_NAME:expr; $($REMAINING:tt)*) => {
-        lazy_static! {
-            $(#[$attr])* pub static ref $METRIC_ID: $TY = {
-                let e: ProxyInput = $INPUT.into();
-                e.new_metric($METRIC_NAME)
-            }.into();
+macro_rules! __in_context {
+    // METRIC NODE - public
+    ($WITH:expr; $TY:ty; $(#[$attr:meta])* pub $IDENT:ident: $MTY:ty = $METRIC_NAME:expr; $($REST:tt)*) => {
+        lazy_static! { $(#[$attr])* pub static ref $IDENT: $MTY =
+            $WITH.new_metric($METRIC_NAME.into(), stringify!($MTY).into()).into();
         }
-        __metrics_block!($INPUT; $($REMAINING)*);
+        __in_context!{ $WITH; $TY; $($REST)* }
     };
 
-    // private metric
-    ($INPUT:expr;
-    $(#[$attr:meta])* $METRIC_ID:ident: $TY:ty = $METRIC_NAME:expr; $($REMAINING:tt)*) => {
-        lazy_static! {
-            $(#[$attr])* static ref $METRIC_ID: $TY = {
-                let e: ProxyInput = $INPUT.into();
-                e.new_metric($METRIC_NAME)
-            }.into();
+    // METRIC NODE - private
+    ($WITH:expr; $TY:ty; $(#[$attr:meta])* $IDENT:ident: $MTY:ty = $METRIC_NAME:expr; $($REST:tt)*) => {
+        lazy_static! { $(#[$attr])* static ref $IDENT: $MTY =
+            $WITH.new_metric($METRIC_NAME.into(), stringify!($MTY).into()).into();
         }
-        __metrics_block!($INPUT; $($REMAINING)*);
+        __in_context!{ $WITH; $TY; $($REST)* }
     };
-//    ($INPUT:expr;
-//    $(#[$attr:meta])* pub $METRIC_ID:ident: Marker = $METRIC_NAME:expr; $($REMAINING:tt)*) => {
-//        lazy_static! { $(#[$attr])* pub static ref $METRIC_ID:
-//            Marker = { let e: ProxyInput = $INPUT.into(); e.marker($METRIC_NAME) }; }
-//        __metrics_block!($INPUT; $($REMAINING)*);
-//    };
-//    ($INPUT:expr;
-//    $(#[$attr:meta])* $METRIC_ID:ident: Marker = $METRIC_NAME:expr; $($REMAINING:tt)*) => {
-//        lazy_static! { $(#[$attr])* static ref $METRIC_ID:
-//            Marker = { let e: ProxyInput = $INPUT.into(); e.marker($METRIC_NAME) }; }
-//        __metrics_block!($INPUT; $($REMAINING)*);
-//    };
-//    ($INPUT:expr;
-//    $(#[$attr:meta])* pub $METRIC_ID:ident: Gauge = $METRIC_NAME:expr; $($REMAINING:tt)*) => {
-//        lazy_static! { $(#[$attr])* pub static ref $METRIC_ID:
-//            Gauge = { let e: ProxyInput = $INPUT.into(); e.gauge($METRIC_NAME) }; }
-//        __metrics_block!($INPUT; $($REMAINING)*);
-//    };
-//    ($INPUT:expr;
-//    $(#[$attr:meta])* $METRIC_ID:ident: Gauge = $METRIC_NAME:expr; $($REMAINING:tt)*) => {
-//        lazy_static! { $(#[$attr])* static ref $METRIC_ID:
-//            Gauge = { let e: ProxyInput = $INPUT.into(); e.gauge($METRIC_NAME) }; }
-//        __metrics_block!($INPUT; $($REMAINING)*);
-//    };
-//    ($INPUT:expr;
-//    $(#[$attr:meta])* pub $METRIC_ID:ident: Timer = $METRIC_NAME:expr; $($REMAINING:tt)*) => {
-//        lazy_static! { $(#[$attr])* pub static ref $METRIC_ID:
-//            Timer = { let e: ProxyInput = $INPUT.into(); e.timer($METRIC_NAME) }; }
-//        __metrics_block!($INPUT; $($REMAINING)*);
-//    };
-//    ($INPUT:expr;
-//    $(#[$attr:meta])* $METRIC_ID:ident: Timer = $METRIC_NAME:expr; $($REMAINING:tt)*) => {
-//        lazy_static! { $(#[$attr])* static ref $METRIC_ID:
-//            Timer = { let e: ProxyInput = $INPUT.into(); e.timer($METRIC_NAME) }; }
-//        __metrics_block!($INPUT; $($REMAINING)*);
-//    };
-    ($INPUT:expr;) => ()
+
+    // SUB BRANCH NODE - public identifier
+    ($WITH:expr; $TY:ty; $(#[$attr:meta])* pub $IDENT:ident = $e:expr => { $($BRANCH:tt)*} $($REST:tt)*) => {
+        lazy_static! { $(#[$attr])* pub static ref $IDENT = $WITH.add_prefix($e); }
+        __in_context!($IDENT; $TY; $($BRANCH)*);
+        __in_context!($WITH; $TY; $($REST)*);
+    };
+
+    // SUB BRANCH NODE - private identifier
+    ($WITH:expr; $TY:ty; $(#[$attr:meta])* $IDENT:ident = $e:expr => { $($BRANCH:tt)*} $($REST:tt)*) => {
+        lazy_static! { $(#[$attr])* static ref $IDENT = $WITH.add_prefix($e); }
+        __in_context!($IDENT; $TY; $($BRANCH)*);
+        __in_context!($WITH; $TY; $($REST)*);
+    };
+
+    // SUB BRANCH NODE (not yet)
+    ($WITH:expr; $TY:ty; $(#[$attr:meta])* pub $e:expr => { $($BRANCH:tt)*} $($REST:tt)*) => {
+        __in_context!($WITH.add_prefix($e); $TY; $($BRANCH)*);
+        __in_context!($WITH; $TY; $($REST)*);
+    };
+
+    // SUB BRANCH NODE (not yet)
+    ($WITH:expr; $TY:ty; $(#[$attr:meta])* $e:expr => { $($BRANCH:tt)*} $($REST:tt)*) => {
+        __in_context!($WITH.add_prefix($e); $TY; $($BRANCH)*);
+        __in_context!($WITH; $TY; $($REST)*);
+    };
+
+    ($WITH:expr; $TYPE:ty;) => ()
 }
 
 
 #[cfg(test)]
 mod test {
     use core::*;
-    use proxy::ProxyInput;
+    use proxy::Proxy;
 
-    metrics!("test_prefix" => {
+//    DECL =  WITH_CLAUSE => { ELEM; ELEM.. }
+//            | ELEM
+//
+//    ELEM =
+//            DECL
+
+    metrics!{TEST: Proxy = "test_prefix" => {
         M1: Marker = "failed";
         C1: Counter = "failed";
         G1: Gauge = "failed";
         T1: Timer = "failed";
-    });
+    }}
 
     #[test]
     fn call_new_macro_defined_metrics() {

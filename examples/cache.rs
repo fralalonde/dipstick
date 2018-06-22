@@ -11,8 +11,8 @@ fn main() {
 
     loop {
         // report some ad-hoc metric values from our "application" loop
-        metrics.count("blorf", 1134);
-        metrics.mark("burg");
+        metrics.counter("blorf").count(1134);
+        metrics.marker("burg").mark();
 
         sleep(Duration::from_millis(500));
     }

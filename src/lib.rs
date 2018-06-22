@@ -3,7 +3,7 @@
 #![cfg_attr(feature = "bench", feature(test))]
 #![warn(missing_docs, trivial_casts, trivial_numeric_casts, unused_extern_crates,
         unused_import_braces, unused_qualifications)]
-#![recursion_limit="8"]
+#![recursion_limit="32"]
 
 #[cfg(feature = "bench")]
 extern crate test;
@@ -33,13 +33,13 @@ pub use core::{Value, Kind, Marker, Timer, Counter, Gauge,
 pub mod macros;
 
 pub mod proxy;
-pub use proxy::{ProxyInput, ROOT_PROXY, input_proxy};
+pub use proxy::{Proxy, input_proxy};
 
 mod bucket;
 pub use bucket::{Bucket, input_bucket, stats_summary, stats_all, stats_average};
 
 mod text;
-pub use text::{output_stdout, TextOutput, TextInput};
+pub use text::{output_stdout, output_stderr, TextOutput, TextInput};
 
 mod logging;
 pub use logging::{LogOutput, LogInput, output_log};
@@ -50,10 +50,10 @@ mod scores;
 pub use scores::ScoreType;
 
 mod statsd;
-pub use statsd::{StatsdOutput, StatsdInput, output_statsd};
+pub use statsd::{StatsdOutput, Statsd, output_statsd};
 
 mod graphite;
-pub use graphite::{GraphiteOutput, GraphiteInput, output_graphite};
+pub use graphite::{GraphiteOutput, Graphite, output_graphite};
 
 //mod prometheus;
 //pub use prometheus::{Prometheus, to_prometheus};
@@ -71,16 +71,16 @@ mod multi;
 pub use multi::{MultiOutput, MultiInput, output_multi, input_multi};
 
 mod queue;
-pub use queue::{QueueInput, QueueOutput};
+pub use queue::{Queue, QueueOutput};
 
 mod raw_queue;
-pub use raw_queue::{QueueRawInput, QueueRawOutput};
+pub use raw_queue::{RawQueue, RawQueueOutput};
 
 mod scheduler;
 pub use scheduler::{set_schedule, CancelHandle, ScheduleFlush};
 
-mod self_metrics;
-pub use self_metrics::DIPSTICK_METRICS;
+mod metrics;
+pub use metrics::DIPSTICK_METRICS;
 
 mod clock;
 pub use clock::{TimeHandle, mock_clock_advance, mock_clock_reset};

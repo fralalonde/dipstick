@@ -12,13 +12,13 @@ use atomic_refcell::*;
 lazy_static! {
     /// Root of the default metrics proxy, usable by all libraries and apps.
     /// Libraries should create their metrics into sub subspaces of this.
-    /// Applications should configure on startup where the proxyed metrics should go.
+    /// Applications should configure on startup where the proxied metrics should go.
     /// Exceptionally, one can create its own ProxyInput root, separate from this one.
-    pub static ref ROOT_PROXY: ProxyInput = ProxyInput::new();
+    static ref ROOT_PROXY: Proxy = Proxy::new();
 }
 
 /// Return the root metric proxy.
-pub fn input_proxy() -> ProxyInput {
+pub fn input_proxy() -> Proxy {
     ROOT_PROXY.clone()
 }
 
@@ -50,7 +50,7 @@ impl Drop for ProxyMetric {
 /// Allows defining metrics before a concrete type has been selected.
 /// Allows replacing metrics backend on the fly at runtime.
 #[derive(Clone, Debug)]
-pub struct ProxyInput {
+pub struct Proxy {
     attributes: Attributes,
     inner: Arc<RwLock<InnerProxy>>,
 }
@@ -149,7 +149,7 @@ impl InnerProxy {
 
 }
 
-impl ProxyInput {
+impl Proxy {
 
     /// Create a new "private" metric proxy root. This is usually not what you want.
     /// Since this proxy will not be part of the standard proxy tree,
@@ -157,7 +157,7 @@ impl ProxyInput {
     /// its existence this may never happen and metrics will not be proxyed anywhere.
     /// If you want to use the standard proxy tree, use #metric_proxy() instead.
     pub fn new() -> Self {
-        ProxyInput {
+        Proxy {
             attributes: Attributes::default(),
             inner: Arc::new(RwLock::new(InnerProxy::new())),
         }
@@ -175,15 +175,25 @@ impl ProxyInput {
         inner.unset_target(self.get_namespace());
     }
 
+    /// Replace target for this proxy and it's children.
+    pub fn set_default_target<IS: Input + Send + Sync + 'static>(target: IS) {
+        ROOT_PROXY.set_target(target)
+    }
+
+    /// Replace target for this proxy and it's children.
+    pub fn unset_default_target(&self) {
+        ROOT_PROXY.unset_target()
+    }
+
 }
 
-impl<S: AsRef<str>> From<S> for ProxyInput {
-    fn from(name: S) -> ProxyInput {
-        ProxyInput::new().add_prefix(name.as_ref())
+impl<S: AsRef<str>> From<S> for Proxy {
+    fn from(name: S) -> Proxy {
+        Proxy::new().add_prefix(name.as_ref())
     }
 }
 
-impl Input for ProxyInput {
+impl Input for Proxy {
     /// Lookup or create a proxy stub for the requested metric.
     fn new_metric(&self, name: Name, kind: Kind) -> Metric {
         let name = self.qualified_name(name);
@@ -216,7 +226,7 @@ impl Input for ProxyInput {
     }
 }
 
-impl WithAttributes for ProxyInput {
+impl WithAttributes for Proxy {
     fn get_attributes(&self) -> &Attributes { &self.attributes }
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }

@@ -8,11 +8,21 @@ use std::io::{Write,  self};
 use std::rc::Rc;
 use std::cell::RefCell;
 
-/// Write metric values to stdout using `println!`.
+/// Write metric values to stdout.
 pub fn output_stdout() -> TextOutput<io::Stdout> {
     TextOutput {
         attributes: Attributes::default(),
         inner: Arc::new(RwLock::new(io::stdout())),
+        format_fn: Arc::new(format_name),
+        print_fn: Arc::new(print_name_value_line),
+    }
+}
+
+/// Write metric values to stderr.
+pub fn output_stderr() -> TextOutput<io::Stderr> {
+    TextOutput {
+        attributes: Attributes::default(),
+        inner: Arc::new(RwLock::new(io::stderr())),
         format_fn: Arc::new(format_name),
         print_fn: Arc::new(print_name_value_line),
     }

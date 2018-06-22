@@ -1,23 +1,14 @@
 //! Queue metrics for write on a separate thread,
 //! Metrics definitions are still synchronous.
 //! If queue size is exceeded, calling code reverts to blocking.
-use core::{Input, Value, Metric, Name, Kind, Marker, WithName, OutputDyn, Output,
+use core::{Input, Value, Metric, Name, Kind, WithName, OutputDyn, Output,
            WithAttributes, Attributes, Cache};
-use proxy::ProxyInput;
-
 use error;
-use self_metrics::DIPSTICK_METRICS;
+use metrics;
 
 use std::sync::Arc;
 use std::sync::mpsc;
 use std::thread;
-
-metrics!{
-    DIPSTICK_METRICS.add_prefix("async_queue") => {
-        /// Maybe queue was full?
-        SEND_FAILED: Marker = "send_failed";
-    }
-}
 
 fn new_async_channel(length: usize) -> Arc<mpsc::SyncSender<QueueCmd>> {
     let (sender, receiver) = mpsc::sync_channel::<QueueCmd>(length);
@@ -67,18 +58,17 @@ impl WithAttributes for QueueOutput {
 }
 
 impl Output for QueueOutput {
-    type INPUT = QueueInput;
+    type INPUT = Queue;
 
     /// Wrap new inputs with an asynchronous metric write & flush dispatcher.
     fn new_input(&self) -> Self::INPUT {
         let target_input = self.target.new_input_dyn();
-        QueueInput {
+        Queue {
             attributes: self.attributes.clone(),
             sender: self.sender.clone(),
             target: target_input,
         }
     }
-
 }
 
 /// This is only `pub` because `error` module needs to know about it.
@@ -91,25 +81,25 @@ pub enum QueueCmd {
 /// A metric input wrapper that sends writes & flushes over a Rust sync channel.
 /// Commands are executed by a background thread.
 #[derive(Clone)]
-pub struct QueueInput {
+pub struct Queue {
     attributes: Attributes,
     sender: Arc<mpsc::SyncSender<QueueCmd>>,
     target: Arc<Input + Send + Sync + 'static>,
 }
 
-impl WithAttributes for QueueInput {
+impl WithAttributes for Queue {
     fn get_attributes(&self) -> &Attributes { &self.attributes }
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
-impl Input for QueueInput {
+impl Input for Queue {
     fn new_metric(&self, name: Name, kind:Kind) -> Metric {
         let name = self.qualified_name(name);
         let target_metric = self.target.new_metric(name, kind);
         let sender = self.sender.clone();
         Metric::new(move |value| {
             if let Err(e) = sender.send(QueueCmd::Write(target_metric.clone(), value)) {
-                SEND_FAILED.mark();
+                metrics::SEND_FAILED.mark();
                 debug!("Failed to send async metrics: {}", e);
             }
         })
@@ -117,7 +107,7 @@ impl Input for QueueInput {
 
     fn flush(&self) -> error::Result<()> {
         if let Err(e) = self.sender.send(QueueCmd::Flush(self.target.clone())) {
-            SEND_FAILED.mark();
+            metrics::SEND_FAILED.mark();
             debug!("Failed to flush async metrics: {}", e);
             Err(e.into())
         } else {

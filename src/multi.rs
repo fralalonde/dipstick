@@ -38,7 +38,7 @@ impl MultiOutput {
     }
 
     /// Returns a clone of the dispatch with the new output added to the list.
-    pub fn with_output<OUT: OutputDyn + Send + Sync + 'static>(&self, out: OUT) -> Self {
+    pub fn add_output<OUT: OutputDyn + Send + Sync + 'static>(&self, out: OUT) -> Self {
         let mut cloned = self.clone();
         cloned.outputs.push(Arc::new(out));
         cloned
@@ -72,7 +72,7 @@ impl MultiInput {
     }
 
     /// Returns a clone of the dispatch with the new output added to the list.
-    pub fn with_input<IN: Input + Send + Sync + 'static>(&self, input: IN) -> Self {
+    pub fn add_input<IN: Input + Send + Sync + 'static>(&self, input: IN) -> Self {
         let mut cloned = self.clone();
         cloned.inputs.push(Arc::new(input));
         cloned

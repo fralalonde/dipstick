@@ -13,12 +13,12 @@ use dipstick::*;
 use std::thread;
 
 metrics!{
-    Counter COUNTER: "counter_a";
-    Marker EVENT: "event_c";
+    COUNTER: Counter = "counter_a";
+    EVENT: Marker = "event_c";
 }
 
 fn main() {
-    input_proxy().set_target(output_stdout().async(100));
+    Proxy::set_default_target(output_stdout().async(100).new_input());
     for _ in 0..4 {
         thread::spawn(move || {
             loop {

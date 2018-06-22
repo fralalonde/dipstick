@@ -13,11 +13,10 @@ use std::ops;
 use std::rc::Rc;
 use std::fmt;
 
-// TODO define an 'AsValue' trait + impl for supported number types, then drop 'num' crate
+// TODO maybe define an 'AsValue' trait + impl for supported number types, then drop 'num' crate
 pub use num::ToPrimitive;
 
 /// Base type for recorded metric values.
-// TODO should this be f64? f32?
 pub type Value = u64;
 
 /// Used to differentiate between metric kinds in the backend.
@@ -31,6 +30,19 @@ pub enum Kind {
     Gauge,
     /// Measuring a time interval, internal to the app or provided by an external source.
     Timer,
+}
+
+/// Used by the metrics! macro to obtain the Kind from the stringified type.
+impl<'a> From<&'a str> for Kind {
+    fn from(s: &str) -> Kind {
+        match s {
+            "Marker" => Kind::Marker,
+            "Counter" => Kind::Counter,
+            "Gauge" => Kind::Gauge,
+            "Timer" => Kind::Timer,
+            _ => panic!("No Kind '{}' defined", s)
+        }
+    }
 }
 
 /// The actual distribution (random, fixed-cycled, etc) depends on selected sampling method.
@@ -321,16 +333,6 @@ pub trait Input {
         self.new_metric(name.into(), Kind::Gauge).into()
     }
 
-    /// Create and increment an ad-hoc counter.
-    fn count(&self, name: &str, value: Value) {
-        self.counter(name).count(value)
-    }
-
-    /// Create and increment an ad-hoc marker.
-    fn mark(&self, name: &str) {
-        self.marker(name).mark()
-    }
-
 }
 
 /// A metric is actually a function that knows to write a metric value to a metric output.
@@ -371,8 +373,8 @@ pub trait RawOutput: RawOutputDyn + Send + Sync + 'static + Sized {
 /// Wrap this raw output behind an asynchronous metrics dispatch queue.
 pub trait RawAsync: RawOutput + Sized {
     /// Wrap this output with an asynchronous dispatch queue of specified length.
-    fn async(self, queue_length: usize) -> raw_queue::QueueRawOutput {
-        raw_queue::QueueRawOutput::new(self, queue_length)
+    fn async(self, queue_length: usize) -> raw_queue::RawQueueOutput {
+        raw_queue::RawQueueOutput::new(self, queue_length)
     }
 }
 
