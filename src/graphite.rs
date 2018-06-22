@@ -1,7 +1,7 @@
 //! Send metrics to a graphite server.
 
 use core::*;
-use bucket::*;
+use proxy::ProxyInput;
 
 use error;
 use self_metrics::DIPSTICK_METRICS;
@@ -18,10 +18,10 @@ use std::rc::Rc;
 use std::cell::{RefCell, RefMut};
 
 metrics!{
-    <Bucket> DIPSTICK_METRICS.add_prefix("graphite") => {
-        Marker SEND_ERR: "send_failed";
-        Marker TRESHOLD_EXCEEDED: "bufsize_exceeded";
-        Counter SENT_BYTES: "sent_bytes";
+    DIPSTICK_METRICS.add_prefix("graphite") => {
+        SEND_ERR: Marker = "send_failed";
+        TRESHOLD_EXCEEDED: Marker = "bufsize_exceeded";
+        SENT_BYTES: Counter = "sent_bytes";
     }
 }
 

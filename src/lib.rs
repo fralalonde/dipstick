@@ -3,6 +3,7 @@
 #![cfg_attr(feature = "bench", feature(test))]
 #![warn(missing_docs, trivial_casts, trivial_numeric_casts, unused_extern_crates,
         unused_import_braces, unused_qualifications)]
+#![recursion_limit="8"]
 
 #[cfg(feature = "bench")]
 extern crate test;
@@ -32,7 +33,7 @@ pub use core::{Value, Kind, Marker, Timer, Counter, Gauge,
 pub mod macros;
 
 pub mod proxy;
-pub use proxy::{InputProxy, ROOT_PROXY, input_proxy};
+pub use proxy::{ProxyInput, ROOT_PROXY, input_proxy};
 
 mod bucket;
 pub use bucket::{Bucket, input_bucket, stats_summary, stats_all, stats_average};

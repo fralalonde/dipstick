@@ -31,7 +31,9 @@ time = "0.1"
 skeptic = { version = "0.13", optional = true }
 
 [features]
+default-features = []
 bench = []
+self_metrics = []
 
 [package.metadata.release]
 #sign-commit = true
