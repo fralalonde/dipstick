@@ -9,14 +9,14 @@ use dipstick::*;
 use std::time::Duration;
 
 // undeclared root (un-prefixed) metrics
-metrics! { "" => {
+metrics! {
     // create counter "some_counter"
     pub Counter ROOT_COUNTER: "root_counter";
     // create counter "root_counter"
     pub Gauge ROOT_GAUGE: "root_gauge";
     // create counter "root_timer"
     pub Timer ROOT_TIMER: "root_timer";
-}}
+}
 
 // public source
 metrics!(pub PUB_METRICS = "pub_lib_prefix" => {

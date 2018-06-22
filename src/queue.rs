@@ -3,8 +3,8 @@
 //! If queue size is exceeded, calling code reverts to blocking.
 use core::{Input, Value, Metric, Name, Kind, Marker, WithName, OutputDyn, Output,
            WithAttributes, Attributes, Cache};
+use proxy::ProxyInput;
 
-use bucket::Bucket;
 use error;
 use self_metrics::DIPSTICK_METRICS;
 
@@ -13,9 +13,9 @@ use std::sync::mpsc;
 use std::thread;
 
 metrics!{
-    <Bucket> DIPSTICK_METRICS.add_prefix("async_queue") => {
+    DIPSTICK_METRICS.add_prefix("async_queue") => {
         /// Maybe queue was full?
-        Marker SEND_FAILED: "send_failed";
+        SEND_FAILED: Marker = "send_failed";
     }
 }
 

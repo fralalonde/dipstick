@@ -2,11 +2,11 @@
 
 use core::{Input, Output, Value, Metric, Attributes, WithAttributes, Kind,
            Counter, Marker, Name, WithSamplingRate, WithName, WithBuffering, Sampling, Cache, Async};
+use proxy::ProxyInput;
 
 use pcg32;
 use error;
 use self_metrics::DIPSTICK_METRICS;
-use bucket::Bucket;
 
 use std::net::UdpSocket;
 use std::sync::{Arc, RwLock};
@@ -14,9 +14,9 @@ use std::sync::{Arc, RwLock};
 pub use std::net::ToSocketAddrs;
 
 metrics! {
-    <Bucket> DIPSTICK_METRICS.add_prefix("statsd") => {
-        Marker SEND_ERR: "send_failed";
-        Counter SENT_BYTES: "sent_bytes";
+    DIPSTICK_METRICS.add_prefix("statsd") => {
+        SEND_ERR: Marker ="send_failed";
+        SENT_BYTES: Counter = "sent_bytes";
     }
 }
 

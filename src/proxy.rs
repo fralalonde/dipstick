@@ -13,18 +13,18 @@ lazy_static! {
     /// Root of the default metrics proxy, usable by all libraries and apps.
     /// Libraries should create their metrics into sub subspaces of this.
     /// Applications should configure on startup where the proxyed metrics should go.
-    /// Exceptionally, one can create its own InputProxy root, separate from this one.
-    pub static ref ROOT_PROXY: InputProxy = InputProxy::new();
+    /// Exceptionally, one can create its own ProxyInput root, separate from this one.
+    pub static ref ROOT_PROXY: ProxyInput = ProxyInput::new();
 }
 
 /// Return the root metric proxy.
-pub fn input_proxy() -> InputProxy {
+pub fn input_proxy() -> ProxyInput {
     ROOT_PROXY.clone()
 }
 
 /// A dynamically proxyed metric.
 #[derive(Debug)]
-struct ProxiedMetric {
+struct ProxyMetric {
     // basic info for this metric, needed to recreate new corresponding trait object if target changes
     name: Name,
     kind: Kind,
@@ -39,7 +39,7 @@ struct ProxiedMetric {
 }
 
 /// Dispatcher weak ref does not prevent dropping but still needs to be cleaned out.
-impl Drop for ProxiedMetric {
+impl Drop for ProxyMetric {
     fn drop(&mut self) {
         self.proxy.write().expect("Dispatch Lock").drop_metric(&self.name)
     }
@@ -50,7 +50,7 @@ impl Drop for ProxiedMetric {
 /// Allows defining metrics before a concrete type has been selected.
 /// Allows replacing metrics backend on the fly at runtime.
 #[derive(Clone, Debug)]
-pub struct InputProxy {
+pub struct ProxyInput {
     attributes: Attributes,
     inner: Arc<RwLock<InnerProxy>>,
 }
@@ -59,7 +59,7 @@ struct InnerProxy {
     // namespaces can target one, many or no metrics
     targets: HashMap<Name, Arc<Input + Send + Sync>>,
     // last part of the namespace is the metric's name
-    metrics: BTreeMap<Name, Weak<ProxiedMetric>>,
+    metrics: BTreeMap<Name, Weak<ProxyMetric>>,
 }
 
 impl fmt::Debug for InnerProxy {
@@ -149,7 +149,7 @@ impl InnerProxy {
 
 }
 
-impl InputProxy {
+impl ProxyInput {
 
     /// Create a new "private" metric proxy root. This is usually not what you want.
     /// Since this proxy will not be part of the standard proxy tree,
@@ -157,7 +157,7 @@ impl InputProxy {
     /// its existence this may never happen and metrics will not be proxyed anywhere.
     /// If you want to use the standard proxy tree, use #metric_proxy() instead.
     pub fn new() -> Self {
-        InputProxy {
+        ProxyInput {
             attributes: Attributes::default(),
             inner: Arc::new(RwLock::new(InnerProxy::new())),
         }
@@ -177,13 +177,13 @@ impl InputProxy {
 
 }
 
-impl<S: AsRef<str>> From<S> for InputProxy {
-    fn from(name: S) -> InputProxy {
-        InputProxy::new().add_prefix(name.as_ref())
+impl<S: AsRef<str>> From<S> for ProxyInput {
+    fn from(name: S) -> ProxyInput {
+        ProxyInput::new().add_prefix(name.as_ref())
     }
 }
 
-impl Input for InputProxy {
+impl Input for ProxyInput {
     /// Lookup or create a proxy stub for the requested metric.
     fn new_metric(&self, name: Name, kind: Kind) -> Metric {
         let name = self.qualified_name(name);
@@ -199,7 +199,7 @@ impl Input for InputProxy {
                 let (target, target_namespace_length) = inner.get_effective_target(&name)
                     .unwrap_or_else(|| (NO_METRIC_OUTPUT.new_input_dyn(), 0));
                 let metric_object = target.new_metric(name.clone(), kind);
-                let proxy = Arc::new(ProxiedMetric {
+                let proxy = Arc::new(ProxyMetric {
                     name,
                     kind,
                     target: AtomicRefCell::new((metric_object, target_namespace_length)),
@@ -216,7 +216,7 @@ impl Input for InputProxy {
     }
 }
 
-impl WithAttributes for InputProxy {
+impl WithAttributes for ProxyInput {
     fn get_attributes(&self) -> &Attributes { &self.attributes }
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
