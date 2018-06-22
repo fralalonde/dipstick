@@ -1,24 +1,15 @@
 //! Send metrics to a statsd server.
 
 use core::{Input, Output, Value, Metric, Attributes, WithAttributes, Kind,
-           Counter, Marker, Name, WithSamplingRate, WithName, WithBuffering, Sampling, Cache, Async};
-use proxy::ProxyInput;
-
+           Name, WithSamplingRate, WithName, WithBuffering, Sampling, Cache, Async};
 use pcg32;
 use error;
-use self_metrics::DIPSTICK_METRICS;
+use metrics;
 
 use std::net::UdpSocket;
 use std::sync::{Arc, RwLock};
 
 pub use std::net::ToSocketAddrs;
-
-metrics! {
-    DIPSTICK_METRICS.add_prefix("statsd") => {
-        SEND_ERR: Marker ="send_failed";
-        SENT_BYTES: Counter = "sent_bytes";
-    }
-}
 
 /// Send metrics to a statsd server at the address and port provided.
 pub fn output_statsd<ADDR: ToSocketAddrs>(address: ADDR) -> error::Result<StatsdOutput> {
@@ -41,9 +32,9 @@ pub struct StatsdOutput {
 }
 
 impl Output for StatsdOutput {
-    type INPUT = StatsdInput;
+    type INPUT = Statsd;
     fn new_input(&self) -> Self::INPUT {
-        StatsdInput {
+        Statsd {
             attributes: self.attributes.clone(),
             buffer: Arc::new(RwLock::new(InputBuffer {
                 buffer: String::with_capacity(MAX_UDP_PAYLOAD),
@@ -71,12 +62,12 @@ impl Async for StatsdOutput {}
 
 /// Metrics input for statsd.
 #[derive(Clone)]
-pub struct StatsdInput {
+pub struct Statsd {
     attributes: Attributes,
     buffer: Arc<RwLock<InputBuffer>>,
 }
 
-impl Input for StatsdInput {
+impl Input for Statsd {
     fn new_metric(&self, name: Name, kind: Kind) -> Metric {
         let mut prefix = self.qualified_name(name).join(".");
         prefix.push(':');
@@ -120,9 +111,9 @@ impl Input for StatsdInput {
     }
 }
 
-impl WithSamplingRate for StatsdInput {}
+impl WithSamplingRate for Statsd {}
 
-impl WithAttributes for StatsdInput {
+impl WithAttributes for Statsd {
     fn get_attributes(&self) -> &Attributes { &self.attributes }
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
@@ -181,11 +172,11 @@ impl InputBuffer {
         if !self.buffer.is_empty() {
             match self.socket.send(self.buffer.as_bytes()) {
                 Ok(size) => {
-                    SENT_BYTES.count(size);
+                    metrics::STATSD_SENT_BYTES.count(size);
                     trace!("Sent {} bytes to statsd", self.buffer.len());
                 }
                 Err(e) => {
-                    SEND_ERR.mark();
+                    metrics::STATSD_SEND_ERR.mark();
                     return Err(e.into())
                 }
             };

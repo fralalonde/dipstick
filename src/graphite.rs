@@ -1,10 +1,8 @@
 //! Send metrics to a graphite server.
 
 use core::*;
-use proxy::ProxyInput;
-
 use error;
-use self_metrics::DIPSTICK_METRICS;
+use metrics;
 
 use std::net::ToSocketAddrs;
 
@@ -16,14 +14,6 @@ use std::fmt::Debug;
 use socket::RetrySocket;
 use std::rc::Rc;
 use std::cell::{RefCell, RefMut};
-
-metrics!{
-    DIPSTICK_METRICS.add_prefix("graphite") => {
-        SEND_ERR: Marker = "send_failed";
-        TRESHOLD_EXCEEDED: Marker = "bufsize_exceeded";
-        SENT_BYTES: Counter = "sent_bytes";
-    }
-}
 
 /// Send metrics to a graphite server at the address and port provided.
 pub fn output_graphite<A: ToSocketAddrs + Debug + Clone>(address: A) -> error::Result<GraphiteOutput> {
@@ -48,10 +38,10 @@ pub struct GraphiteOutput {
 
 impl RawOutput for GraphiteOutput {
 
-    type INPUT = GraphiteInput;
+    type INPUT = Graphite;
 
-    fn new_raw_input(&self) -> GraphiteInput {
-        GraphiteInput {
+    fn new_raw_input(&self) -> Graphite {
+        Graphite {
             attributes: self.attributes.clone(),
             buffer: Rc::new(RefCell::new(String::new())),
             socket: self.socket.clone(),
@@ -71,13 +61,13 @@ impl Async for GraphiteOutput {}
 
 /// Graphite Input
 #[derive(Debug, Clone)]
-pub struct GraphiteInput {
+pub struct Graphite {
     attributes: Attributes,
     buffer: Rc<RefCell<String>>,
     socket: Arc<RwLock<RetrySocket>>,
 }
 
-impl RawInput for GraphiteInput {
+impl RawInput for Graphite {
     /// Define a metric of the specified type.
     fn new_metric_raw(&self, name: Name, kind: Kind) -> RawMetric {
         let mut prefix = self.qualified_name(name).join(".");
@@ -96,14 +86,14 @@ impl RawInput for GraphiteInput {
             RawMetric::new(move |value| {
                 if let Err(err) = cloned.buf_write(&metric, value) {
                     debug!("Graphite buffer write failed: {}", err);
-                    SEND_ERR.mark();
+                    metrics::GRAPHITE_SEND_ERR.mark();
                 }
             })
         } else {
             RawMetric::new(move |value| {
                 if let Err(err) = cloned.buf_write(&metric, value).and_then(|_| cloned.flush_raw()) {
                     debug!("Graphite buffer write failed: {}", err);
-                    SEND_ERR.mark();
+                    metrics::GRAPHITE_SEND_ERR.mark();
                 }
 
             })
@@ -116,7 +106,7 @@ impl RawInput for GraphiteInput {
     }
 }
 
-impl GraphiteInput {
+impl Graphite {
     fn buf_write(&self, metric: &GraphiteMetric, value: Value) -> error::Result<()> {
         let scaled_value = value / metric.scale;
         let value_str = scaled_value.to_string();
@@ -132,7 +122,7 @@ impl GraphiteInput {
                 buf.push('\n');
 
                 if buf.len() > BUFFER_FLUSH_THRESHOLD {
-                    TRESHOLD_EXCEEDED.mark();
+                    metrics::GRAPHITE_OVERFLOW.mark();
                     warn!("Graphite Buffer Size Exceeded: {}", BUFFER_FLUSH_THRESHOLD);
                     self.flush_inner(buf)?;
                 }
@@ -151,12 +141,12 @@ impl GraphiteInput {
         match sock.write_all(buf.as_bytes()) {
             Ok(()) => {
                 buf.clear();
-                SENT_BYTES.count(buf.len());
+                metrics::GRAPHITE_SENT_BYTES.count(buf.len());
                 trace!("Sent {} bytes to graphite", buf.len());
                 Ok(())
             }
             Err(e) => {
-                SEND_ERR.mark();
+                metrics::GRAPHITE_SEND_ERR.mark();
                 debug!("Failed to send buffer to graphite: {}", e);
                 Err(e.into())
             }
@@ -165,12 +155,12 @@ impl GraphiteInput {
     }
 }
 
-impl WithAttributes for GraphiteInput {
+impl WithAttributes for Graphite {
     fn get_attributes(&self) -> &Attributes { &self.attributes }
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
-impl WithBuffering for GraphiteInput {}
+impl WithBuffering for Graphite {}
 
 /// Its hard to see how a single scope could get more metrics than this.
 // TODO make configurable?
@@ -184,7 +174,7 @@ pub struct GraphiteMetric {
 }
 
 /// Any remaining buffered data is flushed on Drop.
-impl Drop for GraphiteInput {
+impl Drop for Graphite {
     fn drop(&mut self) {
         if let Err(err) = self.flush_raw() {
             warn!("Could not flush graphite metrics upon Drop: {}", err)
