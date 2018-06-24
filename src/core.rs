@@ -304,14 +304,9 @@ impl<T: Output + Send + Sync + 'static> OutputDyn for T {
 }
 
 /// Define metrics, write values and flush them.
-pub trait Input {
+pub trait Input: Flush {
     /// Define a metric of the specified type.
     fn new_metric(&self, name: Name, kind: Kind) -> Metric;
-
-    /// Flush does nothing by default.
-    fn flush(&self) -> error::Result<()> {
-        Ok(())
-    }
 
     /// Define a counter.
     fn counter(&self, name: &str) -> Counter {
@@ -331,6 +326,15 @@ pub trait Input {
     /// Define a gauge.
     fn gauge(&self, name: &str) -> Gauge {
         self.new_metric(name.into(), Kind::Gauge).into()
+    }
+
+}
+
+pub trait Flush {
+
+    /// Flush does nothing by default.
+    fn flush(&self) -> error::Result<()> {
+        Ok(())
     }
 
 }
@@ -415,8 +419,11 @@ impl Input for LockingInputBox {
         } )
     }
 
+}
+
+impl Flush for LockingInputBox {
     fn flush(&self) -> error::Result<()> {
-        self.inner.lock().expect("RawInput Lock").flush_raw()
+        self.inner.lock().expect("RawInput Lock").flush()
     }
 }
 
@@ -433,14 +440,11 @@ impl<T: RawOutput + Send + Sync + 'static> Output for T {
 }
 
 /// Define metrics, write values and flush them.
-pub trait RawInput {
-    /// Define a metric of the specified type.
+pub trait RawInput: Flush {
+
+    /// Define a raw metric of the specified type.
     fn new_metric_raw(&self, name: Name, kind: Kind) -> RawMetric;
 
-    /// Flush does nothing by default.
-    fn flush_raw(&self) -> error::Result<()> {
-        Ok(())
-    }
 }
 
 /// Blanket impl that provides RawOutputs their dynamic flavor.
@@ -632,6 +636,9 @@ impl RawInput for VoidOutput {
     fn new_metric_raw(&self, _name: Name, _kind: Kind) -> RawMetric {
         RawMetric::new(|_value| {})
     }
+}
+
+impl Flush for VoidOutput {
 }
 
 /// Discard all metric values sent to it.

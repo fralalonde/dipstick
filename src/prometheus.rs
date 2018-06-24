@@ -2,31 +2,53 @@
 // TODO impl this
 
 use core::*;
-use output::*;
 use error;
-use self_metrics::*;
 
 use std::net::ToSocketAddrs;
 
-use std::sync::{Arc, RwLock};
-use std::time::{SystemTime, UNIX_EPOCH};
-use std::io::Write;
-use std::fmt::Debug;
-
 use socket::RetrySocket;
 
+use prometheus_proto as proto;
+
 metrics!{
-    <Aggregate> DIPSTICK_METRICS.add_prefix("prometheus") => {
-        Marker SEND_ERR: "send_failed";
-        Marker TRESHOLD_EXCEEDED: "bufsize_exceeded";
-        Counter SENT_BYTES: "sent_bytes";
+}
+
+pub struct PrometheusOutput {
+
+}
+
+impl RawOutput for PrometheusOutput {
+    type INPUT = Prometheus;
+    fn new_raw_input(&self) -> Self::INPUT {
+        Prometheus {}
+    }
+}
+
+pub struct Prometheus {
+}
+
+impl RawInput for Prometheus {
+
+    /// Define a metric of the specified type.
+    fn new_metric_raw(&self, name: Name, kind: Kind) -> RawMetric {
+        RawMetric::new(|_value| {})
+    }
+}
+
+impl Flush for Prometheus {
+
+    /// Flush does nothing by default.
+    fn flush(&self) -> error::Result<()> {
+        Ok(())
     }
 }
 
 /// Send metrics to a prometheus server at the address and port provided.
-pub fn output_prometheus<ADDR>(address: ADDR) -> error::Result<MetricOutput<Prometheus>>
-    where
-        ADDR: ToSocketAddrs + Debug + Clone,
+pub fn output_prometheus<ADDR>(address: ADDR) -> error::Result<PrometheusOutput>
 {
+    Ok(PrometheusOutput{})
 }
 
+//mod shit {
+//    include! {concat!{env!{"RUST_GEN_SRC"}, "/prometheus.rs"}}
+//}

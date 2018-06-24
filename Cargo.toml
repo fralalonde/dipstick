@@ -26,14 +26,17 @@ num = { version = "0.1", default-features = false }
 
 # FIXME required only for random seed for sampling
 time = "0.1"
+protobuf = { version = "2", features = ["with-bytes"], optional = true }
 
 [build-dependencies]
 skeptic = { version = "0.13", optional = true }
+protoc-rust = { version = "2", optional = true }
 
 [features]
-default-features = []
+default-features = [ "prometheus", "self_metrics" ]
 bench = []
 self_metrics = []
+prometheus = [ "protobuf", "protoc-rust" ]
 
 [package.metadata.release]
 #sign-commit = true

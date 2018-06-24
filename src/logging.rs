@@ -1,4 +1,5 @@
-use core::{Name, WithName, Value, Metric, Kind, Output, Input, WithAttributes, Attributes, WithBuffering};
+use core::{Name, WithName, Value, Metric, Kind, Output, Input, WithAttributes, Attributes,
+           WithBuffering, Flush};
 use error;
 use std::sync::{RwLock, Arc};
 use text;
@@ -25,10 +26,10 @@ pub struct LogOutput {
 }
 
 impl Output for LogOutput {
-    type INPUT = LogInput;
+    type INPUT = Log;
 
     fn new_input(&self) -> Self::INPUT {
-        LogInput {
+        Log {
             attributes: self.attributes.clone(),
             entries: Arc::new(RwLock::new(Vec::new())),
             output: self.clone(),
@@ -45,20 +46,20 @@ impl WithBuffering for LogOutput {}
 
 /// The scope-local input for buffered log metrics output.
 #[derive(Clone)]
-pub struct LogInput {
+pub struct Log {
     attributes: Attributes,
     entries: Arc<RwLock<Vec<Vec<u8>>>>,
     output: LogOutput,
 }
 
-impl WithAttributes for LogInput {
+impl WithAttributes for Log {
     fn get_attributes(&self) -> &Attributes { &self.attributes }
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
-impl WithBuffering for LogInput {}
+impl WithBuffering for Log {}
 
-impl Input for LogInput {
+impl Input for Log {
     fn new_metric(&self, name: Name, kind: Kind) -> Metric {
         let name = self.qualified_name(name);
         let template = (self.output.format_fn)(&name, kind);
@@ -87,6 +88,9 @@ impl Input for LogInput {
             })
         }
     }
+}
+
+impl Flush for Log {
 
     fn flush(&self) -> error::Result<()> {
         let mut entries = self.entries.write().expect("Metrics TextBuffer");
@@ -101,7 +105,7 @@ impl Input for LogInput {
     }
 }
 
-impl Drop for LogInput {
+impl Drop for Log {
     fn drop(&mut self) {
         if let Err(e) = self.flush() {
             warn!("Could not flush log metrics on Drop. {}", e)

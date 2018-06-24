@@ -91,7 +91,7 @@ impl RawInput for Graphite {
             })
         } else {
             RawMetric::new(move |value| {
-                if let Err(err) = cloned.buf_write(&metric, value).and_then(|_| cloned.flush_raw()) {
+                if let Err(err) = cloned.buf_write(&metric, value).and_then(|_| cloned.flush()) {
                     debug!("Graphite buffer write failed: {}", err);
                     metrics::GRAPHITE_SEND_ERR.mark();
                 }
@@ -99,8 +99,11 @@ impl RawInput for Graphite {
             })
         }
     }
+}
 
-    fn flush_raw(&self) -> error::Result<()> {
+impl Flush for Graphite {
+
+    fn flush(&self) -> error::Result<()> {
         let buf = self.buffer.borrow_mut();
         self.flush_inner(buf)
     }
@@ -176,7 +179,7 @@ pub struct GraphiteMetric {
 /// Any remaining buffered data is flushed on Drop.
 impl Drop for Graphite {
     fn drop(&mut self) {
-        if let Err(err) = self.flush_raw() {
+        if let Err(err) = self.flush() {
             warn!("Could not flush graphite metrics upon Drop: {}", err)
         }
     }

@@ -16,6 +16,9 @@ extern crate lazy_static;
 extern crate atomic_refcell;
 extern crate num;
 
+#[cfg(feature="protobuf")]
+extern crate protobuf;
+
 // FIXME required only for random seed for sampling
 extern crate time;
 
@@ -39,10 +42,10 @@ mod bucket;
 pub use bucket::{Bucket, input_bucket, stats_summary, stats_all, stats_average};
 
 mod text;
-pub use text::{output_stdout, output_stderr, TextOutput, TextInput};
+pub use text::{output_stdout, output_stderr, TextOutput, Text};
 
 mod logging;
-pub use logging::{LogOutput, LogInput, output_log};
+pub use logging::{LogOutput, Log, output_log};
 
 mod pcg32;
 
@@ -55,8 +58,12 @@ pub use statsd::{StatsdOutput, Statsd, output_statsd};
 mod graphite;
 pub use graphite::{GraphiteOutput, Graphite, output_graphite};
 
-//mod prometheus;
-//pub use prometheus::{Prometheus, to_prometheus};
+#[cfg(feature="prometheus")]
+mod prometheus;
+#[cfg(feature="prometheus")]
+mod prometheus_proto;
+#[cfg(feature="prometheus")]
+pub use prometheus::{Prometheus, PrometheusOutput};
 
 mod map;
 pub use map::{StatsMap, output_map};
