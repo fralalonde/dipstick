@@ -2,7 +2,7 @@
 //! Metrics definitions are still synchronous.
 //! If queue size is exceeded, calling code reverts to blocking.
 use core::{Input, Value, Metric, Name, Kind, WithName, OutputDyn, Output,
-           WithAttributes, Attributes, Cache};
+           WithAttributes, Attributes, Cache, Flush};
 use error;
 use metrics;
 
@@ -104,6 +104,9 @@ impl Input for Queue {
             }
         })
     }
+}
+
+impl Flush for Queue {
 
     fn flush(&self) -> error::Result<()> {
         if let Err(e) = self.sender.send(QueueCmd::Flush(self.target.clone())) {

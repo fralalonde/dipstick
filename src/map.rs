@@ -1,4 +1,4 @@
-use core::{Value, RawMetric, Kind, Name, RawInput};
+use core::{Value, RawMetric, Kind, Name, RawInput, Flush};
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -31,6 +31,11 @@ impl RawInput for StatsMap {
         })
     }
 }
+
+impl Flush for StatsMap {
+}
+
+
 
 impl From<StatsMap> for BTreeMap<String, Value> {
     fn from(map: StatsMap) -> Self {

@@ -68,6 +68,9 @@ impl Input for CacheInput {
             new_metric
         })
     }
+}
+
+impl Flush for CacheInput {
 
     fn flush(&self) -> error::Result<()> {
         self.target.flush()

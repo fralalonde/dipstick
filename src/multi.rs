@@ -1,6 +1,6 @@
 //! Dispatch metrics to multiple sinks.
 
-use core::{Output, Input, Name, WithName, OutputDyn, Kind, Metric, WithAttributes, Attributes};
+use core::{Output, Input, Name, WithName, OutputDyn, Kind, Metric, WithAttributes, Attributes, Flush};
 use error;
 use std::sync::Arc;
 
@@ -89,7 +89,9 @@ impl Input for MultiInput {
             metric.write(value)
         })
     }
+}
 
+impl Flush for MultiInput {
     fn flush(&self) -> error::Result<()> {
         for w in &self.inputs {
             w.flush()?;

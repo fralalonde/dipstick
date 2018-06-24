@@ -2,7 +2,7 @@
 //! RawMetrics definitions are still synchronous.
 //! If queue size is exceeded, calling code reverts to blocking.
 use core::{Value, RawMetric, Name, Kind, WithName, RawOutputDyn,
-           WithAttributes, Attributes, Input, Output, Metric, UnsafeInput};
+           WithAttributes, Attributes, Input, Output, Metric, UnsafeInput, Flush};
 use error;
 use metrics;
 
@@ -17,7 +17,7 @@ fn new_async_channel(length: usize) -> Arc<mpsc::SyncSender<RawQueueCmd>> {
         while !done {
             match receiver.recv() {
                 Ok(RawQueueCmd::Write(wfn, value)) => wfn.write(value),
-                Ok(RawQueueCmd::Flush(input)) => if let Err(e) = input.flush_raw() {
+                Ok(RawQueueCmd::Flush(input)) => if let Err(e) = input.flush() {
                     debug!("Could not asynchronously flush metrics: {}", e);
                 },
                 Err(e) => {
@@ -104,6 +104,9 @@ impl Input for RawQueue {
             }
         })
     }
+}
+
+impl Flush for RawQueue {
 
     fn flush(&self) -> error::Result<()> {
         if let Err(e) = self.sender.send(RawQueueCmd::Flush(self.target.clone())) {

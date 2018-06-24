@@ -1,7 +1,7 @@
 //! Maintain aggregated metrics for deferred reporting,
 //!
 use core::{Kind, Value, Name, WithName, output_none, Input, Metric, WithAttributes, Attributes,
-           RawInput, RawMetric, RawOutputDyn};
+           RawInput, RawMetric, RawOutputDyn, Flush};
 use clock::TimeHandle;
 use core::Kind::*;
 use error;
@@ -89,7 +89,7 @@ impl InnerBucket {
             .for_each(|k| {purged.remove(k);});
         self.metrics = purged;
 
-        pub_scope.flush_raw()
+        pub_scope.flush()
 
     }
 
@@ -220,7 +220,9 @@ impl Input for Bucket {
             .clone();
         Metric::new(move |value| scoreb.update(value))
     }
+}
 
+impl Flush for Bucket {
     /// Collect and reset aggregated data.
     /// Publish statistics
     fn flush(&self) -> error::Result<()> {

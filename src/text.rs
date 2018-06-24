@@ -1,7 +1,8 @@
 //! Standard stateless metric outputs.
 
 // TODO parameterize templates
-use core::{Name, WithName, Value, Kind, RawInput, WithAttributes, Attributes, WithBuffering, RawMetric, RawOutput, Cache, RawAsync};
+use core::{Name, WithName, Value, Kind, RawInput, WithAttributes, Attributes,
+           WithBuffering, RawMetric, RawOutput, Cache, RawAsync, Flush};
 use error;
 use std::sync::{RwLock, Arc};
 use std::io::{Write,  self};
@@ -74,10 +75,10 @@ impl<W: Write + Send + Sync + 'static> WithBuffering for TextOutput<W> {}
 
 impl<W: Write + Send + Sync + 'static> RawOutput for TextOutput<W> {
 
-    type INPUT = TextInput<W>;
+    type INPUT = Text<W>;
 
     fn new_raw_input(&self) -> Self::INPUT {
-        TextInput {
+        Text {
             attributes: self.attributes.clone(),
             entries: Rc::new(RefCell::new(Vec::new())),
             output: self.clone(),
@@ -86,15 +87,15 @@ impl<W: Write + Send + Sync + 'static> RawOutput for TextOutput<W> {
 }
 
 /// The scope-local input for buffered text metrics output.
-pub struct TextInput<W: Write + Send + Sync + 'static> {
+pub struct Text<W: Write + Send + Sync + 'static> {
     attributes: Attributes,
     entries: Rc<RefCell<Vec<Vec<u8>>>>,
     output: TextOutput<W>,
 }
 
-impl<W: Write + Send + Sync + 'static> Clone for TextInput<W> {
+impl<W: Write + Send + Sync + 'static> Clone for Text<W> {
     fn clone(&self) -> Self {
-        TextInput {
+        Text {
             attributes: self.attributes.clone(),
             entries: self.entries.clone(),
             output: self.output.clone(),
@@ -102,14 +103,14 @@ impl<W: Write + Send + Sync + 'static> Clone for TextInput<W> {
     }
 }
 
-impl<W: Write + Send + Sync + 'static> WithAttributes for TextInput<W> {
+impl<W: Write + Send + Sync + 'static> WithAttributes for Text<W> {
     fn get_attributes(&self) -> &Attributes { &self.attributes }
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
-impl<W: Write + Send + Sync + 'static> WithBuffering for TextInput<W> {}
+impl<W: Write + Send + Sync + 'static> WithBuffering for Text<W> {}
 
-impl<W: Write + Send + Sync + 'static> RawInput for TextInput<W> {
+impl<W: Write + Send + Sync + 'static> RawInput for Text<W> {
     fn new_metric_raw(&self, name: Name, kind: Kind) -> RawMetric {
         let name = self.qualified_name(name);
         let template = (self.output.format_fn)(&name, kind);
@@ -144,8 +145,11 @@ impl<W: Write + Send + Sync + 'static> RawInput for TextInput<W> {
             })
         }
     }
+}
 
-    fn flush_raw(&self) -> error::Result<()> {
+impl<W: Write + Send + Sync + 'static> Flush for Text<W> {
+
+    fn flush(&self) -> error::Result<()> {
         let mut entries = self.entries.borrow_mut();
         if !entries.is_empty() {
             let mut output = self.output.inner.write().expect("TextOutput");
@@ -158,9 +162,9 @@ impl<W: Write + Send + Sync + 'static> RawInput for TextInput<W> {
     }
 }
 
-impl<W: Write + Send + Sync + 'static> Drop for TextInput<W> {
+impl<W: Write + Send + Sync + 'static> Drop for Text<W> {
     fn drop(&mut self) {
-        if let Err(e) = self.flush_raw() {
+        if let Err(e) = self.flush() {
             warn!("Could not flush text metrics on Drop. {}", e)
         }
     }

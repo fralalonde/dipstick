@@ -123,12 +123,6 @@ mod test {
     use core::*;
     use proxy::Proxy;
 
-//    DECL =  WITH_CLAUSE => { ELEM; ELEM.. }
-//            | ELEM
-//
-//    ELEM =
-//            DECL
-
     metrics!{TEST: Proxy = "test_prefix" => {
         M1: Marker = "failed";
         C1: Counter = "failed";
