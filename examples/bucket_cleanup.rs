@@ -6,7 +6,7 @@ extern crate dipstick;
 use dipstick::*;
 
 fn main() {
-    let metrics = input_bucket();
+    let metrics = Bucket::new();
 
     let counter = metrics.counter("counter_a");
     let timer = metrics.timer("timer_a");

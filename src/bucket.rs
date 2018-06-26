@@ -1,6 +1,6 @@
 //! Maintain aggregated metrics for deferred reporting,
 //!
-use core::{Kind, Value, Name, WithName, output_none, Input, Metric, WithAttributes, Attributes,
+use core::{Kind, Value, Name, AddPrefix, output_none, Input, Metric, WithAttributes, Attributes,
            RawInput, RawMetric, RawOutputDyn, Flush};
 use clock::TimeHandle;
 use core::Kind::*;
@@ -29,11 +29,6 @@ lazy_static! {
     static ref DEFAULT_AGGREGATE_STATS: RwLock<Arc<StatsFn>> = RwLock::new(Arc::new(initial_stats()));
 
     static ref DEFAULT_AGGREGATE_OUTPUT: RwLock<Arc<RawOutputDyn + Send + Sync>> = RwLock::new(initial_output());
-}
-
-/// Create a new metric aggregating bucket.
-pub fn input_bucket() -> Bucket {
-    Bucket::new()
 }
 
 /// Central aggregation structure.
@@ -73,8 +68,8 @@ impl InnerBucket {
         };
 
         let pub_scope = match self.output {
-            Some(ref out) => out.new_raw_input_dyn(),
-            None => output_none().new_raw_input_dyn(),
+            Some(ref out) => out.new_input_raw_dyn(),
+            None => output_none().new_input_raw_dyn(),
         };
 
         self.flush_to(pub_scope.borrow(), stats_fn.as_ref());

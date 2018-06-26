@@ -4,13 +4,14 @@
 extern crate dipstick;
 
 use std::time::Duration;
+use std::io;
 use dipstick::*;
 
 fn main() {
-    let metrics = input_bucket().add_prefix("test");
+    let metrics = Bucket::new().add_prefix("test");
 
     // Bucket::set_default_output(to_stdout());
-    metrics.set_output(output_stdout());
+    metrics.set_output(Text::output(io::stdout()));
 
     metrics.flush_every(Duration::from_secs(3));
 

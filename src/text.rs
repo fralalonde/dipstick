@@ -1,33 +1,13 @@
 //! Standard stateless metric outputs.
 
 // TODO parameterize templates
-use core::{Name, WithName, Value, Kind, RawInput, WithAttributes, Attributes,
+use core::{Name, AddPrefix, Value, Kind, RawInput, WithAttributes, Attributes,
            WithBuffering, RawMetric, RawOutput, Cache, RawAsync, Flush};
 use error;
 use std::sync::{RwLock, Arc};
-use std::io::{Write,  self};
+use std::io::{Write, self};
 use std::rc::Rc;
 use std::cell::RefCell;
-
-/// Write metric values to stdout.
-pub fn output_stdout() -> TextOutput<io::Stdout> {
-    TextOutput {
-        attributes: Attributes::default(),
-        inner: Arc::new(RwLock::new(io::stdout())),
-        format_fn: Arc::new(format_name),
-        print_fn: Arc::new(print_name_value_line),
-    }
-}
-
-/// Write metric values to stderr.
-pub fn output_stderr() -> TextOutput<io::Stderr> {
-    TextOutput {
-        attributes: Attributes::default(),
-        inner: Arc::new(RwLock::new(io::stderr())),
-        format_fn: Arc::new(format_name),
-        print_fn: Arc::new(print_name_value_line),
-    }
-}
 
 pub fn format_name(name: &Name, _kind: Kind) -> Vec<String> {
     let mut z = name.join(".");
@@ -77,7 +57,7 @@ impl<W: Write + Send + Sync + 'static> RawOutput for TextOutput<W> {
 
     type INPUT = Text<W>;
 
-    fn new_raw_input(&self) -> Self::INPUT {
+    fn new_input_raw(&self) -> Self::INPUT {
         Text {
             attributes: self.attributes.clone(),
             entries: Rc::new(RefCell::new(Vec::new())),
@@ -92,6 +72,29 @@ pub struct Text<W: Write + Send + Sync + 'static> {
     entries: Rc<RefCell<Vec<Vec<u8>>>>,
     output: TextOutput<W>,
 }
+
+impl<W: Write + Send + Sync + 'static> Text<W> {
+    /// Write metric values to provided Write target.
+    pub fn output(write: W) -> TextOutput<W> {
+        TextOutput {
+            attributes: Attributes::default(),
+            inner: Arc::new(RwLock::new(write)),
+            format_fn: Arc::new(format_name),
+            print_fn: Arc::new(print_name_value_line),
+        }
+    }
+
+    /// Write metric values to stdout.
+    pub fn stdout() -> TextOutput<io::Stdout> {
+        Text::output(io::stdout())
+    }
+
+    /// Write metric values to stdout.
+    pub fn stderr() -> TextOutput<io::Stderr> {
+        Text::output(io::stderr())
+    }
+}
+
 
 impl<W: Write + Send + Sync + 'static> Clone for Text<W> {
     fn clone(&self) -> Self {
@@ -173,10 +176,11 @@ impl<W: Write + Send + Sync + 'static> Drop for Text<W> {
 #[cfg(test)]
 mod test {
     use core::*;
+    use std::io;
 
     #[test]
     fn sink_print() {
-        let c = super::output_stdout().new_input_dyn();
+        let c = super::Text::output(io::stdout()).new_input();
         let m = c.new_metric("test".into(), Kind::Marker);
         m.write(33);
     }

@@ -4,10 +4,11 @@ extern crate dipstick;
 
 use std::thread::sleep;
 use std::time::Duration;
+use std::io;
 use dipstick::*;
 
 fn main() {
-    let metrics = output_stdout().cache(5).new_input().add_prefix("cache");
+    let metrics = Text::output(io::stdout()).cache(5).new_input().add_prefix("cache");
 
     loop {
         // report some ad-hoc metric values from our "application" loop

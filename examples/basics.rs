@@ -4,12 +4,13 @@
 #[macro_use]
 extern crate dipstick;
 use std::thread::sleep;
+use std::io;
 use std::time::Duration;
 use dipstick::*;
 
 fn main() {
     // for this demo, print metric values to the console
-    let app_metrics = output_stdout().new_input();
+    let app_metrics = Text::output(io::stdout()).new_input();
 
     // metrics can be predefined by type and name
     let counter = app_metrics.counter("counter_a");

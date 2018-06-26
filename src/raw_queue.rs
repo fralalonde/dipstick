@@ -1,7 +1,7 @@
 //! Queue metrics for write on a separate thread,
 //! RawMetrics definitions are still synchronous.
 //! If queue size is exceeded, calling code reverts to blocking.
-use core::{Value, RawMetric, Name, Kind, WithName, RawOutputDyn,
+use core::{Value, RawMetric, Name, Kind, AddPrefix, RawOutputDyn,
            WithAttributes, Attributes, Input, Output, Metric, UnsafeInput, Flush};
 use error;
 use metrics;
@@ -61,7 +61,7 @@ impl Output for RawQueueOutput {
 
     /// Wrap new inputs with an asynchronous metric write & flush dispatcher.
     fn new_input(&self) -> Self::INPUT {
-        let target_input = UnsafeInput::new(self.target.new_raw_input_dyn());
+        let target_input = UnsafeInput::new(self.target.new_input_raw_dyn());
         RawQueue {
             attributes: self.attributes.clone(),
             sender: self.sender.clone(),

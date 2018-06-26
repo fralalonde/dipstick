@@ -5,11 +5,12 @@ extern crate dipstick;
 
 use std::time::Duration;
 use std::thread::sleep;
+use std::io;
 
 use dipstick::*;
 
 fn main() {
-    let output = output_stdout().with_buffering(Buffering::Unlimited);
+    let output = Text::output(io::stdout()).with_buffering(Buffering::Unlimited);
 
     loop {
         // add counts forever, non-stop

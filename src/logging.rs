@@ -1,4 +1,4 @@
-use core::{Name, WithName, Value, Metric, Kind, Output, Input, WithAttributes, Attributes,
+use core::{Name, AddPrefix, Value, Metric, Kind, Output, Input, WithAttributes, Attributes,
            WithBuffering, Flush};
 use error;
 use std::sync::{RwLock, Arc};
@@ -6,16 +6,6 @@ use text;
 use std::io::Write;
 
 use log;
-
-/// Write metric values to the standard log using `info!`.
-// TODO parameterize log level
-pub fn output_log() -> LogOutput {
-    LogOutput {
-        attributes: Attributes::default(),
-        format_fn: Arc::new(text::format_name),
-        print_fn: Arc::new(text::print_name_value_line),
-    }
-}
 
 /// Buffered metrics log output.
 #[derive(Clone)]
@@ -50,6 +40,18 @@ pub struct Log {
     attributes: Attributes,
     entries: Arc<RwLock<Vec<Vec<u8>>>>,
     output: LogOutput,
+}
+
+impl Log {
+    /// Write metric values to the standard log using `info!`.
+    // TODO parameterize log level
+    pub fn output() -> LogOutput {
+        LogOutput {
+            attributes: Attributes::default(),
+            format_fn: Arc::new(text::format_name),
+            print_fn: Arc::new(text::print_name_value_line),
+        }
+    }
 }
 
 impl WithAttributes for Log {
@@ -119,7 +121,7 @@ mod test {
 
     #[test]
     fn test_to_log() {
-        let c = super::output_log().new_input_dyn();
+        let c = super::Log::output().new_input();
         let m = c.new_metric("test".into(), Kind::Marker);
         m.write(33);
     }

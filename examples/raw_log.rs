@@ -11,7 +11,7 @@ fn main() {
 
 pub fn raw_write() {
     // setup dual metric channels
-    let metrics_log = dipstick::output_log().new_input();
+    let metrics_log = dipstick::Log::output().new_input();
 
     // define and send metrics using raw channel API
     let counter = metrics_log.new_metric(

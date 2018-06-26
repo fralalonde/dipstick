@@ -1,36 +1,47 @@
-//! Send metrics to a prometheus server.
-// TODO impl this
+//! Prometheus-related functionality.
+//! Both push and pull are supported.
+//! Both protobuf and text format are supported.
+//! - Send metrics to a prometheus aggregator agent.
+//! - Serve metrics with basic HTTP server
+//! - Print metrics to a buffer provided by an HTTP framework.
 
 use core::*;
 use error;
 
 use std::net::ToSocketAddrs;
 
-use socket::RetrySocket;
-
+#[cfg(feature="proto")]
 use prometheus_proto as proto;
 
 metrics!{
 }
 
+/// Prometheus push shared client
 pub struct PrometheusOutput {
-
 }
 
 impl RawOutput for PrometheusOutput {
     type INPUT = Prometheus;
-    fn new_raw_input(&self) -> Self::INPUT {
+    fn new_input_raw(&self) -> Self::INPUT {
         Prometheus {}
     }
 }
 
+/// Prometheus push client scope
 pub struct Prometheus {
+}
+
+impl Prometheus {
+    /// Send metrics to a prometheus server at the address and port provided.
+    pub fn output<ADDR: ToSocketAddrs>(_address: ADDR) -> error::Result<PrometheusOutput> {
+        Ok(PrometheusOutput{})
+    }
 }
 
 impl RawInput for Prometheus {
 
     /// Define a metric of the specified type.
-    fn new_metric_raw(&self, name: Name, kind: Kind) -> RawMetric {
+    fn new_metric_raw(&self, _name: Name, _kind: Kind) -> RawMetric {
         RawMetric::new(|_value| {})
     }
 }
@@ -42,13 +53,3 @@ impl Flush for Prometheus {
         Ok(())
     }
 }
-
-/// Send metrics to a prometheus server at the address and port provided.
-pub fn output_prometheus<ADDR>(address: ADDR) -> error::Result<PrometheusOutput>
-{
-    Ok(PrometheusOutput{})
-}
-
-//mod shit {
-//    include! {concat!{env!{"RUST_GEN_SRC"}, "/prometheus.rs"}}
-//}

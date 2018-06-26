@@ -7,18 +7,18 @@ use std::time::Duration;
 use dipstick::*;
 
 fn main() {
-    let metrics = Bucket::new().add_prefix("test");
+    let bucket = Bucket::new().add_prefix("test");
 
     // Bucket::set_default_output(to_stdout());
-    metrics.set_output(output_graphite("localhost:2003").expect("Graphite host name and port")
+    bucket.set_output(Graphite::output("localhost:2003").expect("Socket")
         .add_prefix("machine1").add_prefix("application"));
 
-    metrics.flush_every(Duration::from_secs(3));
+    bucket.flush_every(Duration::from_secs(3));
 
-    let counter = metrics.counter("counter_a");
-    let timer = metrics.timer("timer_a");
-    let gauge = metrics.gauge("gauge_a");
-    let marker = metrics.marker("marker_a");
+    let counter = bucket.counter("counter_a");
+    let timer = bucket.timer("timer_a");
+    let gauge = bucket.gauge("gauge_a");
+    let marker = bucket.marker("marker_a");
 
     loop {
         // add counts forever, non-stop

@@ -4,6 +4,7 @@
 extern crate dipstick;
 
 use std::time::Duration;
+use std::io;
 use dipstick::*;
 
 fn main() {
@@ -43,7 +44,7 @@ fn main() {
     }
 
     // send application metrics to aggregator
-    Bucket::set_default_output(output_stdout());
+    Bucket::set_default_output(Text::output(io::stdout()));
     Bucket::set_default_stats(custom_statistics);
 
     let app_metrics = Bucket::new();
