@@ -1,4 +1,4 @@
-use core::{Value, RawMetric, Kind, Name, RawScope, Flush};
+use core::{Value, OutputMetric, Kind, Name, OutputScope, Flush};
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -17,11 +17,11 @@ impl StatsMap {
     }
 }
 
-impl RawScope for StatsMap {
-    fn new_metric_raw(&self, name: Name, _kind: Kind) -> RawMetric {
+impl OutputScope for StatsMap {
+    fn new_metric_raw(&self, name: Name, _kind: Kind) -> OutputMetric {
         let write_to = self.inner.clone();
         let name: String = name.join(".");
-        RawMetric::new(move |value| {
+        OutputMetric::new(move |value| {
             let _previous = write_to.borrow_mut().insert(name.clone(), value);
         })
     }

@@ -3,7 +3,7 @@
 
 extern crate dipstick;
 
-use dipstick::{Output, Scope};
+use dipstick::{Input, Scope};
 
 fn main() {
     raw_write()

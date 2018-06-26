@@ -1,61 +1,61 @@
 //! Dispatch metrics to multiple sinks.
 
-use core::{Output, Scope, Name, AddPrefix, OutputDyn, Kind, Metric, WithAttributes, Attributes, Flush};
+use core::{Input, Scope, Name, AddPrefix, InputDyn, Kind, InputMetric, WithAttributes, Attributes, Flush};
 use error;
 use std::sync::Arc;
 
 /// Opens multiple scopes at a time from just as many outputs.
 #[derive(Clone)]
-pub struct MultiOutput {
+pub struct MultiInput {
     attributes: Attributes,
-    outputs: Vec<Arc<OutputDyn + Send + Sync>>,
+    outputs: Vec<Arc<InputDyn + Send + Sync>>,
 }
 
-impl Output for MultiOutput {
-    type SCOPE = Multi;
+impl Input for MultiInput {
+    type SCOPE = MultiInputScope;
 
     fn open_scope(&self) -> Self::SCOPE {
         let scopes = self.outputs.iter().map(|out| out.open_scope_dyn()).collect();
-        Multi {
+        MultiInputScope {
             attributes: self.attributes.clone(),
             scopes,
         }
     }
 }
 
-impl MultiOutput {
+impl MultiInput {
     /// Returns a clone of the dispatch with the new output added to the list.
-    pub fn add_target<OUT: OutputDyn + Send + Sync + 'static>(&self, out: OUT) -> Self {
+    pub fn add_target<OUT: InputDyn + Send + Sync + 'static>(&self, out: OUT) -> Self {
         let mut cloned = self.clone();
         cloned.outputs.push(Arc::new(out));
         cloned
     }
 }
 
-impl WithAttributes for MultiOutput {
+impl WithAttributes for MultiInput {
     fn get_attributes(&self) -> &Attributes { &self.attributes }
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
 /// Dispatch metric values to a list of scopes.
 #[derive(Clone)]
-pub struct Multi {
+pub struct MultiInputScope {
     attributes: Attributes,
     scopes: Vec<Arc<Scope + Send + Sync>>,
 }
 
-impl Multi {
+impl MultiInputScope {
     /// Create a new multi scope dispatcher with no scopes.
     pub fn new() -> Self {
-        Multi {
+        MultiInputScope {
             attributes: Attributes::default(),
             scopes: vec![],
         }
     }
 
     /// Create a new multi-output.
-    pub fn output() -> MultiOutput {
-        MultiOutput {
+    pub fn output() -> MultiInput {
+        MultiInput {
             attributes: Attributes::default(),
             outputs: vec![],
         }
@@ -69,19 +69,19 @@ impl Multi {
     }
 }
 
-impl Scope for Multi {
-    fn new_metric(&self, name: Name, kind: Kind) -> Metric {
+impl Scope for MultiInputScope {
+    fn new_metric(&self, name: Name, kind: Kind) -> InputMetric {
         let ref name = self.qualified_name(name);
-        let metrics: Vec<Metric> = self.scopes.iter()
+        let metrics: Vec<InputMetric> = self.scopes.iter()
             .map(move |scope| scope.new_metric(name.clone(), kind))
             .collect();
-        Metric::new(move |value| for metric in &metrics {
+        InputMetric::new(move |value| for metric in &metrics {
             metric.write(value)
         })
     }
 }
 
-impl Flush for Multi {
+impl Flush for MultiInputScope {
     fn flush(&self) -> error::Result<()> {
         for w in &self.scopes {
             w.flush()?;
@@ -90,7 +90,7 @@ impl Flush for Multi {
     }
 }
 
-impl WithAttributes for Multi {
+impl WithAttributes for MultiInputScope {
     fn get_attributes(&self) -> &Attributes { &self.attributes }
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }

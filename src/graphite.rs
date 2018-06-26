@@ -23,7 +23,7 @@ pub struct GraphiteOutput {
     socket: Arc<RwLock<RetrySocket>>,
 }
 
-impl RawOutput for GraphiteOutput {
+impl Output for GraphiteOutput {
     type SCOPE = Graphite;
 
     fn open_scope_raw(&self) -> Graphite {
@@ -66,9 +66,9 @@ impl Graphite {
     }
 }
 
-impl RawScope for Graphite {
+impl OutputScope for Graphite {
     /// Define a metric of the specified type.
-    fn new_metric_raw(&self, name: Name, kind: Kind) -> RawMetric {
+    fn new_metric_raw(&self, name: Name, kind: Kind) -> OutputMetric {
         let mut prefix = self.qualified_name(name).join(".");
         prefix.push(' ');
 
@@ -81,7 +81,7 @@ impl RawScope for Graphite {
         let cloned = self.clone();
         let metric = GraphiteMetric { prefix, scale };
 
-        RawMetric::new(move |value| {
+        OutputMetric::new(move |value| {
             cloned.print(&metric, value);
         })
     }

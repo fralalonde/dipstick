@@ -1,6 +1,6 @@
 //! Decouple metric definition from configuration with trait objects.
 
-use core::{Name, AddPrefix, Kind, Scope, Metric, NO_METRIC_OUTPUT, WithAttributes, Attributes, Flush};
+use core::{Name, AddPrefix, Kind, Scope, InputMetric, NO_METRIC_OUTPUT, WithAttributes, Attributes, Flush};
 use error;
 
 use std::collections::{HashMap, BTreeMap};
@@ -27,7 +27,7 @@ struct ProxyMetric {
     // the metric trait object to proxy metric values to
     // the second part can be up to namespace.len() + 1 if this metric was individually targeted
     // 0 if no target assigned
-    target: (AtomicRefCell<(Metric, usize)>),
+    target: (AtomicRefCell<(InputMetric, usize)>),
 
     // a reference to the the parent proxyer to remove the metric from when it is dropped
     proxy: Arc<RwLock<InnerProxy>>,
@@ -197,7 +197,7 @@ impl<S: AsRef<str>> From<S> for Proxy {
 
 impl Scope for Proxy {
     /// Lookup or create a proxy stub for the requested metric.
-    fn new_metric(&self, name: Name, kind: Kind) -> Metric {
+    fn new_metric(&self, name: Name, kind: Kind) -> InputMetric {
         let name = self.qualified_name(name);
         let mut inner = self.inner.write().expect("Dispatch Lock");
         let proxy = inner
@@ -220,7 +220,7 @@ impl Scope for Proxy {
                 inner.metrics.insert(name2, Arc::downgrade(&proxy));
                 proxy
             });
-        Metric::new(move |value| proxy.target.borrow().0.write(value))
+        InputMetric::new(move |value| proxy.target.borrow().0.write(value))
     }
 }
 

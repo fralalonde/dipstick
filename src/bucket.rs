@@ -1,7 +1,7 @@
 //! Maintain aggregated metrics for deferred reporting,
 //!
-use core::{Kind, Value, Name, AddPrefix, output_none, Scope, Metric, WithAttributes, Attributes,
-           RawScope, RawMetric, RawOutputDyn, Flush};
+use core::{Kind, Value, Name, AddPrefix, output_none, Scope, InputMetric, WithAttributes, Attributes,
+           OutputScope, OutputMetric, OutputDyn, Flush};
 use clock::TimeHandle;
 use core::Kind::*;
 use error;
@@ -21,14 +21,14 @@ fn initial_stats() -> &'static StatsFn {
     &stats_summary
 }
 
-fn initial_output() -> Arc<RawOutputDyn + Send + Sync> {
+fn initial_output() -> Arc<OutputDyn + Send + Sync> {
     Arc::new(output_none())
 }
 
 lazy_static! {
     static ref DEFAULT_AGGREGATE_STATS: RwLock<Arc<StatsFn>> = RwLock::new(Arc::new(initial_stats()));
 
-    static ref DEFAULT_AGGREGATE_OUTPUT: RwLock<Arc<RawOutputDyn + Send + Sync>> = RwLock::new(initial_output());
+    static ref DEFAULT_AGGREGATE_OUTPUT: RwLock<Arc<OutputDyn + Send + Sync>> = RwLock::new(initial_output());
 }
 
 /// Central aggregation structure.
@@ -44,7 +44,7 @@ struct InnerBucket {
     period_start: TimeHandle,
     stats: Option<Arc<Fn(Kind, Name, ScoreType)
         -> Option<(Kind, Name, Value)> + Send + Sync + 'static>>,
-    output: Option<Arc<RawOutputDyn + Send + Sync + 'static>>,
+    output: Option<Arc<OutputDyn + Send + Sync + 'static>>,
     publish_metadata: bool,
 }
 
@@ -72,7 +72,7 @@ impl InnerBucket {
             None => DEFAULT_AGGREGATE_OUTPUT.read().unwrap().open_scope_raw_dyn(),
         };
 
-        self.flush_to(pub_scope.borrow(), stats_fn.as_ref());
+        self.flush_to(pub_scope.borrow(), stats_fn.as_ref())?;
 
         // all metrics published!
         // purge: if bucket is the last owner of the metric, remove it
@@ -84,14 +84,13 @@ impl InnerBucket {
             .for_each(|k| {purged.remove(k);});
         self.metrics = purged;
 
-        pub_scope.flush()
-
+        Ok(())
     }
 
     /// Take a snapshot of aggregated values and reset them.
     /// Compute stats on captured values using assigned or default stats function.
     /// Write stats to assigned or default output.
-    pub fn flush_to(&mut self, publish_scope: &RawScope, stats_fn: &StatsFn) {
+    pub fn flush_to(&mut self, publish_scope: &OutputScope, stats_fn: &StatsFn) -> error::Result<()> {
 
         let now = TimeHandle::now();
         let duration_seconds = self.period_start.elapsed_us() as f64 / 1_000_000.0;
@@ -109,6 +108,7 @@ impl InnerBucket {
             // no data was collected for this period
             // TODO repeat previous frame min/max ?
             // TODO update some canary metric ?
+            Ok(())
         } else {
             // TODO add switch for metadata such as PERIOD_LENGTH
             if self.publish_metadata {
@@ -118,11 +118,12 @@ impl InnerBucket {
                 for score in metric.2 {
                     let filtered = (stats_fn)(metric.1, metric.0.clone(), score);
                     if let Some((kind, name, value)) = filtered {
-                        let metric: RawMetric = publish_scope.new_metric_raw(name, kind);
+                        let metric: OutputMetric = publish_scope.new_metric_raw(name, kind);
                         metric.write(value)
                     }
                 }
             }
+            Ok(publish_scope.flush()?)
         }
     }
 
@@ -163,7 +164,7 @@ impl Bucket {
     }
 
     /// Install a new receiver for all aggregateed metrics, replacing any previous receiver.
-    pub fn set_default_target(default_config: impl RawOutputDyn + Send + Sync + 'static) {
+    pub fn set_default_target(default_config: impl OutputDyn + Send + Sync + 'static) {
         *DEFAULT_AGGREGATE_OUTPUT.write().unwrap() = Arc::new(default_config);
     }
 
@@ -186,7 +187,7 @@ impl Bucket {
     }
 
     /// Install a new receiver for all aggregated metrics, replacing any previous receiver.
-    pub fn set_target(&self, new_config: impl RawOutputDyn + Send + Sync + 'static) {
+    pub fn set_target(&self, new_config: impl OutputDyn + Send + Sync + 'static) {
         self.inner.write().expect("Aggregator").output = Some(Arc::new(new_config))
     }
 
@@ -196,16 +197,16 @@ impl Bucket {
     }
 
     /// Flush the aggregator scores using the specified scope and stats.
-    pub fn flush_to(&self, publish_scope: &RawScope, stats_fn: &StatsFn) {
+    pub fn flush_to(&self, publish_scope: &OutputScope, stats_fn: &StatsFn) -> error::Result<()> {
         let mut inner = self.inner.write().expect("Aggregator");
-        inner.flush_to(publish_scope, stats_fn);
+        inner.flush_to(publish_scope, stats_fn)
     }
 
 }
 
 impl Scope for Bucket {
     /// Lookup or create a scoreboard for the requested metric.
-    fn new_metric(&self, name: Name, kind: Kind) -> Metric {
+    fn new_metric(&self, name: Name, kind: Kind) -> InputMetric {
         let scoreb = self.inner
             .write()
             .expect("Aggregator")
@@ -213,7 +214,7 @@ impl Scope for Bucket {
             .entry(self.qualified_name(name))
             .or_insert_with(|| Arc::new(Scoreboard::new(kind)))
             .clone();
-        Metric::new(move |value| scoreb.update(value))
+        InputMetric::new(move |value| scoreb.update(value))
     }
 }
 
@@ -347,7 +348,7 @@ mod test {
 
         // TODO expose & use flush_to()
         let stats = StatsMap::new();
-        metrics.flush_to(&stats, stats_fn);
+        metrics.flush_to(&stats, stats_fn).unwrap();
         stats.into()
     }
 
