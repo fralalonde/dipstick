@@ -56,7 +56,7 @@ pub enum Sampling {
     /// - 1.0+ records everything
     /// - 0.5 records one of two values
     /// - 0.0 records nothing
-    SampleRate(f64)
+    Random(f64)
 }
 
 impl Default for Sampling {
@@ -87,7 +87,7 @@ impl Default for Buffering {
 }
 
 /// One struct to rule them all.
-/// Possible attributes of metric outputs and inputs.
+/// Possible attributes of metric outputs and scopes.
 /// Private trait used by impls of specific With* traits.
 /// Not all attributes are used by all structs!
 /// This is a design choice to centralize code at the expense of slight waste of memory.
@@ -96,7 +96,7 @@ impl Default for Buffering {
 #[derive(Debug, Clone, Default)]
 pub struct Attributes {
     namespace: Name,
-    sampling_rate: Sampling,
+    sampling: Sampling,
     buffering: Buffering,
 }
 
@@ -162,20 +162,20 @@ impl<T: WithAttributes> AddPrefix for T {
 }
 
 /// Apply statistical sampling to collected metrics data.
-pub trait WithSamplingRate: WithAttributes {
+pub trait WithSampling: WithAttributes {
     /// Perform random sampling of values according to the specified rate.
-    fn with_sampling_rate(&self, sampling_rate: Sampling) -> Self {
-        self.with_attributes(|new_attr| new_attr.sampling_rate = sampling_rate)
+    fn with_sampling(&self, sampling: Sampling) -> Self {
+        self.with_attributes(|new_attr| new_attr.sampling = sampling)
     }
 
     /// Get the sampling strategy for this component, if any.
     fn get_sampling(&self) -> Sampling {
-        self.get_attributes().sampling_rate
+        self.get_attributes().sampling
     }
 }
 
-/// Determine input buffering strategy, if supported by output.
-/// Changing this only affects inputs opened afterwards.
+/// Determine scope buffering strategy, if supported by output.
+/// Changing this only affects scopes opened afterwards.
 /// Buffering is done on best effort, meaning flush will occur if buffer capacity is exceeded.
 pub trait WithBuffering: WithAttributes {
     /// Return a clone with the specified buffering set.
@@ -268,25 +268,25 @@ lazy_static! {
     pub static ref NO_METRIC_OUTPUT: Arc<OutputDyn + Send + Sync> = Arc::new(output_none());
 
     /// The reference instance identifying an uninitialized metric scope.
-    pub static ref NO_METRIC_SCOPE: Arc<Input + Send + Sync> = NO_METRIC_OUTPUT.new_input_dyn();
+    pub static ref NO_METRIC_SCOPE: Arc<Scope + Send + Sync> = NO_METRIC_OUTPUT.open_scope_dyn();
 }
 
 /// A function trait that opens a new metric capture scope.
 pub trait Output: OutputDyn + Send + Sync + 'static + Sized {
-    /// Type of input scope provided by this output.
-    type INPUT: Input + Send + Sync + 'static + Clone;
+    /// Type of scope provided by this output.
+    type SCOPE: Scope + Send + Sync + 'static + Clone;
 
-    /// Open a new input scope from this output.
-    fn new_input(&self) -> Self::INPUT;
+    /// Open a new scope from this output.
+    fn open_scope(&self) -> Self::SCOPE;
 
 }
 
 /// Wrap this output behind an asynchronous metrics dispatch queue.
-/// This is not strictly required for multi threading since the provided inputs
+/// This is not strictly required for multi threading since the provided scopes
 /// are already Send + Sync but might be desired to lower the latency
-pub trait Async: OutputDyn + Send + Sync + 'static + Sized {
+pub trait WithQueue: OutputDyn + Send + Sync + 'static + Sized {
     /// Wrap this output with an asynchronous dispatch queue of specified length.
-    fn async(self, queue_length: usize) -> queue::QueueOutput {
+    fn with_async_queue(self, queue_length: usize) -> queue::QueueOutput {
         queue::QueueOutput::new(self, queue_length)
     }
 }
@@ -294,28 +294,28 @@ pub trait Async: OutputDyn + Send + Sync + 'static + Sized {
 /// Wrap an output with a metric definition cache.
 /// This is useless if all metrics are statically declared but can provide performance
 /// benefits if some metrics are dynamically defined at runtime.
-pub trait Cache: OutputDyn + Send + Sync + 'static + Sized {
+pub trait WithMetricCache: OutputDyn + Send + Sync + 'static + Sized {
     /// Wrap this output with an asynchronous dispatch queue of specified length.
-    fn cache(self, max_size: usize) -> cache::CacheOutput {
-        cache::CacheOutput::new(self, max_size)
+    fn with_metric_cache(self, max_size: usize) -> cache::CacheOutput {
+        cache::Cache::output(self, max_size)
     }
 }
 
 /// Dynamic variant of the Output trait
 pub trait OutputDyn {
-    /// Open a new metric input with dynamic trait typing.
-    fn new_input_dyn(&self) -> Arc<Input + Send + Sync + 'static>;
+    /// Open a new metric scope with dynamic trait typing.
+    fn open_scope_dyn(&self) -> Arc<Scope + Send + Sync + 'static>;
 }
 
 /// Blanket impl that provides Outputs their dynamic flavor.
 impl<T: Output + Send + Sync + 'static> OutputDyn for T {
-    fn new_input_dyn(&self) -> Arc<Input + Send + Sync + 'static> {
-        Arc::new(self.new_input())
+    fn open_scope_dyn(&self) -> Arc<Scope + Send + Sync + 'static> {
+        Arc::new(self.open_scope())
     }
 }
 
 /// Define metrics, write values and flush them.
-pub trait Input: Flush {
+pub trait Scope: Flush {
     /// Define a metric of the specified type.
     fn new_metric(&self, name: Name, kind: Kind) -> Metric;
 
@@ -341,7 +341,7 @@ pub trait Input: Flush {
 
 }
 
-/// Both Input and RawInput share the ability to flush the recorded data.
+/// Both Input and RawScope share the ability to flush the recorded data.
 pub trait Flush {
 
     /// Flush does nothing by default.
@@ -365,8 +365,8 @@ impl fmt::Debug for Metric {
 
 impl Metric {
     /// Utility constructor
-    pub fn new<F: Fn(Value) + Send + Sync + 'static>(wfn: F) -> Metric {
-        Metric { inner: Arc::new(wfn) }
+    pub fn new<F: Fn(Value) + Send + Sync + 'static>(metric: F) -> Metric {
+        Metric { inner: Arc::new(metric) }
     }
 
     /// Some may prefer the `metric.write(value)` form to the `(metric)(value)` form.
@@ -379,51 +379,51 @@ impl Metric {
 
 /// A function trait that opens a new metric capture scope.
 pub trait RawOutput: RawOutputDyn + Send + Sync + 'static + Sized {
-    /// Type of input scope provided by this output.
-    type INPUT: RawInput + 'static  ;
+    /// Type of scope provided by this output.
+    type SCOPE: RawScope + 'static  ;
 
-    /// Open a new input scope from this output.
-    fn new_input_raw(&self) -> Self::INPUT;
+    /// Open a new scope from this output.
+    fn open_scope_raw(&self) -> Self::SCOPE;
 }
 
 /// Wrap this raw output behind an asynchronous metrics dispatch queue.
-pub trait RawAsync: RawOutput + Sized {
+pub trait WithRawQueue: RawOutput + Sized {
     /// Wrap this output with an asynchronous dispatch queue of specified length.
-    fn async(self, queue_length: usize) -> raw_queue::RawQueueOutput {
+    fn with_async_queue(self, queue_length: usize) -> raw_queue::RawQueueOutput {
         raw_queue::RawQueueOutput::new(self, queue_length)
     }
 }
 
 /// Dynamic variant of the RawOutput trait
 pub trait RawOutputDyn {
-    /// Open a new metric input with dynamic typing.
-    fn new_input_raw_dyn(&self) -> Rc<RawInput + 'static>;
+    /// Open a new metric scope with dynamic typing.
+    fn open_scope_raw_dyn(&self) -> Rc<RawScope + 'static>;
 }
 
 /// Blanket impl that provides RawOutputs their dynamic flavor.
 impl<T: RawOutput + Send + Sync + 'static> RawOutputDyn for T {
-    fn new_input_raw_dyn(&self) -> Rc<RawInput + 'static> {
-        Rc::new(self.new_input_raw())
+    fn open_scope_raw_dyn(&self) -> Rc<RawScope + 'static> {
+        Rc::new(self.open_scope_raw())
     }
 }
 
-/// Provide thread-safe locking to RawInput implementers.
+/// Provide thread-safe locking to RawScope implementers.
 #[derive(Clone)]
-pub struct LockingInputBox {
+pub struct LockingScopeBox {
     attributes: Attributes,
-    inner: Arc<Mutex<UnsafeInput>>
+    inner: Arc<Mutex<UnsafeScope>>
 }
 
-impl WithAttributes for LockingInputBox {
+impl WithAttributes for LockingScopeBox {
     fn get_attributes(&self) -> &Attributes { &self.attributes }
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
-impl Input for LockingInputBox {
+impl Scope for LockingScopeBox {
 
     fn new_metric(&self, name: Name, kind: Kind) -> Metric {
         let name = self.qualified_name(name);
-        let raw_metric = self.inner.lock().expect("RawInput Lock").new_metric_raw(name, kind);
+        let raw_metric = self.inner.lock().expect("RawScope Lock").new_metric_raw(name, kind);
         let mutex = self.inner.clone();
         Metric::new(move |value| {
             let _guard = mutex.lock().expect("RawMetric Lock");
@@ -433,26 +433,26 @@ impl Input for LockingInputBox {
 
 }
 
-impl Flush for LockingInputBox {
+impl Flush for LockingScopeBox {
     fn flush(&self) -> error::Result<()> {
-        self.inner.lock().expect("RawInput Lock").flush()
+        self.inner.lock().expect("RawScope Lock").flush()
     }
 }
 
 /// Blanket impl that provides RawOutputs their dynamic flavor.
 impl<T: RawOutput + Send + Sync + 'static> Output for T {
-    type INPUT = LockingInputBox;
+    type SCOPE = LockingScopeBox;
 
-    fn new_input(&self) -> Self::INPUT {
-        LockingInputBox {
+    fn open_scope(&self) -> Self::SCOPE {
+        LockingScopeBox {
             attributes: Attributes::default(),
-            inner: Arc::new(Mutex::new(UnsafeInput(self.new_input_raw_dyn())))
+            inner: Arc::new(Mutex::new(UnsafeScope(self.open_scope_raw_dyn())))
         }
     }
 }
 
 /// Define metrics, write values and flush them.
-pub trait RawInput: Flush {
+pub trait RawScope: Flush {
 
     /// Define a raw metric of the specified type.
     fn new_metric_raw(&self, name: Name, kind: Kind) -> RawMetric;
@@ -460,30 +460,30 @@ pub trait RawInput: Flush {
 }
 
 /// Blanket impl that provides RawOutputs their dynamic flavor.
-impl<T: Input + Send + Sync + 'static> RawInput for T {
+impl<T: Scope + Send + Sync + 'static> RawScope for T {
     fn new_metric_raw(&self, name: Name, kind: Kind) -> RawMetric {
         let raw = self.new_metric(name, kind);
         RawMetric::new(move |value| raw.write(value))
     }
 }
 
-/// Wrap a RawInput to make it Send + Sync, allowing it to travel the world of threads.
+/// Wrap a RawScope to make it Send + Sync, allowing it to travel the world of threads.
 /// Obviously, it should only still be used from a single thread or dragons may occur.
 #[derive(Clone)]
-pub struct UnsafeInput(Rc<RawInput + 'static> );
+pub struct UnsafeScope(Rc<RawScope + 'static> );
 
-unsafe impl Send for UnsafeInput {}
-unsafe impl Sync for UnsafeInput {}
+unsafe impl Send for UnsafeScope {}
+unsafe impl Sync for UnsafeScope {}
 
-impl UnsafeInput {
-    /// Wrap a dynamic RawInput to make it Send + Sync.
-    pub fn new(input: Rc<RawInput + 'static>) -> Self {
-        UnsafeInput(input)
+impl UnsafeScope {
+    /// Wrap a dynamic RawScope to make it Send + Sync.
+    pub fn new(raw_scope: Rc<RawScope + 'static>) -> Self {
+        UnsafeScope(raw_scope)
     }
 }
 
-impl ops::Deref for UnsafeInput {
-    type Target = RawInput + 'static;
+impl ops::Deref for UnsafeScope {
+    type Target = RawScope + 'static;
     fn deref(&self) -> &Self::Target {
         Rc::as_ref(&self.0)
     }
@@ -503,8 +503,8 @@ impl fmt::Debug for RawMetric {
 
 impl RawMetric {
     /// Utility constructor
-    pub fn new<F: Fn(Value) + 'static>(wfn: F) -> RawMetric {
-        RawMetric { inner: Box::new(wfn) }
+    pub fn new<F: Fn(Value) + 'static>(metric: F) -> RawMetric {
+        RawMetric { inner: Box::new(metric) }
     }
 
     /// Some may prefer the `metric.write(value)` form to the `(metric)(value)` form.
@@ -610,26 +610,26 @@ impl Timer {
 }
 
 impl From<Metric> for Gauge {
-    fn from(wfn: Metric) -> Gauge {
-        Gauge { inner: wfn }
+    fn from(metric: Metric) -> Gauge {
+        Gauge { inner: metric }
     }
 }
 
 impl From<Metric> for Timer {
-    fn from(wfn: Metric) -> Timer {
-        Timer { inner: wfn }
+    fn from(metric: Metric) -> Timer {
+        Timer { inner: metric }
     }
 }
 
 impl From<Metric> for Counter {
-    fn from(wfn: Metric) -> Counter {
-        Counter { inner: wfn }
+    fn from(metric: Metric) -> Counter {
+        Counter { inner: metric }
     }
 }
 
 impl From<Metric> for Marker {
-    fn from(wfn: Metric) -> Marker {
-        Marker { inner: wfn }
+    fn from(metric: Metric) -> Marker {
+        Marker { inner: metric }
     }
 }
 
@@ -638,13 +638,13 @@ impl From<Metric> for Marker {
 pub struct VoidOutput {}
 
 impl RawOutput for VoidOutput {
-    type INPUT = VoidOutput;
-    fn new_input_raw(&self) -> VoidOutput {
+    type SCOPE = VoidOutput;
+    fn open_scope_raw(&self) -> VoidOutput {
         VoidOutput {}
     }
 }
 
-impl RawInput for VoidOutput {
+impl RawScope for VoidOutput {
     fn new_metric_raw(&self, _name: Name, _kind: Kind) -> RawMetric {
         RawMetric::new(|_value| {})
     }
@@ -664,7 +664,7 @@ mod test {
 
     #[test]
     fn test_to_void() {
-        let c = output_none().new_input();
+        let c = output_none().open_scope();
         let m = c.new_metric("test".into(), Kind::Marker);
         m.write(33);
     }

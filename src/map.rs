@@ -1,4 +1,4 @@
-use core::{Value, RawMetric, Kind, Name, RawInput, Flush};
+use core::{Value, RawMetric, Kind, Name, RawScope, Flush};
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -17,7 +17,7 @@ impl StatsMap {
     }
 }
 
-impl RawInput for StatsMap {
+impl RawScope for StatsMap {
     fn new_metric_raw(&self, name: Name, _kind: Kind) -> RawMetric {
         let write_to = self.inner.clone();
         let name: String = name.join(".");

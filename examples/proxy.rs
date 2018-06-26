@@ -1,11 +1,11 @@
-//! Use the input metric proxy to dynamically update the metrics output & names.
+//! Use the proxy to dynamically switch the metrics output & names.
 
 extern crate dipstick;
 
 use std::thread::sleep;
 use std::time::Duration;
 use std::io;
-use dipstick::{Proxy, Text, Input, AddPrefix, Output};
+use dipstick::{Proxy, Text, Scope, AddPrefix, Output};
 
 fn main() {
     let root = Proxy::default_root();
@@ -16,17 +16,17 @@ fn main() {
     let count2 = sub.counter("counter_b");
 
     loop {
-        root.set_target(Text::output(io::stdout()).new_input());
+        root.set_target(Text::output(io::stdout()).open_scope());
         count1.count(1);
         count2.count(2);
 
         // route every metric from the root to stdout with prefix "root"
-        root.set_target(Text::output(io::stdout()).add_prefix("root").new_input());
+        root.set_target(Text::output(io::stdout()).add_prefix("root").open_scope());
         count1.count(3);
         count2.count(4);
 
         // route metrics from "sub" to stdout with prefix "mutant"
-        sub.set_target(Text::output(io::stdout()).add_prefix("mutant").new_input());
+        sub.set_target(Text::output(io::stdout()).add_prefix("mutant").open_scope());
         count1.count(5);
         count2.count(6);
 
@@ -41,7 +41,7 @@ fn main() {
         count2.count(10);
 
         // go back to initial single un-prefixed route
-        root.set_target(Text::output(io::stdout()).new_input());
+        root.set_target(Text::output(io::stdout()).open_scope());
         count1.count(11);
         count2.count(12);
 

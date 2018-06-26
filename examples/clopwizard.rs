@@ -30,14 +30,14 @@ fn main() {
     fifteen_minutes.flush_every(Duration::from_secs(900));
 
     let all_buckets = Multi::new()
-        .add_input(one_minute)
-        .add_input(five_minutes)
-        .add_input(fifteen_minutes)
+        .add_target(one_minute)
+        .add_target(five_minutes)
+        .add_target(fifteen_minutes)
         .add_prefix("machine_name");
 
     // send application metrics to aggregator
     Proxy::default_root().set_target(all_buckets);
-    Bucket::set_default_output(Text::output(io::stdout()));
+    Bucket::set_default_target(Text::output(io::stdout()));
     Bucket::set_default_stats(stats_all);
 
     loop {

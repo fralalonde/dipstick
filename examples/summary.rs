@@ -10,7 +10,7 @@ use std::io;
 fn main() {
 
     let app_metrics = Bucket::new();
-    app_metrics.set_output(Text::output(io::stdout()));
+    app_metrics.set_target(Text::output(io::stdout()));
 
     app_metrics.flush_every(Duration::from_secs(3));
 

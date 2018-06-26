@@ -27,9 +27,9 @@ pub use error::{Error, Result};
 
 pub mod core;
 pub use core::{Value, Kind, Marker, Timer, Counter, Gauge,
-               Input, Output, OutputDyn,
-               Name, AddPrefix, WithSamplingRate, Sampling, Buffering, WithBuffering,
-               Cache, Async, RawAsync, RawInput, RawOutput, RawMetric, UnsafeInput, RawOutputDyn,
+               Scope, Output, OutputDyn,
+               Name, AddPrefix, WithSampling, Sampling, Buffering, WithBuffering,
+               WithMetricCache, WithQueue, WithRawQueue, RawScope, RawOutput, RawMetric, UnsafeScope, RawOutputDyn,
                output_none, VoidOutput};
 
 #[macro_use]
@@ -52,8 +52,11 @@ mod pcg32;
 mod scores;
 pub use scores::ScoreType;
 
-mod statsd;
-pub use statsd::{StatsdOutput, Statsd};
+//mod statsd;
+//pub use statsd::{StatsdOutput, Statsd};
+
+mod statds;
+pub use statds::{StatsdOutput, Statsd};
 
 mod graphite;
 pub use graphite::{GraphiteOutput, Graphite};
@@ -72,7 +75,7 @@ mod socket;
 pub use socket::RetrySocket;
 
 mod cache;
-pub use cache::{CacheInput, CacheOutput};
+pub use cache::{Cache, CacheOutput};
 
 mod multi;
 pub use multi::{MultiOutput, Multi};

@@ -8,7 +8,7 @@ use std::io;
 use dipstick::*;
 
 fn main() {
-    let metrics = Text::output(io::stdout()).cache(5).new_input().add_prefix("cache");
+    let metrics = Text::output(io::stdout()).with_metric_cache(5).open_scope().add_prefix("cache");
 
     loop {
         // report some ad-hoc metric values from our "application" loop
