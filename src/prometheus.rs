@@ -21,8 +21,8 @@ pub struct PrometheusOutput {
 }
 
 impl RawOutput for PrometheusOutput {
-    type INPUT = Prometheus;
-    fn new_input_raw(&self) -> Self::INPUT {
+    type SCOPE = Prometheus;
+    fn open_scope_raw(&self) -> Self::SCOPE {
         Prometheus {}
     }
 }
@@ -38,7 +38,7 @@ impl Prometheus {
     }
 }
 
-impl RawInput for Prometheus {
+impl RawScope for Prometheus {
 
     /// Define a metric of the specified type.
     fn new_metric_raw(&self, _name: Name, _kind: Kind) -> RawMetric {

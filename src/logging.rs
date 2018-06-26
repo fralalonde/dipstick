@@ -1,4 +1,4 @@
-use core::{Name, AddPrefix, Value, Metric, Kind, Output, Input, WithAttributes, Attributes,
+use core::{Name, AddPrefix, Value, Metric, Kind, Output, Scope, WithAttributes, Attributes,
            WithBuffering, Flush};
 use error;
 use std::sync::{RwLock, Arc};
@@ -16,9 +16,9 @@ pub struct LogOutput {
 }
 
 impl Output for LogOutput {
-    type INPUT = Log;
+    type SCOPE = Log;
 
-    fn new_input(&self) -> Self::INPUT {
+    fn open_scope(&self) -> Self::SCOPE {
         Log {
             attributes: self.attributes.clone(),
             entries: Arc::new(RwLock::new(Vec::new())),
@@ -34,7 +34,7 @@ impl WithAttributes for LogOutput {
 
 impl WithBuffering for LogOutput {}
 
-/// The scope-local input for buffered log metrics output.
+/// A scope for metrics log output.
 #[derive(Clone)]
 pub struct Log {
     attributes: Attributes,
@@ -61,7 +61,7 @@ impl WithAttributes for Log {
 
 impl WithBuffering for Log {}
 
-impl Input for Log {
+impl Scope for Log {
     fn new_metric(&self, name: Name, kind: Kind) -> Metric {
         let name = self.qualified_name(name);
         let template = (self.output.format_fn)(&name, kind);
@@ -121,7 +121,7 @@ mod test {
 
     #[test]
     fn test_to_log() {
-        let c = super::Log::output().new_input();
+        let c = super::Log::output().open_scope();
         let m = c.new_metric("test".into(), Kind::Marker);
         m.write(33);
     }

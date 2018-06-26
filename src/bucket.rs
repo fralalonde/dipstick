@@ -1,7 +1,7 @@
 //! Maintain aggregated metrics for deferred reporting,
 //!
-use core::{Kind, Value, Name, AddPrefix, output_none, Input, Metric, WithAttributes, Attributes,
-           RawInput, RawMetric, RawOutputDyn, Flush};
+use core::{Kind, Value, Name, AddPrefix, output_none, Scope, Metric, WithAttributes, Attributes,
+           RawScope, RawMetric, RawOutputDyn, Flush};
 use clock::TimeHandle;
 use core::Kind::*;
 use error;
@@ -68,8 +68,8 @@ impl InnerBucket {
         };
 
         let pub_scope = match self.output {
-            Some(ref out) => out.new_input_raw_dyn(),
-            None => output_none().new_input_raw_dyn(),
+            Some(ref out) => out.open_scope_raw_dyn(),
+            None => output_none().open_scope_raw_dyn(),
         };
 
         self.flush_to(pub_scope.borrow(), stats_fn.as_ref());
@@ -91,7 +91,7 @@ impl InnerBucket {
     /// Take a snapshot of aggregated values and reset them.
     /// Compute stats on captured values using assigned or default stats function.
     /// Write stats to assigned or default output.
-    pub fn flush_to(&mut self, publish_scope: &RawInput, stats_fn: &StatsFn) {
+    pub fn flush_to(&mut self, publish_scope: &RawScope, stats_fn: &StatsFn) {
 
         let now = TimeHandle::now();
         let duration_seconds = self.period_start.elapsed_us() as f64 / 1_000_000.0;
@@ -163,12 +163,12 @@ impl Bucket {
     }
 
     /// Install a new receiver for all aggregateed metrics, replacing any previous receiver.
-    pub fn set_default_output(default_config: impl RawOutputDyn + Send + Sync + 'static) {
+    pub fn set_default_target(default_config: impl RawOutputDyn + Send + Sync + 'static) {
         *DEFAULT_AGGREGATE_OUTPUT.write().unwrap() = Arc::new(default_config);
     }
 
     /// Install a new receiver for all aggregateed metrics, replacing any previous receiver.
-    pub fn unset_default_output() {
+    pub fn unset_default_target() {
         *DEFAULT_AGGREGATE_OUTPUT.write().unwrap() = initial_output()
     }
 
@@ -186,24 +186,24 @@ impl Bucket {
     }
 
     /// Install a new receiver for all aggregated metrics, replacing any previous receiver.
-    pub fn set_output(&self, new_config: impl RawOutputDyn + Send + Sync + 'static) {
+    pub fn set_target(&self, new_config: impl RawOutputDyn + Send + Sync + 'static) {
         self.inner.write().expect("Aggregator").output = Some(Arc::new(new_config))
     }
 
     /// Install a new receiver for all aggregated metrics, replacing any previous receiver.
-    pub fn unset_output(&self) {
+    pub fn unset_target(&self) {
         self.inner.write().expect("Aggregator").output = None
     }
 
     /// Flush the aggregator scores using the specified scope and stats.
-    pub fn flush_to(&self, publish_scope: &RawInput, stats_fn: &StatsFn) {
+    pub fn flush_to(&self, publish_scope: &RawScope, stats_fn: &StatsFn) {
         let mut inner = self.inner.write().expect("Aggregator");
         inner.flush_to(publish_scope, stats_fn);
     }
 
 }
 
-impl Input for Bucket {
+impl Scope for Bucket {
     /// Lookup or create a scoreboard for the requested metric.
     fn new_metric(&self, name: Name, kind: Kind) -> Metric {
         let scoreb = self.inner

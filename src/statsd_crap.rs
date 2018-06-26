@@ -1,7 +1,7 @@
 //! Send metrics to a statsd server.
 
-use core::{RawInput, RawOutput, Value, RawMetric, Attributes, WithAttributes, Kind,
-           Name, WithSamplingRate, AddPrefix, WithBuffering, Sampling, Cache, Async, Flush};
+use core::{RawScope, RawOutput, Value, RawMetric, Attributes, WithAttributes, Kind,
+           Name, WithSamplingRate, AddPrefix, WithBuffering, Sampling, WithMetricCache, WithQueue, Flush};
 use pcg32;
 use error;
 use metrics;
@@ -9,12 +9,12 @@ use metrics;
 use std::net::UdpSocket;
 use std::sync::Arc;
 use std::rc::Rc;
-use std::cell::RefCell;
+use std::cell::{RefCell, RefMut};
 
 pub use std::net::ToSocketAddrs;
 
 /// Statsd output holds a UDP client socket to a statsd host.
-/// The output's connection is shared between all inputs originating from it.
+/// The output's connection is shared between all scopes originating from it.
 #[derive(Debug, Clone)]
 pub struct StatsdOutput {
     attributes: Attributes,
@@ -22,8 +22,8 @@ pub struct StatsdOutput {
 }
 
 impl RawOutput for StatsdOutput {
-    type INPUT = Statsd;
-    fn new_input_raw(&self) -> Self::INPUT {
+    type SCOPE = Statsd;
+    fn open_scope_raw(&self) -> Self::SCOPE {
         Statsd {
             attributes: self.attributes.clone(),
             buffer: Rc::new(RefCell::new(String::with_capacity(MAX_UDP_PAYLOAD))),
@@ -44,8 +44,8 @@ impl WithAttributes for StatsdOutput {
 impl WithBuffering for StatsdOutput {}
 impl WithSamplingRate for StatsdOutput {}
 
-impl Cache for StatsdOutput {}
-impl Async for StatsdOutput {}
+impl WithMetricCache for StatsdOutput {}
+impl WithQueue for StatsdOutput {}
 
 /// Metrics input for statsd.
 #[derive(Clone)]
@@ -68,9 +68,7 @@ impl Statsd {
         })
     }
 
-    fn print(&self, prefix: &str, suffix: &str, scale: u64, value: Value) {
-        let mut buffer = self.buffer.borrow_mut();
-
+    fn print(&self, mut buffer: RefMut<String>, prefix: &str, suffix: &str, scale: u64, value: Value) {
         let scaled_value = value / scale;
         let value_str = scaled_value.to_string();
         let entry_len = prefix.len() + value_str.len() + suffix.len();
@@ -93,16 +91,35 @@ impl Statsd {
             buffer.push_str(&value_str);
             buffer.push_str(suffix);
         }
+
         if !self.is_buffering() {
-            if let Err(e) = self.flush() {
-                debug!("Could not send immediate statsd {}", e)
+            if let Err(e) = self.flush_inner(buffer) {
+                debug!("Could not send to statsd {}", e)
             }
         }
     }
 
+    fn flush_inner(&self, mut buffer: RefMut<String>) -> error::Result<()> {
+        if buffer.is_empty() {
+            match self.socket.send(buffer.as_bytes()) {
+                Ok(size) => {
+                    metrics::STATSD_SENT_BYTES.count(size);
+                    trace!("Sent {} bytes to statsd", buffer.len());
+                }
+                Err(e) => {
+                    metrics::STATSD_SEND_ERR.mark();
+                    return Err(e.into())
+                }
+            };
+            buffer.clear();
+        }
+        Ok(())
+    }
+
+
 }
 
-impl RawInput for Statsd {
+impl RawScope for Statsd {
     fn new_metric_raw(&self, name: Name, kind: Kind) -> RawMetric {
         let mut prefix = self.qualified_name(name).join(".");
         prefix.push(':');
@@ -121,7 +138,7 @@ impl RawInput for Statsd {
             _ => 1,
         };
 
-        let buffer = self.clone();
+        let cloned = self.clone();
 
         if let Sampling::SampleRate(float_rate) = self.get_sampling() {
             suffix.push_str(&format!{"|@{}", float_rate});
@@ -129,12 +146,14 @@ impl RawInput for Statsd {
 
             RawMetric::new(move |value| {
                 if pcg32::accept_sample(int_sampling_rate) {
-                    buffer.print(&prefix, &suffix, scale, value)
+                    let buffer = cloned.buffer.borrow_mut();
+                    cloned.print(buffer, &prefix, &suffix, scale, value)
                 }
             })
         } else {
             RawMetric::new(move |value| {
-                buffer.print(&prefix, &suffix, scale, value)
+                let buffer = cloned.buffer.borrow_mut();
+                cloned.print(buffer, &prefix, &suffix, scale, value)
             })
         }
     }
@@ -143,22 +162,10 @@ impl RawInput for Statsd {
 impl Flush for Statsd {
 
     fn flush(&self) -> error::Result<()> {
-        let mut buffer = self.buffer.borrow_mut();
-        if buffer.is_empty() {
-            match self.socket.send(buffer.as_bytes()) {
-                Ok(size) => {
-                    metrics::STATSD_SENT_BYTES.count(size);
-                    trace!("Sent {} bytes to statsd", buffer.len());
-                }
-                Err(e) => {
-                    metrics::STATSD_SEND_ERR.mark();
-                    return Err(e.into())
-                }
-            };
-            buffer.clear();
-        }
-        Ok(())
+        let buf = self.buffer.borrow_mut();
+        self.flush_inner(buf)
     }
+
 }
 
 impl WithBuffering for Statsd {}
@@ -192,9 +199,17 @@ mod bench {
     use test;
 
     #[bench]
-    pub fn timer_statsd(b: &mut test::Bencher) {
-        let sd = Statsd::output("localhost:8125").unwrap().new_input_dyn();
-        let timer = sd.new_metric("timer".into(), Kind::Timer);
+    pub fn immediate_statsd(b: &mut test::Bencher) {
+        let sd = Statsd::output("localhost:8125").unwrap().open_scope_raw();
+        let timer = sd.new_metric_raw("timer".into(), Kind::Timer);
+
+        b.iter(|| test::black_box(timer.write(2000)));
+    }
+
+    #[bench]
+    pub fn buffering_statsd(b: &mut test::Bencher) {
+        let sd = Statsd::output("localhost:8125").unwrap().with_buffering(Buffering::BufferSize(3534)).open_scope_raw();
+        let timer = sd.new_metric_raw("timer".into(), Kind::Timer);
 
         b.iter(|| test::black_box(timer.write(2000)));
     }

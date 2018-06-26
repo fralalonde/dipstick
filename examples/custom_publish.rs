@@ -44,7 +44,7 @@ fn main() {
     }
 
     // send application metrics to aggregator
-    Bucket::set_default_output(Text::output(io::stdout()));
+    Bucket::set_default_target(Text::output(io::stdout()));
     Bucket::set_default_stats(custom_statistics);
 
     let app_metrics = Bucket::new();

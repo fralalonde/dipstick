@@ -12,16 +12,6 @@ pub struct CacheOutput {
     cache: Arc<RwLock<lru::LRUCache<Name, Metric>>>,
 }
 
-impl CacheOutput {
-    /// Wrap new inputs with an asynchronous metric write & flush dispatcher.
-    pub fn new<OUT: OutputDyn + Send + Sync + 'static>(target: OUT, max_size: usize) -> Self {
-        CacheOutput {
-            attributes: Attributes::default(),
-            target: Arc::new(target),
-            cache: Arc::new(RwLock::new(lru::LRUCache::with_capacity(max_size)))
-        }
-    }
-}
 
 impl WithAttributes for CacheOutput {
     fn get_attributes(&self) -> &Attributes { &self.attributes }
@@ -29,10 +19,10 @@ impl WithAttributes for CacheOutput {
 }
 
 impl Output for CacheOutput {
-    type INPUT = CacheInput;
-    fn new_input(&self) -> CacheInput {
-        let target = self.target.new_input_dyn();
-        CacheInput {
+    type SCOPE = Cache;
+    fn open_scope(&self) -> Cache {
+        let target = self.target.open_scope_dyn();
+        Cache {
             attributes: self.attributes.clone(),
             target,
             cache: self.cache.clone(),
@@ -42,18 +32,29 @@ impl Output for CacheOutput {
 
 /// Input wrapper caching frequently defined metrics
 #[derive(Clone)]
-pub struct CacheInput {
+pub struct Cache {
     attributes: Attributes,
-    target: Arc<Input + Send + Sync + 'static>,
+    target: Arc<Scope + Send + Sync + 'static>,
     cache: Arc<RwLock<lru::LRUCache<Name, Metric>>>,
 }
 
-impl WithAttributes for CacheInput {
+impl Cache {
+    /// Wrap scopes with an asynchronous metric write & flush dispatcher.
+    pub fn output<OUT: OutputDyn + Send + Sync + 'static>(target: OUT, max_size: usize) -> CacheOutput {
+        CacheOutput {
+            attributes: Attributes::default(),
+            target: Arc::new(target),
+            cache: Arc::new(RwLock::new(lru::LRUCache::with_capacity(max_size)))
+        }
+    }
+}
+
+impl WithAttributes for Cache {
     fn get_attributes(&self) -> &Attributes { &self.attributes }
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
-impl Input for CacheInput {
+impl Scope for Cache {
     fn new_metric(&self, name: Name, kind: Kind) -> Metric {
         let name = self.qualified_name(name);
         let lookup = {
@@ -70,14 +71,14 @@ impl Input for CacheInput {
     }
 }
 
-impl Flush for CacheInput {
+impl Flush for Cache {
 
     fn flush(&self) -> error::Result<()> {
         self.target.flush()
     }
 }
 
-impl Async for CacheOutput {}
+impl WithQueue for CacheOutput {}
 
 mod lru {
     //! A fixed-size cache with LRU expiration criteria.

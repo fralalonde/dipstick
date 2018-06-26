@@ -1,8 +1,8 @@
 //! Standard stateless metric outputs.
 
 // TODO parameterize templates
-use core::{Name, AddPrefix, Value, Kind, RawInput, WithAttributes, Attributes,
-           WithBuffering, RawMetric, RawOutput, Cache, RawAsync, Flush};
+use core::{Name, AddPrefix, Value, Kind, RawScope, WithAttributes, Attributes,
+           WithBuffering, RawMetric, RawOutput, WithMetricCache, WithRawQueue, Flush};
 use error;
 use std::sync::{RwLock, Arc};
 use std::io::{Write, self};
@@ -47,17 +47,17 @@ impl<W: Write + Send + Sync + 'static> WithAttributes for TextOutput<W> {
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
-impl<W: Write + Send + Sync + 'static> Cache for TextOutput<W> {}
+impl<W: Write + Send + Sync + 'static> WithMetricCache for TextOutput<W> {}
 
-impl<W: Write + Send + Sync + 'static> RawAsync for TextOutput<W> {}
+impl<W: Write + Send + Sync + 'static> WithRawQueue for TextOutput<W> {}
 
 impl<W: Write + Send + Sync + 'static> WithBuffering for TextOutput<W> {}
 
 impl<W: Write + Send + Sync + 'static> RawOutput for TextOutput<W> {
 
-    type INPUT = Text<W>;
+    type SCOPE = Text<W>;
 
-    fn new_input_raw(&self) -> Self::INPUT {
+    fn open_scope_raw(&self) -> Self::SCOPE {
         Text {
             attributes: self.attributes.clone(),
             entries: Rc::new(RefCell::new(Vec::new())),
@@ -66,7 +66,7 @@ impl<W: Write + Send + Sync + 'static> RawOutput for TextOutput<W> {
     }
 }
 
-/// The scope-local input for buffered text metrics output.
+/// A scope for text metrics.
 pub struct Text<W: Write + Send + Sync + 'static> {
     attributes: Attributes,
     entries: Rc<RefCell<Vec<Vec<u8>>>>,
@@ -113,7 +113,7 @@ impl<W: Write + Send + Sync + 'static> WithAttributes for Text<W> {
 
 impl<W: Write + Send + Sync + 'static> WithBuffering for Text<W> {}
 
-impl<W: Write + Send + Sync + 'static> RawInput for Text<W> {
+impl<W: Write + Send + Sync + 'static> RawScope for Text<W> {
     fn new_metric_raw(&self, name: Name, kind: Kind) -> RawMetric {
         let name = self.qualified_name(name);
         let template = (self.output.format_fn)(&name, kind);
@@ -180,7 +180,7 @@ mod test {
 
     #[test]
     fn sink_print() {
-        let c = super::Text::output(io::stdout()).new_input();
+        let c = super::Text::output(io::stdout()).open_scope();
         let m = c.new_metric("test".into(), Kind::Marker);
         m.write(33);
     }

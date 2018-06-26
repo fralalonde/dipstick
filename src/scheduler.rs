@@ -1,6 +1,6 @@
 //! Task scheduling facilities.
 
-use core::Input;
+use core::Scope;
 
 use std::time::Duration;
 use std::thread;
@@ -52,7 +52,7 @@ pub trait ScheduleFlush {
     fn flush_every(&self, period: Duration) -> CancelHandle;
 }
 
-impl<T: Input + Send + Sync + Clone + 'static> ScheduleFlush for T {
+impl<T: Scope + Send + Sync + Clone + 'static> ScheduleFlush for T {
     /// Start a thread dedicated to flushing this scope at regular intervals.
     fn flush_every(&self, period: Duration) -> CancelHandle {
         let scope = self.clone();

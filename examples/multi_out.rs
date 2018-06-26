@@ -9,14 +9,14 @@ use std::io;
 fn main() {
     // will output metrics to graphite and to stdout
     let different_type_metrics = MultiOutput::new()
-        .add_output(Graphite::output("localhost:2003").expect("Connecting"))
-        .add_output(Text::output(io::stdout())).new_input();
+        .add_target(Graphite::output("localhost:2003").expect("Connecting"))
+        .add_target(Text::output(io::stdout())).open_scope();
 
     // will output metrics twice, once with "cool.yeah" prefix and once with "cool.ouch" prefix.
     let same_type_metrics = MultiOutput::new()
-        .add_output(Text::output(io::stdout()).add_prefix("yeah"))
-        .add_output(Text::output(io::stdout()).add_prefix("ouch"))
-        .add_prefix("cool").new_input();
+        .add_target(Text::output(io::stdout()).add_prefix("yeah"))
+        .add_target(Text::output(io::stdout()).add_prefix("ouch"))
+        .add_prefix("cool").open_scope();
 
     loop {
         different_type_metrics.counter("counter_a").count(123);

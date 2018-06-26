@@ -18,7 +18,8 @@ metrics!{
 }
 
 fn main() {
-    Proxy::set_default_target(Text::output(io::stdout()).async(100).new_input());
+    Proxy::set_default_target(
+        Text::output(io::stdout()).with_async_queue(100).open_scope());
     for _ in 0..4 {
         thread::spawn(move || {
             loop {

@@ -2,7 +2,7 @@
 //! RawMetrics definitions are still synchronous.
 //! If queue size is exceeded, calling code reverts to blocking.
 use core::{Value, RawMetric, Name, Kind, AddPrefix, RawOutputDyn,
-           WithAttributes, Attributes, Input, Output, Metric, UnsafeInput, Flush};
+           WithAttributes, Attributes, Scope, Output, Metric, UnsafeScope, Flush};
 use error;
 use metrics;
 
@@ -16,8 +16,8 @@ fn new_async_channel(length: usize) -> Arc<mpsc::SyncSender<RawQueueCmd>> {
         let mut done = false;
         while !done {
             match receiver.recv() {
-                Ok(RawQueueCmd::Write(wfn, value)) => wfn.write(value),
-                Ok(RawQueueCmd::Flush(input)) => if let Err(e) = input.flush() {
+                Ok(RawQueueCmd::Write(metric, value)) => metric.write(value),
+                Ok(RawQueueCmd::Flush(scope)) => if let Err(e) = scope.flush() {
                     debug!("Could not asynchronously flush metrics: {}", e);
                 },
                 Err(e) => {
@@ -32,7 +32,7 @@ fn new_async_channel(length: usize) -> Arc<mpsc::SyncSender<RawQueueCmd>> {
 }
 
 
-/// Wrap new inputs with an asynchronous metric write & flush dispatcher.
+/// Wrap scope with an asynchronous metric write & flush dispatcher.
 #[derive(Clone)]
 pub struct RawQueueOutput {
     attributes: Attributes,
@@ -41,7 +41,7 @@ pub struct RawQueueOutput {
 }
 
 impl RawQueueOutput {
-    /// Wrap new inputs with an asynchronous metric write & flush dispatcher.
+    /// Wrap new scopes with an asynchronous metric write & flush dispatcher.
     pub fn new<OUT: RawOutputDyn + Send + Sync + 'static>(target: OUT, queue_length: usize) -> Self {
         RawQueueOutput {
             attributes: Attributes::default(),
@@ -57,15 +57,15 @@ impl WithAttributes for RawQueueOutput {
 }
 
 impl Output for RawQueueOutput {
-    type INPUT = RawQueue;
+    type SCOPE = RawQueue;
 
-    /// Wrap new inputs with an asynchronous metric write & flush dispatcher.
-    fn new_input(&self) -> Self::INPUT {
-        let target_input = UnsafeInput::new(self.target.new_input_raw_dyn());
+    /// Wrap new scopes with an asynchronous metric write & flush dispatcher.
+    fn open_scope(&self) -> Self::SCOPE {
+        let target_scope = UnsafeScope::new(self.target.open_scope_raw_dyn());
         RawQueue {
             attributes: self.attributes.clone(),
             sender: self.sender.clone(),
-            target: Arc::new(target_input),
+            target: Arc::new(target_scope),
         }
     }
 
@@ -75,16 +75,16 @@ impl Output for RawQueueOutput {
 /// Async commands should be of no concerns to applications.
 pub enum RawQueueCmd {
     Write(Arc<RawMetric>, Value),
-    Flush(Arc<UnsafeInput>),
+    Flush(Arc<UnsafeScope>),
 }
 
-/// A metric input wrapper that sends writes & flushes over a Rust sync channel.
+/// A scope wrapper that sends writes & flushes over a Rust sync channel.
 /// Commands are executed by a background thread.
 #[derive(Clone)]
 pub struct RawQueue {
     attributes: Attributes,
     sender: Arc<mpsc::SyncSender<RawQueueCmd>>,
-    target: Arc<UnsafeInput>,
+    target: Arc<UnsafeScope>,
 }
 
 impl WithAttributes for RawQueue {
@@ -92,7 +92,7 @@ impl WithAttributes for RawQueue {
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
-impl Input for RawQueue {
+impl Scope for RawQueue {
     fn new_metric(&self, name: Name, kind:Kind) -> Metric {
         let name = self.qualified_name(name);
         let target_metric = Arc::new(self.target.new_metric_raw(name, kind));
