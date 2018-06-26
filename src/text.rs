@@ -1,8 +1,8 @@
 //! Standard stateless metric outputs.
 
 // TODO parameterize templates
-use core::{Name, AddPrefix, Value, Kind, RawScope, WithAttributes, Attributes,
-           WithBuffering, RawMetric, RawOutput, WithMetricCache, WithRawQueue, Flush};
+use core::{Name, AddPrefix, Value, Kind, OutputScope, WithAttributes, Attributes,
+           WithBuffering, OutputMetric, Output, WithMetricCache, WithOutputQueue, Flush};
 use error;
 use std::sync::{RwLock, Arc};
 use std::io::{Write, self};
@@ -49,11 +49,11 @@ impl<W: Write + Send + Sync + 'static> WithAttributes for TextOutput<W> {
 
 impl<W: Write + Send + Sync + 'static> WithMetricCache for TextOutput<W> {}
 
-impl<W: Write + Send + Sync + 'static> WithRawQueue for TextOutput<W> {}
+impl<W: Write + Send + Sync + 'static> WithOutputQueue for TextOutput<W> {}
 
 impl<W: Write + Send + Sync + 'static> WithBuffering for TextOutput<W> {}
 
-impl<W: Write + Send + Sync + 'static> RawOutput for TextOutput<W> {
+impl<W: Write + Send + Sync + 'static> Output for TextOutput<W> {
 
     type SCOPE = Text<W>;
 
@@ -113,8 +113,8 @@ impl<W: Write + Send + Sync + 'static> WithAttributes for Text<W> {
 
 impl<W: Write + Send + Sync + 'static> WithBuffering for Text<W> {}
 
-impl<W: Write + Send + Sync + 'static> RawScope for Text<W> {
-    fn new_metric_raw(&self, name: Name, kind: Kind) -> RawMetric {
+impl<W: Write + Send + Sync + 'static> OutputScope for Text<W> {
+    fn new_metric_raw(&self, name: Name, kind: Kind) -> OutputMetric {
         let name = self.qualified_name(name);
         let template = (self.output.format_fn)(&name, kind);
 
@@ -122,7 +122,7 @@ impl<W: Write + Send + Sync + 'static> RawScope for Text<W> {
         let entries = self.entries.clone();
 
         if self.is_buffering() {
-            RawMetric::new(move |value| {
+            OutputMetric::new(move |value| {
                 let mut buffer = Vec::with_capacity(32);
                 match (print_fn)(&mut buffer, &template, value) {
                     Ok(()) => {
@@ -134,7 +134,7 @@ impl<W: Write + Send + Sync + 'static> RawScope for Text<W> {
             })
         } else {
             let output = self.output.clone();
-            RawMetric::new(move |value| {
+            OutputMetric::new(move |value| {
                 let mut buffer = Vec::with_capacity(32);
                 match (print_fn)(&mut buffer, &template, value) {
                     Ok(()) => {

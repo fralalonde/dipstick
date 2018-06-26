@@ -1,4 +1,4 @@
-use core::{Name, AddPrefix, Value, Metric, Kind, Output, Scope, WithAttributes, Attributes,
+use core::{Name, AddPrefix, Value, InputMetric, Kind, Input, Scope, WithAttributes, Attributes,
            WithBuffering, Flush};
 use error;
 use std::sync::{RwLock, Arc};
@@ -15,7 +15,7 @@ pub struct LogOutput {
     print_fn: Arc<Fn(&mut Vec<u8>, &[String], Value) -> error::Result<()> + Send + Sync>,
 }
 
-impl Output for LogOutput {
+impl Input for LogOutput {
     type SCOPE = Log;
 
     fn open_scope(&self) -> Self::SCOPE {
@@ -62,7 +62,7 @@ impl WithAttributes for Log {
 impl WithBuffering for Log {}
 
 impl Scope for Log {
-    fn new_metric(&self, name: Name, kind: Kind) -> Metric {
+    fn new_metric(&self, name: Name, kind: Kind) -> InputMetric {
         let name = self.qualified_name(name);
         let template = (self.output.format_fn)(&name, kind);
 
@@ -70,7 +70,7 @@ impl Scope for Log {
         let entries = self.entries.clone();
 
         if self.is_buffering() {
-            Metric::new(move |value| {
+            InputMetric::new(move |value| {
                 let mut buffer = Vec::with_capacity(32);
                 match (print_fn)(&mut buffer, &template, value) {
                     Ok(()) => {
@@ -81,7 +81,7 @@ impl Scope for Log {
                 }
             })
         } else {
-            Metric::new(move |value| {
+            InputMetric::new(move |value| {
                 let mut buffer = Vec::with_capacity(32);
                 match (print_fn)(&mut buffer, &template, value) {
                     Ok(()) => log!(log::Level::Debug, "{:?}", &buffer),

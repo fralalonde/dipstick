@@ -8,13 +8,13 @@ use std::io;
 
 fn main() {
     // will output metrics to graphite and to stdout
-    let different_type_metrics = MultiRaw::output()
+    let different_type_metrics = MultiOutputScope::output()
         .add_raw_target(Graphite::output("localhost:2003").expect("Connecting"))
         .add_raw_target(Text::output(io::stdout()))
         .open_scope_raw();
 
     // will output metrics twice, once with "cool.yeah" prefix and once with "cool.ouch" prefix.
-    let same_type_metrics = MultiRaw::output()
+    let same_type_metrics = MultiOutputScope::output()
         .add_raw_target(Text::output(io::stdout()).add_prefix("yeah"))
         .add_raw_target(Text::output(io::stdout()).add_prefix("ouch"))
         .add_prefix("cool").open_scope();

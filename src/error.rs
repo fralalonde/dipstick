@@ -5,8 +5,8 @@ use std::error;
 use std::fmt::{self, Display, Formatter};
 use std::result;
 use std::sync::mpsc;
-use queue;
-use queue_raw;
+use queue_in;
+use queue_out;
 
 use self::Error::*;
 
@@ -16,9 +16,9 @@ pub enum Error {
     /// A generic I/O error.
     IO(io::Error),
     /// An error from the async metric queue.
-    Async(mpsc::SendError<queue::QueueCmd>),
+    Async(mpsc::SendError<queue_in::InputQueueCmd>),
     /// An error from the async metric queue.
-    RawAsync(mpsc::SendError<queue_raw::RawQueueCmd>)
+    RawAsync(mpsc::SendError<queue_out::OutputQueueCmd>)
 }
 
 impl Display for Error {
@@ -58,14 +58,14 @@ impl From<io::Error> for Error {
     }
 }
 
-impl From<mpsc::SendError<queue::QueueCmd>> for Error {
-    fn from(err: mpsc::SendError<queue::QueueCmd>) -> Self {
+impl From<mpsc::SendError<queue_in::InputQueueCmd>> for Error {
+    fn from(err: mpsc::SendError<queue_in::InputQueueCmd>) -> Self {
         Async(err)
     }
 }
 
-impl From<mpsc::SendError<queue_raw::RawQueueCmd>> for Error {
-    fn from(err: mpsc::SendError<queue_raw::RawQueueCmd>) -> Self {
+impl From<mpsc::SendError<queue_out::OutputQueueCmd>> for Error {
+    fn from(err: mpsc::SendError<queue_out::OutputQueueCmd>) -> Self {
         RawAsync(err)
     }
 }

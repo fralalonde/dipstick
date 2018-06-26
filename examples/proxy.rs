@@ -5,7 +5,7 @@ extern crate dipstick;
 use std::thread::sleep;
 use std::time::Duration;
 use std::io;
-use dipstick::{Proxy, Text, Scope, AddPrefix, Output};
+use dipstick::{Proxy, Text, Scope, AddPrefix, Input};
 
 fn main() {
     let root = Proxy::default_root();

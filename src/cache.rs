@@ -8,8 +8,8 @@ use std::sync::{Arc, RwLock};
 #[derive(Clone)]
 pub struct CacheOutput {
     attributes: Attributes,
-    target: Arc<OutputDyn + Send + Sync + 'static>,
-    cache: Arc<RwLock<lru::LRUCache<Name, Metric>>>,
+    target: Arc<InputDyn + Send + Sync + 'static>,
+    cache: Arc<RwLock<lru::LRUCache<Name, InputMetric>>>,
 }
 
 
@@ -18,7 +18,7 @@ impl WithAttributes for CacheOutput {
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
-impl Output for CacheOutput {
+impl Input for CacheOutput {
     type SCOPE = Cache;
     fn open_scope(&self) -> Cache {
         let target = self.target.open_scope_dyn();
@@ -35,12 +35,12 @@ impl Output for CacheOutput {
 pub struct Cache {
     attributes: Attributes,
     target: Arc<Scope + Send + Sync + 'static>,
-    cache: Arc<RwLock<lru::LRUCache<Name, Metric>>>,
+    cache: Arc<RwLock<lru::LRUCache<Name, InputMetric>>>,
 }
 
 impl Cache {
     /// Wrap scopes with an asynchronous metric write & flush dispatcher.
-    pub fn output<OUT: OutputDyn + Send + Sync + 'static>(target: OUT, max_size: usize) -> CacheOutput {
+    pub fn output<OUT: InputDyn + Send + Sync + 'static>(target: OUT, max_size: usize) -> CacheOutput {
         CacheOutput {
             attributes: Attributes::default(),
             target: Arc::new(target),
@@ -55,7 +55,7 @@ impl WithAttributes for Cache {
 }
 
 impl Scope for Cache {
-    fn new_metric(&self, name: Name, kind: Kind) -> Metric {
+    fn new_metric(&self, name: Name, kind: Kind) -> InputMetric {
         let name = self.qualified_name(name);
         let lookup = {
             let mut cache = self.cache.write().expect("Cache Lock");

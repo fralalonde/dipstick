@@ -32,7 +32,7 @@ impl WithSampling for StatsdOutput {}
 impl WithMetricCache for StatsdOutput {}
 impl WithQueue for StatsdOutput {}
 
-impl RawOutput for StatsdOutput {
+impl Output for StatsdOutput {
     type SCOPE = Statsd;
 
     fn open_scope_raw(&self) -> Statsd {
@@ -73,9 +73,9 @@ impl Statsd {
 
 impl WithSampling for Statsd {}
 
-impl RawScope for Statsd {
+impl OutputScope for Statsd {
     /// Define a metric of the specified type.
-    fn new_metric_raw(&self, name: Name, kind: Kind) -> RawMetric {
+    fn new_metric_raw(&self, name: Name, kind: Kind) -> OutputMetric {
         let mut prefix = self.qualified_name(name).join(".");
         prefix.push(':');
 
@@ -100,7 +100,7 @@ impl RawScope for Statsd {
             let int_sampling_rate = pcg32::to_int_rate(float_rate);
             let metric = StatsdMetric { prefix, suffix, scale };
 
-            RawMetric::new(move |value| {
+            OutputMetric::new(move |value| {
                 if pcg32::accept_sample(int_sampling_rate) {
                     cloned.print(&metric, value)
                 }
@@ -108,7 +108,7 @@ impl RawScope for Statsd {
         } else {
             suffix.push_str("\n");
             let metric = StatsdMetric { prefix, suffix, scale };
-            RawMetric::new(move |value| {
+            OutputMetric::new(move |value| {
                 cloned.print(&metric, value)
             })
         }
