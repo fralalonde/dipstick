@@ -6,7 +6,7 @@ use std::fmt::{self, Display, Formatter};
 use std::result;
 use std::sync::mpsc;
 use queue;
-use raw_queue;
+use queue_raw;
 
 use self::Error::*;
 
@@ -18,7 +18,7 @@ pub enum Error {
     /// An error from the async metric queue.
     Async(mpsc::SendError<queue::QueueCmd>),
     /// An error from the async metric queue.
-    RawAsync(mpsc::SendError<raw_queue::RawQueueCmd>)
+    RawAsync(mpsc::SendError<queue_raw::RawQueueCmd>)
 }
 
 impl Display for Error {
@@ -64,8 +64,8 @@ impl From<mpsc::SendError<queue::QueueCmd>> for Error {
     }
 }
 
-impl From<mpsc::SendError<raw_queue::RawQueueCmd>> for Error {
-    fn from(err: mpsc::SendError<raw_queue::RawQueueCmd>) -> Self {
+impl From<mpsc::SendError<queue_raw::RawQueueCmd>> for Error {
+    fn from(err: mpsc::SendError<queue_raw::RawQueueCmd>) -> Self {
         RawAsync(err)
     }
 }

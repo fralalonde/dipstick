@@ -1,32 +1,31 @@
-//! A sample application continuously aggregating metrics,
-//! printing the summary stats every three seconds
+//! Transient metrics are not retained by buckets after flushing.
 
 extern crate dipstick;
 
 use dipstick::*;
 
-fn main() {
-    let metrics = Bucket::new();
+use std::io;
+use std::time::Duration;
+use std::thread::sleep;
 
-    let counter = metrics.counter("counter_a");
-    let timer = metrics.timer("timer_a");
-    let gauge = metrics.gauge("gauge_a");
-    let marker = metrics.marker("marker_a");
+
+fn main() {
+    let bucket = Bucket::new();
+    Bucket::set_default_target(Text::output(io::stdout()));
+
+    let persistent_marker = bucket.marker("persistent");
+
+    let mut i = 0;
 
     loop {
-        // add counts forever, non-stop
-        counter.count(11);
-        counter.count(12);
-        counter.count(13);
+        i += 1;
+        let transient_marker = bucket.marker(&format!("marker_{}", i));
 
-        timer.interval_us(11_000_000);
-        timer.interval_us(12_000_000);
-        timer.interval_us(13_000_000);
+        transient_marker.mark();
+        persistent_marker.mark();
 
-        gauge.value(11);
-        gauge.value(12);
-        gauge.value(13);
+        bucket.flush().unwrap();
 
-        marker.mark();
+        sleep(Duration::from_secs(1));
     }
 }
