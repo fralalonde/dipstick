@@ -26,17 +26,21 @@ num = { version = "0.1", default-features = false }
 
 # FIXME required only for random seed for sampling
 time = "0.1"
+# optional dep for prometheus format
 protobuf = { version = "2", features = ["with-bytes"], optional = true }
+# optional dep for standalone http pull metrics
+tiny_http = { version = "0.6.0", optional = true }
 
 [build-dependencies]
 skeptic = { version = "0.13", optional = true }
 protoc-rust = { version = "2", optional = true }
 
 [features]
-default-features = [ "prometheus", "self_metrics" ]
+default-features = [ "prometheus", "self_metrics", "proto", "tiny_http" ]
 bench = []
 self_metrics = []
-prometheus = [ "protobuf", "protoc-rust" ]
+proto = [ "protoc-rust", "protobuf" ]
+prometheus = []
 
 [package.metadata.release]
 #sign-commit = true

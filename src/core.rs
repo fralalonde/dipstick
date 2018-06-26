@@ -12,6 +12,7 @@ use std::sync::{Arc, Mutex};
 use std::ops;
 use std::rc::Rc;
 use std::fmt;
+use std::collections::HashMap;
 
 // TODO maybe define an 'AsValue' trait + impl for supported number types, then drop 'num' crate
 pub use num::ToPrimitive;
@@ -122,7 +123,7 @@ pub trait WithAttributes: Clone {
 }
 
 /// Name operations support.
-pub trait WithName {
+pub trait AddPrefix {
     /// Return the namespace of the component.
     fn get_namespace(&self) -> &Name;
 
@@ -133,7 +134,17 @@ pub trait WithName {
     fn qualified_name(&self, metric_name: Name) -> Name;
 }
 
-impl<T: WithAttributes> WithName for T {
+/// Name operations support.
+pub trait AddTag {
+    /// Return the namespace of the component.
+    fn get_tags(&self) -> &Arc<HashMap<String, String>>;
+
+    /// Join namespace and prepend in newly defined metrics.
+    fn add_tag(&self, name: &str) -> Self;
+
+}
+
+impl<T: WithAttributes> AddPrefix for T {
     fn get_namespace(&self) -> &Name {
         &self.get_attributes().namespace
     }
@@ -330,6 +341,7 @@ pub trait Input: Flush {
 
 }
 
+/// Both Input and RawInput share the ability to flush the recorded data.
 pub trait Flush {
 
     /// Flush does nothing by default.
@@ -371,7 +383,7 @@ pub trait RawOutput: RawOutputDyn + Send + Sync + 'static + Sized {
     type INPUT: RawInput + 'static  ;
 
     /// Open a new input scope from this output.
-    fn new_raw_input(&self) -> Self::INPUT;
+    fn new_input_raw(&self) -> Self::INPUT;
 }
 
 /// Wrap this raw output behind an asynchronous metrics dispatch queue.
@@ -385,13 +397,13 @@ pub trait RawAsync: RawOutput + Sized {
 /// Dynamic variant of the RawOutput trait
 pub trait RawOutputDyn {
     /// Open a new metric input with dynamic typing.
-    fn new_raw_input_dyn(&self) -> Rc<RawInput + 'static>;
+    fn new_input_raw_dyn(&self) -> Rc<RawInput + 'static>;
 }
 
 /// Blanket impl that provides RawOutputs their dynamic flavor.
 impl<T: RawOutput + Send + Sync + 'static> RawOutputDyn for T {
-    fn new_raw_input_dyn(&self) -> Rc<RawInput + 'static> {
-        Rc::new(self.new_raw_input())
+    fn new_input_raw_dyn(&self) -> Rc<RawInput + 'static> {
+        Rc::new(self.new_input_raw())
     }
 }
 
@@ -434,7 +446,7 @@ impl<T: RawOutput + Send + Sync + 'static> Output for T {
     fn new_input(&self) -> Self::INPUT {
         LockingInputBox {
             attributes: Attributes::default(),
-            inner: Arc::new(Mutex::new(UnsafeInput(self.new_raw_input_dyn())))
+            inner: Arc::new(Mutex::new(UnsafeInput(self.new_input_raw_dyn())))
         }
     }
 }
@@ -627,7 +639,7 @@ pub struct VoidOutput {}
 
 impl RawOutput for VoidOutput {
     type INPUT = VoidOutput;
-    fn new_raw_input(&self) -> VoidOutput {
+    fn new_input_raw(&self) -> VoidOutput {
         VoidOutput {}
     }
 }

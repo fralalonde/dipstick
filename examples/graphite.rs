@@ -8,7 +8,7 @@ use std::time::Duration;
 
 fn main() {
     let metrics =
-        output_graphite("localhost:2003")
+        Graphite::output("localhost:2003")
             .expect("Connected")
             .add_prefix("my_app")
             .new_input();

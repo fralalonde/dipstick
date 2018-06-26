@@ -1,7 +1,7 @@
 //! Queue metrics for write on a separate thread,
 //! Metrics definitions are still synchronous.
 //! If queue size is exceeded, calling code reverts to blocking.
-use core::{Input, Value, Metric, Name, Kind, WithName, OutputDyn, Output,
+use core::{Input, Value, Metric, Name, Kind, AddPrefix, OutputDyn, Output,
            WithAttributes, Attributes, Cache, Flush};
 use error;
 use metrics;

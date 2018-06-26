@@ -5,11 +5,12 @@ extern crate dipstick;
 
 use std::time::Duration;
 use dipstick::*;
+use std::io;
 
 fn main() {
 
     let app_metrics = Bucket::new();
-    app_metrics.set_output(output_stdout());
+    app_metrics.set_output(Text::output(io::stdout()));
 
     app_metrics.flush_every(Duration::from_secs(3));
 

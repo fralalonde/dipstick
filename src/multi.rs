@@ -1,6 +1,6 @@
 //! Dispatch metrics to multiple sinks.
 
-use core::{Output, Input, Name, WithName, OutputDyn, Kind, Metric, WithAttributes, Attributes, Flush};
+use core::{Output, Input, Name, AddPrefix, OutputDyn, Kind, Metric, WithAttributes, Attributes, Flush};
 use error;
 use std::sync::Arc;
 
@@ -11,17 +11,12 @@ pub struct MultiOutput {
     outputs: Vec<Arc<OutputDyn + Send + Sync>>,
 }
 
-/// Create a new multi-output.
-pub fn output_multi() -> MultiOutput {
-    MultiOutput::new()
-}
-
 impl Output for MultiOutput {
-    type INPUT = MultiInput;
+    type INPUT = Multi;
 
     fn new_input(&self) -> Self::INPUT {
         let inputs = self.outputs.iter().map(|out| out.new_input_dyn()).collect();
-        MultiInput {
+        Multi {
             attributes: self.attributes.clone(),
             inputs,
         }
@@ -50,25 +45,25 @@ impl WithAttributes for MultiOutput {
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
-/// Create a new multi-output.
-pub fn input_multi() -> MultiInput {
-    MultiInput::new()
-}
-
 /// Dispatch metric values to a list of inputs.
 #[derive(Clone)]
-pub struct MultiInput {
+pub struct Multi {
     attributes: Attributes,
     inputs: Vec<Arc<Input + Send + Sync>>,
 }
 
-impl MultiInput {
+impl Multi {
     /// Create a new multi input dispatcher with no inputs configured.
     pub fn new() -> Self {
-        MultiInput {
+        Multi {
             attributes: Attributes::default(),
             inputs: vec![],
         }
+    }
+
+    /// Create a new multi-output.
+    pub fn output() -> MultiOutput {
+        MultiOutput::new()
     }
 
     /// Returns a clone of the dispatch with the new output added to the list.
@@ -79,7 +74,7 @@ impl MultiInput {
     }
 }
 
-impl Input for MultiInput {
+impl Input for Multi {
     fn new_metric(&self, name: Name, kind: Kind) -> Metric {
         let ref name = self.qualified_name(name);
         let metrics: Vec<Metric> = self.inputs.iter()
@@ -91,7 +86,7 @@ impl Input for MultiInput {
     }
 }
 
-impl Flush for MultiInput {
+impl Flush for Multi {
     fn flush(&self) -> error::Result<()> {
         for w in &self.inputs {
             w.flush()?;
@@ -100,7 +95,7 @@ impl Flush for MultiInput {
     }
 }
 
-impl WithAttributes for MultiInput {
+impl WithAttributes for Multi {
     fn get_attributes(&self) -> &Attributes { &self.attributes }
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }

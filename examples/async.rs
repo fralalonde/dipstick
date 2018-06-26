@@ -9,7 +9,7 @@ extern crate lazy_static;
 use std::thread::sleep;
 use std::time::Duration;
 use dipstick::*;
-
+use std::io;
 use std::thread;
 
 metrics!{
@@ -18,7 +18,7 @@ metrics!{
 }
 
 fn main() {
-    Proxy::set_default_target(output_stdout().async(100).new_input());
+    Proxy::set_default_target(Text::output(io::stdout()).async(100).new_input());
     for _ in 0..4 {
         thread::spawn(move || {
             loop {

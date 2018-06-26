@@ -28,7 +28,7 @@ pub use error::{Error, Result};
 pub mod core;
 pub use core::{Value, Kind, Marker, Timer, Counter, Gauge,
                Input, Output, OutputDyn,
-               Name, WithName, WithSamplingRate, Sampling, Buffering, WithBuffering,
+               Name, AddPrefix, WithSamplingRate, Sampling, Buffering, WithBuffering,
                Cache, Async, RawAsync, RawInput, RawOutput, RawMetric, UnsafeInput, RawOutputDyn,
                output_none, VoidOutput};
 
@@ -36,16 +36,16 @@ pub use core::{Value, Kind, Marker, Timer, Counter, Gauge,
 pub mod macros;
 
 pub mod proxy;
-pub use proxy::{Proxy, input_proxy};
+pub use proxy::Proxy;
 
 mod bucket;
-pub use bucket::{Bucket, input_bucket, stats_summary, stats_all, stats_average};
+pub use bucket::{Bucket, stats_summary, stats_all, stats_average};
 
 mod text;
-pub use text::{output_stdout, output_stderr, TextOutput, Text};
+pub use text::{TextOutput, Text};
 
 mod logging;
-pub use logging::{LogOutput, Log, output_log};
+pub use logging::{LogOutput, Log};
 
 mod pcg32;
 
@@ -53,20 +53,20 @@ mod scores;
 pub use scores::ScoreType;
 
 mod statsd;
-pub use statsd::{StatsdOutput, Statsd, output_statsd};
+pub use statsd::{StatsdOutput, Statsd};
 
 mod graphite;
-pub use graphite::{GraphiteOutput, Graphite, output_graphite};
+pub use graphite::{GraphiteOutput, Graphite};
 
 #[cfg(feature="prometheus")]
 mod prometheus;
-#[cfg(feature="prometheus")]
+#[cfg(feature="prometheus, proto")]
 mod prometheus_proto;
 #[cfg(feature="prometheus")]
 pub use prometheus::{Prometheus, PrometheusOutput};
 
 mod map;
-pub use map::{StatsMap, output_map};
+pub use map::StatsMap;
 
 mod socket;
 pub use socket::RetrySocket;
@@ -75,7 +75,7 @@ mod cache;
 pub use cache::{CacheInput, CacheOutput};
 
 mod multi;
-pub use multi::{MultiOutput, MultiInput, output_multi, input_multi};
+pub use multi::{MultiOutput, Multi};
 
 mod queue;
 pub use queue::{Queue, QueueOutput};

@@ -1,6 +1,6 @@
 //! Decouple metric definition from configuration with trait objects.
 
-use core::{Name, WithName, Kind, Input, Metric, NO_METRIC_OUTPUT, WithAttributes, Attributes, Flush};
+use core::{Name, AddPrefix, Kind, Input, Metric, NO_METRIC_OUTPUT, WithAttributes, Attributes, Flush};
 use error;
 
 use std::collections::{HashMap, BTreeMap};
@@ -15,11 +15,6 @@ lazy_static! {
     /// Applications should configure on startup where the proxied metrics should go.
     /// Exceptionally, one can create its own ProxyInput root, separate from this one.
     static ref ROOT_PROXY: Proxy = Proxy::new();
-}
-
-/// Return the root metric proxy.
-pub fn input_proxy() -> Proxy {
-    ROOT_PROXY.clone()
 }
 
 /// A dynamically proxyed metric.
@@ -53,6 +48,13 @@ impl Drop for ProxyMetric {
 pub struct Proxy {
     attributes: Attributes,
     inner: Arc<RwLock<InnerProxy>>,
+}
+
+impl Proxy {
+    /// Return the default root metric proxy.
+    pub fn default_root() -> Proxy {
+        ROOT_PROXY.clone()
+    }
 }
 
 struct InnerProxy {

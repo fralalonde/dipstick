@@ -15,18 +15,6 @@ use socket::RetrySocket;
 use std::rc::Rc;
 use std::cell::{RefCell, RefMut};
 
-/// Send metrics to a graphite server at the address and port provided.
-pub fn output_graphite<A: ToSocketAddrs + Debug + Clone>(address: A) -> error::Result<GraphiteOutput> {
-    debug!("Connecting to graphite {:?}", address);
-    let socket = Arc::new(RwLock::new(RetrySocket::new(address.clone())?));
-
-    Ok(GraphiteOutput {
-        attributes: Attributes::default(),
-        socket,
-        buffered: false
-    })
-}
-
 /// Graphite output holds a socket to a graphite server.
 /// The connection is shared between all graphite inputs originating from it.
 #[derive(Clone, Debug)]
@@ -37,10 +25,9 @@ pub struct GraphiteOutput {
 }
 
 impl RawOutput for GraphiteOutput {
-
     type INPUT = Graphite;
 
-    fn new_raw_input(&self) -> Graphite {
+    fn new_input_raw(&self) -> Graphite {
         Graphite {
             attributes: self.attributes.clone(),
             buffer: Rc::new(RefCell::new(String::new())),
@@ -67,6 +54,20 @@ pub struct Graphite {
     socket: Arc<RwLock<RetrySocket>>,
 }
 
+impl Graphite {
+    /// Send metrics to a graphite server at the address and port provided.
+    pub fn output<A: ToSocketAddrs + Debug + Clone>(address: A) -> error::Result<GraphiteOutput> {
+        debug!("Connecting to graphite {:?}", address);
+        let socket = Arc::new(RwLock::new(RetrySocket::new(address.clone())?));
+
+        Ok(GraphiteOutput {
+            attributes: Attributes::default(),
+            socket,
+            buffered: false
+        })
+    }
+}
+
 impl RawInput for Graphite {
     /// Define a metric of the specified type.
     fn new_metric_raw(&self, name: Name, kind: Kind) -> RawMetric {
@@ -82,22 +83,17 @@ impl RawInput for Graphite {
         let cloned = self.clone();
         let metric = GraphiteMetric { prefix, scale };
 
-        if self.is_buffering() {
-            RawMetric::new(move |value| {
-                if let Err(err) = cloned.buf_write(&metric, value) {
-                    debug!("Graphite buffer write failed: {}", err);
-                    metrics::GRAPHITE_SEND_ERR.mark();
-                }
-            })
-        } else {
-            RawMetric::new(move |value| {
-                if let Err(err) = cloned.buf_write(&metric, value).and_then(|_| cloned.flush()) {
-                    debug!("Graphite buffer write failed: {}", err);
-                    metrics::GRAPHITE_SEND_ERR.mark();
-                }
-
-            })
-        }
+        RawMetric::new(move |value| {
+            cloned.print(&metric, value);
+        })
+//        } else {
+//            RawMetric::new(move |value| {
+//                if let Err(err) = cloned.print(&metric, value).and_then(|_| cloned.flush()) {
+//                    debug!("Graphite buffer write failed: {}", err);
+//                    metrics::GRAPHITE_SEND_ERR.mark();
+//                }
+//            })
+//        }
     }
 }
 
@@ -110,7 +106,7 @@ impl Flush for Graphite {
 }
 
 impl Graphite {
-    fn buf_write(&self, metric: &GraphiteMetric, value: Value) -> error::Result<()> {
+    fn print(&self, metric: &GraphiteMetric, value: Value)  {
         let scaled_value = value / metric.scale;
         let value_str = scaled_value.to_string();
 
@@ -127,14 +123,18 @@ impl Graphite {
                 if buf.len() > BUFFER_FLUSH_THRESHOLD {
                     metrics::GRAPHITE_OVERFLOW.mark();
                     warn!("Graphite Buffer Size Exceeded: {}", BUFFER_FLUSH_THRESHOLD);
-                    self.flush_inner(buf)?;
+                    let _ = self.flush_inner(buf);
                 }
             }
             Err(e) => {
                 warn!("Could not compute epoch timestamp. {}", e);
             }
         };
-        Ok(())
+        if !self.is_buffering() {
+            // need to re-borrow buf after move
+            buf = self.buffer.borrow_mut();
+            let _ = self.flush_inner(buf);
+        }
     }
 
     fn flush_inner(&self, mut buf: RefMut<String>) -> error::Result<()> {
@@ -194,7 +194,7 @@ mod bench {
 
     #[bench]
     pub fn unbuffered_graphite(b: &mut test::Bencher) {
-        let sd = output_graphite("localhost:2003").unwrap().new_raw_input();
+        let sd = output_graphite("localhost:2003").unwrap().new_input_raw();
         let timer = sd.new_metric_raw("timer".into(), Kind::Timer);
 
         b.iter(|| test::black_box(timer.write(2000)));
@@ -202,7 +202,7 @@ mod bench {
 
     #[bench]
     pub fn buffered_graphite(b: &mut test::Bencher) {
-        let sd = output_graphite("localhost:2003").unwrap().with_buffering(Buffering::BufferSize(65465)).new_raw_input();
+        let sd = output_graphite("localhost:2003").unwrap().with_buffering(Buffering::BufferSize(65465)).new_input_raw();
         let timer = sd.new_metric_raw("timer".into(), Kind::Timer);
 
         b.iter(|| test::black_box(timer.write(2000)));

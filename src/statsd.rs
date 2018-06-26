@@ -1,27 +1,17 @@
 //! Send metrics to a statsd server.
 
-use core::{Input, Output, Value, Metric, Attributes, WithAttributes, Kind,
-           Name, WithSamplingRate, WithName, WithBuffering, Sampling, Cache, Async, Flush};
+use core::{RawInput, RawOutput, Value, RawMetric, Attributes, WithAttributes, Kind,
+           Name, WithSamplingRate, AddPrefix, WithBuffering, Sampling, Cache, Async, Flush};
 use pcg32;
 use error;
 use metrics;
 
 use std::net::UdpSocket;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+use std::rc::Rc;
+use std::cell::RefCell;
 
 pub use std::net::ToSocketAddrs;
-
-/// Send metrics to a statsd server at the address and port provided.
-pub fn output_statsd<ADDR: ToSocketAddrs>(address: ADDR) -> error::Result<StatsdOutput> {
-    let socket = Arc::new(UdpSocket::bind("0.0.0.0:0")?);
-    socket.set_nonblocking(true)?;
-    socket.connect(address)?;
-
-    Ok(StatsdOutput {
-        attributes: Attributes::default(),
-        socket,
-    })
-}
 
 /// Statsd output holds a UDP client socket to a statsd host.
 /// The output's connection is shared between all inputs originating from it.
@@ -31,16 +21,13 @@ pub struct StatsdOutput {
     socket: Arc<UdpSocket>,
 }
 
-impl Output for StatsdOutput {
+impl RawOutput for StatsdOutput {
     type INPUT = Statsd;
-    fn new_input(&self) -> Self::INPUT {
+    fn new_input_raw(&self) -> Self::INPUT {
         Statsd {
             attributes: self.attributes.clone(),
-            buffer: Arc::new(RwLock::new(InputBuffer {
-                buffer: String::with_capacity(MAX_UDP_PAYLOAD),
-                socket: self.socket.clone(),
-                buffering: self.is_buffering(),
-            })),
+            buffer: Rc::new(RefCell::new(String::with_capacity(MAX_UDP_PAYLOAD))),
+            socket: self.socket.clone(),
         }
     }
 }
@@ -64,11 +51,59 @@ impl Async for StatsdOutput {}
 #[derive(Clone)]
 pub struct Statsd {
     attributes: Attributes,
-    buffer: Arc<RwLock<InputBuffer>>,
+    buffer: Rc<RefCell<String>>,
+    socket: Arc<UdpSocket>,
 }
 
-impl Input for Statsd {
-    fn new_metric(&self, name: Name, kind: Kind) -> Metric {
+impl Statsd {
+    /// Send metrics to a statsd server at the address and port provided.
+    pub fn output<ADDR: ToSocketAddrs>(address: ADDR) -> error::Result<StatsdOutput> {
+        let socket = Arc::new(UdpSocket::bind("0.0.0.0:0")?);
+        socket.set_nonblocking(true)?;
+        socket.connect(address)?;
+
+        Ok(StatsdOutput {
+            attributes: Attributes::default(),
+            socket,
+        })
+    }
+
+    fn print(&self, prefix: &str, suffix: &str, scale: u64, value: Value) {
+        let mut buffer = self.buffer.borrow_mut();
+
+        let scaled_value = value / scale;
+        let value_str = scaled_value.to_string();
+        let entry_len = prefix.len() + value_str.len() + suffix.len();
+
+        if entry_len > buffer.capacity() {
+            // TODO report entry too big to fit in buffer (!?)
+            return;
+        }
+
+        let remaining = buffer.capacity() - buffer.len();
+        if entry_len + 1 > remaining {
+            // buffer is full, flush before appending
+            let _ = self.flush();
+        } else {
+            if !buffer.is_empty() {
+                // separate from previous entry
+                buffer.push('\n')
+            }
+            buffer.push_str(prefix);
+            buffer.push_str(&value_str);
+            buffer.push_str(suffix);
+        }
+        if !self.is_buffering() {
+            if let Err(e) = self.flush() {
+                debug!("Could not send immediate statsd {}", e)
+            }
+        }
+    }
+
+}
+
+impl RawInput for Statsd {
+    fn new_metric_raw(&self, name: Name, kind: Kind) -> RawMetric {
         let mut prefix = self.qualified_name(name).join(".");
         prefix.push(':');
 
@@ -80,27 +115,26 @@ impl Input for Statsd {
             Kind::Timer => "ms",
         });
 
-        let buffer = self.buffer.clone();
         let scale = match kind {
             // timers are in µs, statsd wants ms
             Kind::Timer => 1000,
             _ => 1,
         };
 
+        let buffer = self.clone();
+
         if let Sampling::SampleRate(float_rate) = self.get_sampling() {
             suffix.push_str(&format!{"|@{}", float_rate});
             let int_sampling_rate = pcg32::to_int_rate(float_rate);
 
-            Metric::new(move |value| {
+            RawMetric::new(move |value| {
                 if pcg32::accept_sample(int_sampling_rate) {
-                    let mut buffer = buffer.write().expect("InputBuffer");
-                    buffer.write(&prefix, &suffix, scale, value)
+                    buffer.print(&prefix, &suffix, scale, value)
                 }
             })
         } else {
-            Metric::new(move |value| {
-                let mut buffer = buffer.write().expect("InputBuffer");
-                buffer.write(&prefix, &suffix, scale, value)
+            RawMetric::new(move |value| {
+                buffer.print(&prefix, &suffix, scale, value)
             })
         }
     }
@@ -109,10 +143,25 @@ impl Input for Statsd {
 impl Flush for Statsd {
 
     fn flush(&self) -> error::Result<()> {
-        let mut buffer = self.buffer.write().expect("InputBuffer");
-        Ok(buffer.flush()?)
+        let mut buffer = self.buffer.borrow_mut();
+        if buffer.is_empty() {
+            match self.socket.send(buffer.as_bytes()) {
+                Ok(size) => {
+                    metrics::STATSD_SENT_BYTES.count(size);
+                    trace!("Sent {} bytes to statsd", buffer.len());
+                }
+                Err(e) => {
+                    metrics::STATSD_SEND_ERR.mark();
+                    return Err(e.into())
+                }
+            };
+            buffer.clear();
+        }
+        Ok(())
     }
 }
+
+impl WithBuffering for Statsd {}
 
 impl WithSamplingRate for Statsd {}
 
@@ -125,67 +174,13 @@ impl WithAttributes for Statsd {
 // TODO make configurable?
 const MAX_UDP_PAYLOAD: usize = 576;
 
-/// Wrapped string buffer & socket as one.
-#[derive(Debug)]
-struct InputBuffer {
-    buffer: String,
-    socket: Arc<UdpSocket>,
-    buffering: bool,
-}
 
 /// Any remaining buffered data is flushed on Drop.
-impl Drop for InputBuffer {
+impl Drop for Statsd {
     fn drop(&mut self) {
         if let Err(err) = self.flush() {
             warn!("Couldn't flush statsd buffer on Drop: {}", err)
         }
-    }
-}
-
-impl InputBuffer {
-    fn write(&mut self, prefix: &str, suffix: &str, scale: u64, value: Value) {
-        let scaled_value = value / scale;
-        let value_str = scaled_value.to_string();
-        let entry_len = prefix.len() + value_str.len() + suffix.len();
-
-        if entry_len > self.buffer.capacity() {
-            // TODO report entry too big to fit in buffer (!?)
-            return;
-        }
-
-        let remaining = self.buffer.capacity() - self.buffer.len();
-        if entry_len + 1 > remaining {
-            // buffer is full, flush before appending
-            let _ = self.flush();
-        } else {
-            if !self.buffer.is_empty() {
-                // separate from previous entry
-                self.buffer.push('\n')
-            }
-            self.buffer.push_str(prefix);
-            self.buffer.push_str(&value_str);
-            self.buffer.push_str(suffix);
-        }
-        if self.buffering {
-            let _ = self.flush();
-        }
-    }
-
-    fn flush(&mut self) -> error::Result<()> {
-        if !self.buffer.is_empty() {
-            match self.socket.send(self.buffer.as_bytes()) {
-                Ok(size) => {
-                    metrics::STATSD_SENT_BYTES.count(size);
-                    trace!("Sent {} bytes to statsd", self.buffer.len());
-                }
-                Err(e) => {
-                    metrics::STATSD_SEND_ERR.mark();
-                    return Err(e.into())
-                }
-            };
-            self.buffer.clear();
-        }
-        Ok(())
     }
 }
 
@@ -198,7 +193,7 @@ mod bench {
 
     #[bench]
     pub fn timer_statsd(b: &mut test::Bencher) {
-        let sd = output_statsd("localhost:8125").unwrap().new_input_dyn();
+        let sd = Statsd::output("localhost:8125").unwrap().new_input_dyn();
         let timer = sd.new_metric("timer".into(), Kind::Timer);
 
         b.iter(|| test::black_box(timer.write(2000)));

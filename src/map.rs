@@ -3,11 +3,6 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 
-/// Create a new StatsMap input to capture metrics to a map
-pub fn output_map() -> StatsMap {
-    StatsMap::new()
-}
-
 /// A HashMap wrapper to receive metrics or stats values.
 /// Every received value for a metric replaces the previous one (if any).
 #[derive(Clone)]
@@ -32,15 +27,12 @@ impl RawInput for StatsMap {
     }
 }
 
-impl Flush for StatsMap {
-}
-
-
+impl Flush for StatsMap {}
 
 impl From<StatsMap> for BTreeMap<String, Value> {
     fn from(map: StatsMap) -> Self {
         // FIXME this is is possibly a full map copy, for nothing.
-        // into_inner() is what we'd really want here but would require some `unsafe`
+        // into_inner() is what we'd really want here but would require some `unsafe`? don't know how to do this yet.
         map.inner.borrow().clone()
     }
 }

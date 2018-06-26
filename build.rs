@@ -1,10 +1,10 @@
 #[cfg(feature="skeptic")]
 extern crate skeptic;
 
-#[cfg(feature="protoc-rust")]
+#[cfg(feature="proto")]
 extern crate protoc_rust;
 
-#[cfg(feature="protoc-rust")]
+#[cfg(feature="proto")]
 use protoc_rust as protoc;
 
 fn main() {
@@ -12,17 +12,17 @@ fn main() {
     #[cfg(feature="skeptic")]
     skeptic::generate_doc_tests(&["README.md"]);
 
-    #[cfg(feature="protobuf")]
+    #[cfg(feature="proto, prometheus")]
     protoc::run(protoc::Args {
         out_dir: "src",
+        // "prometheus_proto.rs" is excluded from git
+        // FIXME generate to target/gen_src instead
         input: &["schema/prometheus_proto.proto"],
         includes: &[".", "schema"],
         customize: protoc::Customize {
             ..Default::default()
         },
     }).expect("protoc");
-
-    println!("cargo:rustc-env=RUST_GEN_SRC=../target/gen_src")
 
 }
 

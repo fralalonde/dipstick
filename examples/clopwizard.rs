@@ -10,6 +10,7 @@ extern crate lazy_static;
 use std::time::Duration;
 use dipstick::*;
 use std::thread::sleep;
+use std::io;
 
 metrics!{
     APP = "application" => {
@@ -19,24 +20,24 @@ metrics!{
 
 fn main() {
 
-    let one_minute = input_bucket();
+    let one_minute = Bucket::new();
     one_minute.flush_every(Duration::from_secs(60));
 
-    let five_minutes = input_bucket();
+    let five_minutes = Bucket::new();
     five_minutes.flush_every(Duration::from_secs(300));
 
-    let fifteen_minutes = input_bucket();
+    let fifteen_minutes = Bucket::new();
     fifteen_minutes.flush_every(Duration::from_secs(900));
 
-    let all_buckets = input_multi()
+    let all_buckets = Multi::new()
         .add_input(one_minute)
         .add_input(five_minutes)
         .add_input(fifteen_minutes)
         .add_prefix("machine_name");
 
     // send application metrics to aggregator
-    input_proxy().set_target(all_buckets);
-    Bucket::set_default_output(output_stdout());
+    Proxy::default_root().set_target(all_buckets);
+    Bucket::set_default_output(Text::output(io::stdout()));
     Bucket::set_default_stats(stats_all);
 
     loop {
