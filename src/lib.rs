@@ -27,7 +27,7 @@ pub use error::{Error, Result};
 
 pub mod core;
 pub use core::{Value, Kind, Marker, Timer, Counter, Gauge,
-               Scope, Output, OutputDyn,
+               Flush, Scope, Output, OutputDyn,
                Name, AddPrefix, WithSampling, Sampling, Buffering, WithBuffering,
                WithMetricCache, WithQueue, WithRawQueue, RawScope, RawOutput, RawMetric, UnsafeScope, RawOutputDyn,
                output_none, VoidOutput};
@@ -51,9 +51,6 @@ mod pcg32;
 
 mod scores;
 pub use scores::ScoreType;
-
-//mod statsd;
-//pub use statsd::{StatsdOutput, Statsd};
 
 mod statds;
 pub use statds::{StatsdOutput, Statsd};
@@ -80,11 +77,14 @@ pub use cache::{Cache, CacheOutput};
 mod multi;
 pub use multi::{MultiOutput, Multi};
 
+mod multi_raw;
+pub use multi_raw::{MultiRawOutput, MultiRaw};
+
 mod queue;
 pub use queue::{Queue, QueueOutput};
 
-mod raw_queue;
-pub use raw_queue::{RawQueue, RawQueueOutput};
+mod queue_raw;
+pub use queue_raw::{RawQueue, RawQueueOutput};
 
 mod scheduler;
 pub use scheduler::{set_schedule, CancelHandle, ScheduleFlush};

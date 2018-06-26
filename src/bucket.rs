@@ -69,7 +69,7 @@ impl InnerBucket {
 
         let pub_scope = match self.output {
             Some(ref out) => out.open_scope_raw_dyn(),
-            None => output_none().open_scope_raw_dyn(),
+            None => DEFAULT_AGGREGATE_OUTPUT.read().unwrap().open_scope_raw_dyn(),
         };
 
         self.flush_to(pub_scope.borrow(), stats_fn.as_ref());

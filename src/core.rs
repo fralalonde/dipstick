@@ -4,8 +4,10 @@
 
 use clock::TimeHandle;
 use queue;
-use raw_queue;
+use queue_raw;
 use cache;
+use multi;
+use multi_raw;
 use error;
 
 use std::sync::{Arc, Mutex};
@@ -281,6 +283,46 @@ pub trait Output: OutputDyn + Send + Sync + 'static + Sized {
 
 }
 
+///// Wrap this output behind an asynchronous metrics dispatch queue.
+///// This is not strictly required for multi threading since the provided scopes
+///// are already Send + Sync but might be desired to lower the latency
+//pub trait WithMultiOutput: OutputDyn + Send + Sync + 'static + Sized {
+//    /// Wrap this output with an asynchronous dispatch queue of specified length.
+//    fn add_target<OUT: OutputDyn + Send + Sync + 'static>(self, target: OUT) -> multi::MultiOutput {
+//        multi::Multi::output().add_target(self).add_target(target)
+//    }
+//}
+//
+///// Blanket output concatenation.
+//impl<T: OutputDyn + Send + Sync + 'static + Sized> WithMultiOutput for T {}
+//
+///// Wrap this output behind an asynchronous metrics dispatch queue.
+///// This is not strictly required for multi threading since the provided scopes
+///// are already Send + Sync but might be desired to lower the latency
+//pub trait WithMultiRawOutput: RawOutputDyn + Send + Sync + 'static + Sized {
+//    /// Wrap this output with an asynchronous dispatch queue of specified length.
+//    fn add_raw_target<OUT: RawOutputDyn + Send + Sync + 'static>(self, target: OUT) -> multi_raw::MultiRawOutput {
+//        multi_raw::MultiRaw::output().add_raw_target(self).add_raw_target(target)
+//    }
+//}
+//
+///// Blanket output concatenation.
+//impl<T: RawOutputDyn + Send + Sync + 'static + Sized> WithMultiRawOutput for T {}
+
+
+/// Wrap this output behind an asynchronous metrics dispatch queue.
+/// This is not strictly required for multi threading since the provided scopes
+/// are already Send + Sync but might be desired to lower the latency
+pub trait WithMultiScope: Scope + Send + Sync + 'static + Sized {
+    /// Wrap this output with an asynchronous dispatch queue of specified length.
+    fn add_target<OUT: Scope + Send + Sync + 'static>(self, target: OUT) -> multi::Multi {
+        multi::Multi::new().add_target(self).add_target(target)
+    }
+}
+
+/// Blanket scope concatenation.
+impl<T: Scope + Send + Sync + 'static + Sized> WithMultiScope for T {}
+
 /// Wrap this output behind an asynchronous metrics dispatch queue.
 /// This is not strictly required for multi threading since the provided scopes
 /// are already Send + Sync but might be desired to lower the latency
@@ -389,8 +431,8 @@ pub trait RawOutput: RawOutputDyn + Send + Sync + 'static + Sized {
 /// Wrap this raw output behind an asynchronous metrics dispatch queue.
 pub trait WithRawQueue: RawOutput + Sized {
     /// Wrap this output with an asynchronous dispatch queue of specified length.
-    fn with_async_queue(self, queue_length: usize) -> raw_queue::RawQueueOutput {
-        raw_queue::RawQueueOutput::new(self, queue_length)
+    fn with_async_queue(self, queue_length: usize) -> queue_raw::RawQueueOutput {
+        queue_raw::RawQueueOutput::new(self, queue_length)
     }
 }
 
