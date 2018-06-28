@@ -1,38 +1,56 @@
 # dipstick
-A quick, modular metrics toolkit for Rust applications of all types. Similar to popular logging frameworks,
-but with counters, markers, gauges and timers.
+Configurable structured metrics library for Rust applications. 
+Like logging frameworks but with counters, markers, gauges and timers.
 
 [![Build Status](https://travis-ci.org/fralalonde/dipstick.svg?branch=master)](https://travis-ci.org/fralalonde/dipstick)
 [![crates.io](https://img.shields.io/crates/v/dipstick.svg)](https://crates.io/crates/dipstick)
  
-Dipstick's main attraction is the ability to send metrics to multiple customized outputs.
-For example, metrics could be written immediately to the log _and_ 
-sent over the network after a period of aggregation.
-
-Dipstick promotes structured metrics for clean, safe code and good performance.
- 
-Dipstick builds on stable Rust with minimal dependencies. 
-
 ## Features
 
   - Send metrics to stdout, log, statsd or graphite (one or many)
-  - Synchronous, asynchronous or mixed operation
-  - Optional fast random statistical sampling
-  - Immediate propagation or local aggregation of metrics (count, sum, average, min/max)
-  - Periodic or programmatic publication of aggregated metrics
-  - Customizable output statistics and formatting
+  - Synchronous or asynchronous operation
+  - Local aggregation with periodical publication (scheduled or manual) 
+  - Customizable statistics and formatting
   - Global or scoped (e.g. per request) metrics
   - Per-application and per-output metric namespaces
-   
-## Examples
+  - Random statistical sampling (statsd)
+  - Builds on stable Rust with minimal, feature-gated dependencies.
+  
+# Goals
 
-For complete applications see the [examples](https://github.com/fralalonde/dipstick/tree/master/examples).
+Dipstick aims to be the one-stop shop for metrics collection in Rust applications. As such, it strives to offer the nicest, 
+Rustiest API, good performance and output drivers for most metrics systems. 
+
+# Anti-goals
+
+Dipstick will not calculate ad-hoc statistics, plot graphs or send alerts. 
+It will also not fix your motorcycle (check your coils).   
+   
+## What it looks like
+
+Here's a basic aggregate & auto-publish counter metric:   
+
+```$rust,skt-run
+let metrics = Bucket::new();
+metrics.set_target(Text::output(io::stdout()));
+metrics.flush_every(Duration::from_secs(3));
+let counter = metrics.counter("counter_a");
+counter.count(8)
+```
+
+Bigger apps will probably want to take advantage of the `metrics!` macro:
+
+```$rust
+
+```
+
+For sample applications see the [examples](https://github.com/fralalonde/dipstick/tree/master/examples).
 
 To use Dipstick in your project, add the following line to your `Cargo.toml`
 in the `[dependencies]` section:
 
 ```toml
-dipstick = "0.6.5"
+dipstick = "0.7.0-alpha.0"
 ```
 
 Then add it to your code:
