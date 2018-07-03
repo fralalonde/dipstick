@@ -30,6 +30,6 @@ fn main() {
         });
     }
     sleep(Duration::from_secs(5));
-    bucket.flush_to(&Text::output(io::stdout()).open_scope_raw(), &stats_all).unwrap();
+    bucket.flush_to(&Text::write_to(io::stdout()).output(), &stats_all).unwrap();
 
 }

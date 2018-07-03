@@ -1,6 +1,6 @@
 //! Decouple metric definition from configuration with trait objects.
 
-use core::{Name, AddPrefix, Kind, Scope, InputMetric, NO_METRIC_OUTPUT, WithAttributes, Attributes, Flush};
+use core::{Name, AddPrefix, Kind, InputScope, InputMetric, NO_METRIC_OUTPUT, WithAttributes, Attributes, Flush};
 use error;
 
 use std::collections::{HashMap, BTreeMap};
@@ -59,7 +59,7 @@ impl Proxy {
 
 struct InnerProxy {
     // namespaces can target one, many or no metrics
-    targets: HashMap<Name, Arc<Scope + Send + Sync>>,
+    targets: HashMap<Name, Arc<InputScope + Send + Sync>>,
     // last part of the namespace is the metric's name
     metrics: BTreeMap<Name, Weak<ProxyMetric>>,
 }
@@ -80,7 +80,7 @@ impl InnerProxy {
         }
     }
 
-    fn set_target(&mut self, target_name: Name, target_scope: Arc<Scope + Send + Sync>) {
+    fn set_target(&mut self, target_name: Name, target_scope: Arc<InputScope + Send + Sync>) {
         self.targets.insert(target_name.clone(), target_scope.clone());
         for (metric_name, metric) in self.metrics.range_mut(target_name.clone()..) {
             if let Some(metric) = metric.upgrade() {
@@ -96,7 +96,7 @@ impl InnerProxy {
         }
     }
 
-    fn get_effective_target(&self, name: &Name) -> Option<(Arc<Scope + Send + Sync>, usize)> {
+    fn get_effective_target(&self, name: &Name) -> Option<(Arc<InputScope + Send + Sync>, usize)> {
         if let Some(target) = self.targets.get(name) {
             return Some((target.clone(), name.len()));
         }
@@ -118,7 +118,7 @@ impl InnerProxy {
         }
 
         let (up_target, up_nslen) = self.get_effective_target(namespace)
-            .unwrap_or_else(|| (NO_METRIC_OUTPUT.open_scope_dyn(), 0));
+            .unwrap_or_else(|| (NO_METRIC_OUTPUT.input_dyn(), 0));
 
         // update all affected metrics to next upper targeted namespace
         for (name, metric) in self.metrics.range_mut(namespace..) {
@@ -166,7 +166,7 @@ impl Proxy {
     }
 
     /// Replace target for this proxy and it's children.
-    pub fn set_target<IS: Scope + Send + Sync + 'static>(&self, target: IS) {
+    pub fn set_target<T: InputScope + Send + Sync + 'static>(&self, target: T) {
         let mut inner = self.inner.write().expect("Dispatch Lock");
         inner.set_target(self.get_namespace().clone(), Arc::new(target));
     }
@@ -178,7 +178,7 @@ impl Proxy {
     }
 
     /// Replace target for this proxy and it's children.
-    pub fn set_default_target<IS: Scope + Send + Sync + 'static>(target: IS) {
+    pub fn set_default_target<T: InputScope + Send + Sync + 'static>(target: T) {
         ROOT_PROXY.set_target(target)
     }
 
@@ -195,7 +195,7 @@ impl<S: AsRef<str>> From<S> for Proxy {
     }
 }
 
-impl Scope for Proxy {
+impl InputScope for Proxy {
     /// Lookup or create a proxy stub for the requested metric.
     fn new_metric(&self, name: Name, kind: Kind) -> InputMetric {
         let name = self.qualified_name(name);
@@ -209,7 +209,7 @@ impl Scope for Proxy {
                 let name2 = name.clone();
                 // not found, define new
                 let (target, target_namespace_length) = inner.get_effective_target(&name)
-                    .unwrap_or_else(|| (NO_METRIC_OUTPUT.open_scope_dyn(), 0));
+                    .unwrap_or_else(|| (NO_METRIC_OUTPUT.input_dyn(), 0));
                 let metric_object = target.new_metric(name.clone(), kind);
                 let proxy = Arc::new(ProxyMetric {
                     name,

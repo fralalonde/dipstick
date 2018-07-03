@@ -1,8 +1,21 @@
 //! Dispatch metrics to multiple sinks.
 
-use core::{Input, Scope, Name, AddPrefix, InputDyn, Kind, InputMetric, WithAttributes, Attributes, Flush};
+use core::{Input, InputScope, Name, AddPrefix, Kind, InputMetric, WithAttributes, Attributes, Flush, InputDyn};
 use error;
 use std::sync::Arc;
+
+/// Wrap this output behind an asynchronous metrics dispatch queue.
+/// This is not strictly required for multi threading since the provided scopes
+/// are already Send + Sync but might be desired to lower the latency
+pub trait WithMultiInputScope: InputScope + Send + Sync + 'static + Sized {
+    /// Wrap this output with an asynchronous dispatch queue of specified length.
+    fn add_target<OUT: InputScope + Send + Sync + 'static>(self, target: OUT) -> MultiInputScope {
+        MultiInputScope::new().add_target(self).add_target(target)
+    }
+}
+
+/// Blanket scope concatenation.
+impl<T: InputScope + Send + Sync + 'static + Sized> WithMultiInputScope for T {}
 
 /// Opens multiple scopes at a time from just as many outputs.
 #[derive(Clone)]
@@ -14,8 +27,8 @@ pub struct MultiInput {
 impl Input for MultiInput {
     type SCOPE = MultiInputScope;
 
-    fn open_scope(&self) -> Self::SCOPE {
-        let scopes = self.outputs.iter().map(|out| out.open_scope_dyn()).collect();
+    fn input(&self) -> Self::SCOPE {
+        let scopes = self.outputs.iter().map(|out| out.input_dyn()).collect();
         MultiInputScope {
             attributes: self.attributes.clone(),
             scopes,
@@ -24,8 +37,17 @@ impl Input for MultiInput {
 }
 
 impl MultiInput {
+
+    /// Create a new multi-output.
+    pub fn inputs() -> MultiInput {
+        MultiInput {
+            attributes: Attributes::default(),
+            outputs: vec![],
+        }
+    }
+
     /// Returns a clone of the dispatch with the new output added to the list.
-    pub fn add_target<OUT: InputDyn + Send + Sync + 'static>(&self, out: OUT) -> Self {
+    pub fn add_target<OUT: Input + Send + Sync + 'static>(&self, out: OUT) -> Self {
         let mut cloned = self.clone();
         cloned.outputs.push(Arc::new(out));
         cloned
@@ -41,7 +63,7 @@ impl WithAttributes for MultiInput {
 #[derive(Clone)]
 pub struct MultiInputScope {
     attributes: Attributes,
-    scopes: Vec<Arc<Scope + Send + Sync>>,
+    scopes: Vec<Arc<InputScope + Send + Sync>>,
 }
 
 impl MultiInputScope {
@@ -53,23 +75,15 @@ impl MultiInputScope {
         }
     }
 
-    /// Create a new multi-output.
-    pub fn output() -> MultiInput {
-        MultiInput {
-            attributes: Attributes::default(),
-            outputs: vec![],
-        }
-    }
-
     /// Returns a clone of the dispatch with the new output added to the list.
-    pub fn add_target<IN: Scope + Send + Sync + 'static>(&self, scope: IN) -> Self {
+    pub fn add_target<IN: InputScope + Send + Sync + 'static>(&self, scope: IN) -> Self {
         let mut cloned = self.clone();
         cloned.scopes.push(Arc::new(scope));
         cloned
     }
 }
 
-impl Scope for MultiInputScope {
+impl InputScope for MultiInputScope {
     fn new_metric(&self, name: Name, kind: Kind) -> InputMetric {
         let ref name = self.qualified_name(name);
         let metrics: Vec<InputMetric> = self.scopes.iter()

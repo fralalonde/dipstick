@@ -2,7 +2,7 @@
 //! Because the possibly high volume of data, this is pre-set to use aggregation.
 //! This is also kept in a separate module because it is not to be exposed outside of the crate.
 
-use core::{Marker, AddPrefix, Scope, Counter};
+use core::{Marker, AddPrefix, InputScope, Counter};
 use proxy::Proxy;
 
 metrics!{

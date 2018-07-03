@@ -27,10 +27,10 @@ pub use error::{Error, Result};
 
 pub mod core;
 pub use core::{Value, Kind, Marker, Timer, Counter, Gauge,
-               Flush, Scope, Input, InputDyn,
+               Flush, InputScope, Input, WithAttributes,
                Name, AddPrefix, WithSampling, Sampling, Buffering, WithBuffering,
-               WithMetricCache, WithQueue, WithOutputQueue, OutputScope, Output, OutputMetric, UnsafeScope, OutputDyn,
-               output_none, VoidOutput};
+               OutputScope, Output, OutputMetric, UnsafeScope,
+               output_none, Void};
 
 #[macro_use]
 pub mod macros;
@@ -42,10 +42,10 @@ mod bucket;
 pub use bucket::{Bucket, stats_summary, stats_all, stats_average};
 
 mod text;
-pub use text::{TextOutput, Text};
+pub use text::{Text, TextScope};
 
 mod logging;
-pub use logging::{LogOutput, Log};
+pub use logging::{Log, LogScope};
 
 mod pcg32;
 
@@ -53,17 +53,17 @@ mod scores;
 pub use scores::ScoreType;
 
 mod statds;
-pub use statds::{StatsdOutput, Statsd};
+pub use statds::{Statsd, StatsdScope};
 
 mod graphite;
-pub use graphite::{GraphiteOutput, Graphite};
+pub use graphite::{Graphite, GraphiteScope};
 
 #[cfg(feature="prometheus")]
 mod prometheus;
 #[cfg(feature="prometheus, proto")]
 mod prometheus_proto;
 #[cfg(feature="prometheus")]
-pub use prometheus::{Prometheus, PrometheusOutput};
+pub use prometheus::{PrometheusScope, Prometheus};
 
 mod map;
 pub use map::StatsMap;
@@ -71,8 +71,11 @@ pub use map::StatsMap;
 mod socket;
 pub use socket::RetrySocket;
 
-mod cache;
-pub use cache::{Cache, CacheOutput};
+mod cache_in;
+pub use cache_in::{InputScopeCache, InputCache, WithInputCache};
+
+mod cache_out;
+pub use cache_out::{OutputScopeCache, OutputCache, WithOutputCache};
 
 mod multi_in;
 pub use multi_in::{MultiInput, MultiInputScope};
@@ -81,10 +84,10 @@ mod multi_out;
 pub use multi_out::{MultiOutput, MultiOutputScope};
 
 mod queue_in;
-pub use queue_in::{InputQueueScope, InputQueue};
+pub use queue_in::{InputQueueScope, InputQueue, WithInputQueue};
 
 mod queue_out;
-pub use queue_out::{OutputQueueScope, OutputQueue};
+pub use queue_out::{OutputQueueScope, OutputQueue, WithOutputQueue};
 
 mod scheduler;
 pub use scheduler::{set_schedule, CancelHandle, ScheduleFlush};

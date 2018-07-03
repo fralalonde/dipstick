@@ -9,12 +9,12 @@ use std::io;
 use dipstick::*;
 
 fn main() {
-    let output = Text::output(io::stdout()).with_buffering(Buffering::Unlimited);
+    let input = Text::write_to(io::stdout()).with_buffering(Buffering::Unlimited);
 
     loop {
         println!("\n------- open scope");
 
-        let metrics = output.open_scope();
+        let metrics = input.input();
 
         metrics.marker("marker_a").mark();
 

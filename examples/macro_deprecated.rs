@@ -28,7 +28,7 @@
 //);
 
 fn main() {
-//    let mmm: &OutputDyn = &to_stdout();
+//    let mmm: &Output = &to_stdout();
 //
 //    loop {
 //        DIFFERENT_TYPES.counter("counter_a").count(123);

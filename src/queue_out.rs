@@ -1,14 +1,24 @@
 //! Queue metrics for write on a separate thread,
 //! RawMetrics definitions are still synchronous.
 //! If queue size is exceeded, calling code reverts to blocking.
-use core::{Value, OutputMetric, Name, Kind, AddPrefix, OutputDyn,
-           WithAttributes, Attributes, Scope, Input, InputMetric, UnsafeScope, Flush};
+use core::{Value, OutputMetric, Name, Kind, AddPrefix, Output, OutputDyn,
+           WithAttributes, Attributes, InputScope, Input, InputMetric, UnsafeScope, Flush};
 use error;
 use metrics;
 
 use std::sync::Arc;
 use std::sync::mpsc;
 use std::thread;
+
+use cache_in;
+
+/// Wrap this raw output behind an asynchronous metrics dispatch queue.
+pub trait WithOutputQueue: Output + Sized {
+    /// Wrap this output with an asynchronous dispatch queue of specified length.
+    fn with_queue(self, queue_length: usize) -> OutputQueue {
+        OutputQueue::new(self, queue_length)
+    }
+}
 
 fn new_async_channel(length: usize) -> Arc<mpsc::SyncSender<OutputQueueCmd>> {
     let (sender, receiver) = mpsc::sync_channel::<OutputQueueCmd>(length);
@@ -37,16 +47,16 @@ fn new_async_channel(length: usize) -> Arc<mpsc::SyncSender<OutputQueueCmd>> {
 pub struct OutputQueue {
     attributes: Attributes,
     target: Arc<OutputDyn + Send + Sync + 'static>,
-    sender: Arc<mpsc::SyncSender<OutputQueueCmd>>,
+    q_sender: Arc<mpsc::SyncSender<OutputQueueCmd>>,
 }
 
 impl OutputQueue {
     /// Wrap new scopes with an asynchronous metric write & flush dispatcher.
-    pub fn new<OUT: OutputDyn + Send + Sync + 'static>(target: OUT, queue_length: usize) -> Self {
+    pub fn new<OUT: Output + Send + Sync + 'static>(target: OUT, queue_length: usize) -> Self {
         OutputQueue {
             attributes: Attributes::default(),
             target: Arc::new(target),
-            sender: new_async_channel(queue_length),
+            q_sender: new_async_channel(queue_length),
         }
     }
 }
@@ -56,15 +66,17 @@ impl WithAttributes for OutputQueue {
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
+impl cache_in::WithInputCache for OutputQueue {}
+
 impl Input for OutputQueue {
     type SCOPE = OutputQueueScope;
 
     /// Wrap new scopes with an asynchronous metric write & flush dispatcher.
-    fn open_scope(&self) -> Self::SCOPE {
-        let target_scope = UnsafeScope::new(self.target.open_scope_raw_dyn());
+    fn input(&self) -> Self::SCOPE {
+        let target_scope = UnsafeScope::new(self.target.output_dyn());
         OutputQueueScope {
             attributes: self.attributes.clone(),
-            sender: self.sender.clone(),
+            sender: self.q_sender.clone(),
             target: Arc::new(target_scope),
         }
     }
@@ -92,10 +104,10 @@ impl WithAttributes for OutputQueueScope {
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
-impl Scope for OutputQueueScope {
+impl InputScope for OutputQueueScope {
     fn new_metric(&self, name: Name, kind:Kind) -> InputMetric {
         let name = self.qualified_name(name);
-        let target_metric = Arc::new(self.target.new_metric_raw(name, kind));
+        let target_metric = Arc::new(self.target.new_metric(name, kind));
         let sender = self.sender.clone();
         InputMetric::new(move |value| {
             if let Err(e) = sender.send(OutputQueueCmd::Write(target_metric.clone(), value)) {

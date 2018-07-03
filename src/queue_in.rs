@@ -1,14 +1,25 @@
 //! Queue metrics for write on a separate thread,
 //! Metrics definitions are still synchronous.
 //! If queue size is exceeded, calling code reverts to blocking.
-use core::{Scope, Value, InputMetric, Name, Kind, AddPrefix, InputDyn, Input,
-           WithAttributes, Attributes, WithMetricCache, Flush};
+use core::{InputScope, Value, InputMetric, Name, Kind, AddPrefix, Input,
+           WithAttributes, Attributes, Flush, InputDyn};
 use error;
 use metrics;
+use cache_in::WithInputCache;
 
 use std::sync::Arc;
 use std::sync::mpsc;
 use std::thread;
+
+/// Wrap this output behind an asynchronous metrics dispatch queue.
+/// This is not strictly required for multi threading since the provided scopes
+/// are already Send + Sync but might be desired to lower the latency
+pub trait WithInputQueue: Input + Send + Sync + 'static + Sized {
+    /// Wrap this output with an asynchronous dispatch queue of specified length.
+    fn with_queue(self, queue_length: usize) -> InputQueue {
+        InputQueue::new(self, queue_length)
+    }
+}
 
 fn new_async_channel(length: usize) -> Arc<mpsc::SyncSender<InputQueueCmd>> {
     let (sender, receiver) = mpsc::sync_channel::<InputQueueCmd>(length);
@@ -41,7 +52,7 @@ pub struct InputQueue {
 
 impl InputQueue {
     /// Wrap new scopes with an asynchronous metric write & flush dispatcher.
-    pub fn new<OUT: InputDyn + Send + Sync + 'static>(target: OUT, queue_length: usize) -> Self {
+    pub fn new<OUT: Input + Send + Sync + 'static>(target: OUT, queue_length: usize) -> Self {
         InputQueue {
             attributes: Attributes::default(),
             target: Arc::new(target),
@@ -50,7 +61,7 @@ impl InputQueue {
     }
 }
 
-impl WithMetricCache for InputQueue {}
+impl WithInputCache for InputQueue {}
 
 impl WithAttributes for InputQueue {
     fn get_attributes(&self) -> &Attributes { &self.attributes }
@@ -61,8 +72,8 @@ impl Input for InputQueue {
     type SCOPE = InputQueueScope;
 
     /// Wrap new scopes with an asynchronous metric write & flush dispatcher.
-    fn open_scope(&self) -> Self::SCOPE {
-        let target_scope = self.target.open_scope_dyn();
+    fn input(&self) -> Self::SCOPE {
+        let target_scope = self.target.input_dyn();
         InputQueueScope {
             attributes: self.attributes.clone(),
             sender: self.sender.clone(),
@@ -75,7 +86,7 @@ impl Input for InputQueue {
 /// Async commands should be of no concerns to applications.
 pub enum InputQueueCmd {
     Write(InputMetric, Value),
-    Flush(Arc<Scope + Send + Sync + 'static>),
+    Flush(Arc<InputScope + Send + Sync + 'static>),
 }
 
 /// A metric scope wrapper that sends writes & flushes over a Rust sync channel.
@@ -84,12 +95,12 @@ pub enum InputQueueCmd {
 pub struct InputQueueScope {
     attributes: Attributes,
     sender: Arc<mpsc::SyncSender<InputQueueCmd>>,
-    target: Arc<Scope + Send + Sync + 'static>,
+    target: Arc<InputScope + Send + Sync + 'static>,
 }
 
 impl InputQueueScope {
     /// Wrap new scopes with an asynchronous metric write & flush dispatcher.
-    pub fn wrap<SC: Scope + Send + Sync + 'static>(target_scope: SC, queue_length: usize) -> Self {
+    pub fn wrap<SC: InputScope + Send + Sync + 'static>(target_scope: SC, queue_length: usize) -> Self {
         InputQueueScope {
             attributes: Attributes::default(),
             sender: new_async_channel(queue_length),
@@ -103,7 +114,7 @@ impl WithAttributes for InputQueueScope {
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
-impl Scope for InputQueueScope {
+impl InputScope for InputQueueScope {
     fn new_metric(&self, name: Name, kind:Kind) -> InputMetric {
         let name = self.qualified_name(name);
         let target_metric = self.target.new_metric(name, kind);

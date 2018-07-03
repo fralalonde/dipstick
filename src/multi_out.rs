@@ -1,6 +1,6 @@
 //! Dispatch metrics to multiple sinks.
 
-use core::{Output, OutputScope, Name, AddPrefix, OutputDyn, Kind, OutputMetric, WithAttributes, Attributes, Flush};
+use core::{Output, OutputScope, Name, AddPrefix, Kind, OutputMetric, WithAttributes, Attributes, Flush, OutputDyn};
 use error;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -15,8 +15,8 @@ pub struct MultiOutput {
 impl Output for MultiOutput {
     type SCOPE = MultiOutputScope;
 
-    fn open_scope_raw(&self) -> Self::SCOPE {
-        let scopes = self.outputs.iter().map(|out| out.open_scope_raw_dyn()).collect();
+    fn output(&self) -> Self::SCOPE {
+        let scopes = self.outputs.iter().map(|out| out.output_dyn()).collect();
         MultiOutputScope {
             attributes: self.attributes.clone(),
             scopes,
@@ -25,9 +25,16 @@ impl Output for MultiOutput {
 }
 
 impl MultiOutput {
+    /// Create a new multi-output.
+    pub fn metrics() -> MultiOutput {
+        MultiOutput {
+            attributes: Attributes::default(),
+            outputs: vec![],
+        }
+    }
 
     /// Returns a clone of the dispatch with the new output added to the list.
-    pub fn add_raw_target<OUT: OutputDyn + Send + Sync + 'static>(&self, out: OUT) -> Self {
+    pub fn add_target<OUT: Output + Send + Sync + 'static>(&self, out: OUT) -> Self {
         let mut cloned = self.clone();
         cloned.outputs.push(Arc::new(out));
         cloned
@@ -55,16 +62,8 @@ impl MultiOutputScope {
         }
     }
 
-    /// Create a new multi-output.
-    pub fn output() -> MultiOutput {
-        MultiOutput {
-            attributes: Attributes::default(),
-            outputs: vec![],
-        }
-    }
-
     /// Returns a clone of the dispatch with the new output added to the list.
-    pub fn add_raw_target<IN: OutputScope + 'static>(&self, scope: IN) -> Self {
+    pub fn add_target<IN: OutputScope + 'static>(&self, scope: IN) -> Self {
         let mut cloned = self.clone();
         cloned.scopes.push(Rc::new(scope));
         cloned
@@ -72,10 +71,10 @@ impl MultiOutputScope {
 }
 
 impl OutputScope for MultiOutputScope {
-    fn new_metric_raw(&self, name: Name, kind: Kind) -> OutputMetric {
+    fn new_metric(&self, name: Name, kind: Kind) -> OutputMetric {
         let ref name = self.qualified_name(name);
         let metrics: Vec<OutputMetric> = self.scopes.iter()
-            .map(move |scope| scope.new_metric_raw(name.clone(), kind))
+            .map(move |scope| scope.new_metric(name.clone(), kind))
             .collect();
         OutputMetric::new(move |value| for metric in &metrics {
             metric.write(value)

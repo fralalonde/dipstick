@@ -11,7 +11,7 @@ use std::thread::sleep;
 
 fn main() {
     let bucket = Bucket::new();
-    Bucket::set_default_target(Text::output(io::stdout()));
+    Bucket::set_default_target(Text::write_to(io::stdout()));
 
     let persistent_marker = bucket.marker("persistent");
 
