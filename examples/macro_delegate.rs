@@ -39,7 +39,7 @@ metrics!(LIB_METRICS => {
 });
 
 fn main() {
-    Proxy::set_default_target(Text::output(io::stdout()).open_scope());
+    Proxy::set_default_target(Text::write_to(io::stdout()).input());
 
     loop {
         ROOT_COUNTER.count(123);

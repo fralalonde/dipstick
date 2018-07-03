@@ -19,7 +19,7 @@ metrics!{
 
 fn main() {
     Proxy::set_default_target(
-        Text::output(io::stdout()).with_async_queue(100).open_scope());
+        Text::write_to(io::stdout()).with_queue(100).input());
     for _ in 0..4 {
         thread::spawn(move || {
             loop {

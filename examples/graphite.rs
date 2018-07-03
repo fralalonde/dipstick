@@ -8,10 +8,10 @@ use std::time::Duration;
 
 fn main() {
     let metrics =
-        Graphite::output("localhost:2003")
+        Graphite::send_to("localhost:2003")
             .expect("Connected")
             .add_prefix("my_app")
-            .open_scope();
+            .input();
 
     loop {
         metrics.counter("counter_a").count(123);

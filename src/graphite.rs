@@ -18,16 +18,16 @@ use std::cell::{RefCell, RefMut};
 /// Graphite output holds a socket to a graphite server.
 /// The socket is shared between scopes opened from the output.
 #[derive(Clone, Debug)]
-pub struct GraphiteOutput {
+pub struct Graphite {
     attributes: Attributes,
     socket: Arc<RwLock<RetrySocket>>,
 }
 
-impl Output for GraphiteOutput {
-    type SCOPE = Graphite;
+impl Output for Graphite {
+    type SCOPE = GraphiteScope;
 
-    fn open_scope_raw(&self) -> Graphite {
-        Graphite {
+    fn output(&self) -> Self::SCOPE {
+        GraphiteScope {
             attributes: self.attributes.clone(),
             buffer: Rc::new(RefCell::new(String::new())),
             socket: self.socket.clone(),
@@ -35,40 +35,37 @@ impl Output for GraphiteOutput {
     }
 }
 
-impl WithAttributes for GraphiteOutput {
-    fn get_attributes(&self) -> &Attributes { &self.attributes }
-    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
-}
-
-impl WithBuffering for GraphiteOutput {}
-
-impl WithMetricCache for GraphiteOutput {}
-impl WithQueue for GraphiteOutput {}
-
-/// Graphite Input
-#[derive(Debug, Clone)]
-pub struct Graphite {
-    attributes: Attributes,
-    buffer: Rc<RefCell<String>>,
-    socket: Arc<RwLock<RetrySocket>>,
-}
-
 impl Graphite {
     /// Send metrics to a graphite server at the address and port provided.
-    pub fn output<A: ToSocketAddrs + Debug + Clone>(address: A) -> error::Result<GraphiteOutput> {
+    pub fn send_to<A: ToSocketAddrs + Debug + Clone>(address: A) -> error::Result<Graphite> {
         debug!("Connecting to graphite {:?}", address);
         let socket = Arc::new(RwLock::new(RetrySocket::new(address.clone())?));
 
-        Ok(GraphiteOutput {
+        Ok(Graphite {
             attributes: Attributes::default(),
             socket,
         })
     }
 }
 
-impl OutputScope for Graphite {
+impl WithAttributes for Graphite {
+    fn get_attributes(&self) -> &Attributes { &self.attributes }
+    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
+}
+
+impl WithBuffering for Graphite {}
+
+/// Graphite Input
+#[derive(Debug, Clone)]
+pub struct GraphiteScope {
+    attributes: Attributes,
+    buffer: Rc<RefCell<String>>,
+    socket: Arc<RwLock<RetrySocket>>,
+}
+
+impl OutputScope for GraphiteScope {
     /// Define a metric of the specified type.
-    fn new_metric_raw(&self, name: Name, kind: Kind) -> OutputMetric {
+    fn new_metric(&self, name: Name, kind: Kind) -> OutputMetric {
         let mut prefix = self.qualified_name(name).join(".");
         prefix.push(' ');
 
@@ -87,7 +84,7 @@ impl OutputScope for Graphite {
     }
 }
 
-impl Flush for Graphite {
+impl Flush for GraphiteScope {
 
     fn flush(&self) -> error::Result<()> {
         let buf = self.buffer.borrow_mut();
@@ -95,7 +92,7 @@ impl Flush for Graphite {
     }
 }
 
-impl Graphite {
+impl GraphiteScope {
     fn print(&self, metric: &GraphiteMetric, value: Value)  {
         let scaled_value = value / metric.scale;
         let value_str = scaled_value.to_string();
@@ -151,12 +148,18 @@ impl Graphite {
     }
 }
 
-impl WithAttributes for Graphite {
+impl WithAttributes for GraphiteScope {
     fn get_attributes(&self) -> &Attributes { &self.attributes }
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
-impl WithBuffering for Graphite {}
+impl WithBuffering for GraphiteScope {}
+
+use queue_out;
+use cache_out;
+
+impl queue_out::WithOutputQueue for Graphite {}
+impl cache_out::WithOutputCache for Graphite {}
 
 /// Its hard to see how a single scope could get more metrics than this.
 // TODO make configurable?
@@ -170,7 +173,7 @@ pub struct GraphiteMetric {
 }
 
 /// Any remaining buffered data is flushed on Drop.
-impl Drop for Graphite {
+impl Drop for GraphiteScope {
     fn drop(&mut self) {
         if let Err(err) = self.flush() {
             warn!("Could not flush graphite metrics upon Drop: {}", err)
@@ -187,17 +190,17 @@ mod bench {
 
     #[bench]
     pub fn immediate_graphite(b: &mut test::Bencher) {
-        let sd = Graphite::output("localhost:2003").unwrap().open_scope_raw();
-        let timer = sd.new_metric_raw("timer".into(), Kind::Timer);
+        let sd = Graphite::send_to("localhost:2003").unwrap().input();
+        let timer = sd.new_metric("timer".into(), Kind::Timer);
 
         b.iter(|| test::black_box(timer.write(2000)));
     }
 
     #[bench]
     pub fn buffering_graphite(b: &mut test::Bencher) {
-        let sd = Graphite::output("localhost:2003").unwrap()
-            .with_buffering(Buffering::BufferSize(65465)).open_scope_raw();
-        let timer = sd.new_metric_raw("timer".into(), Kind::Timer);
+        let sd = Graphite::send_to("localhost:2003").unwrap()
+            .with_buffering(Buffering::BufferSize(65465)).input();
+        let timer = sd.new_metric("timer".into(), Kind::Timer);
 
         b.iter(|| test::black_box(timer.write(2000)));
     }

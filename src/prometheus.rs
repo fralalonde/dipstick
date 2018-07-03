@@ -9,6 +9,7 @@ use core::*;
 use error;
 
 use std::net::ToSocketAddrs;
+use std::sync::Arc;
 
 #[cfg(feature="proto")]
 use prometheus_proto as proto;
@@ -17,36 +18,37 @@ metrics!{
 }
 
 /// Prometheus push shared client
-pub struct PrometheusOutput {
+pub struct Prometheus {
 }
 
-impl Output for PrometheusOutput {
-    type SCOPE = Prometheus;
-    fn open_scope_raw(&self) -> Self::SCOPE {
-        Prometheus {}
+impl Output for Prometheus {
+    type SCOPE = PrometheusScope;
+
+    fn output(&self) -> Arc<Input + Send + Sync + 'static> {
+        PrometheusScope {}
     }
 }
 
 /// Prometheus push client scope
-pub struct Prometheus {
+pub struct PrometheusScope {
 }
 
-impl Prometheus {
+impl PrometheusScope {
     /// Send metrics to a prometheus server at the address and port provided.
-    pub fn output<ADDR: ToSocketAddrs>(_address: ADDR) -> error::Result<PrometheusOutput> {
-        Ok(PrometheusOutput{})
+    pub fn output<ADDR: ToSocketAddrs>(_address: ADDR) -> error::Result<Prometheus> {
+        Ok(Prometheus {})
     }
 }
 
-impl OutputScope for Prometheus {
+impl OutputScope for PrometheusScope {
 
     /// Define a metric of the specified type.
-    fn new_metric_raw(&self, _name: Name, _kind: Kind) -> OutputMetric {
+    fn new_metric(&self, _name: Name, _kind: Kind) -> OutputMetric {
         OutputMetric::new(|_value| {})
     }
 }
 
-impl Flush for Prometheus {
+impl Flush for PrometheusScope {
 
     /// Flush does nothing by default.
     fn flush(&self) -> error::Result<()> {

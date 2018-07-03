@@ -1,7 +1,7 @@
 //! Maintain aggregated metrics for deferred reporting,
 //!
-use core::{Kind, Value, Name, AddPrefix, output_none, Scope, InputMetric, WithAttributes, Attributes,
-           OutputScope, OutputMetric, OutputDyn, Flush};
+use core::{Kind, Value, Name, AddPrefix, output_none, InputScope, InputMetric, WithAttributes, Attributes,
+           OutputScope, OutputMetric, Output, Flush, OutputDyn};
 use clock::TimeHandle;
 use core::Kind::*;
 use error;
@@ -68,8 +68,8 @@ impl InnerBucket {
         };
 
         let pub_scope = match self.output {
-            Some(ref out) => out.open_scope_raw_dyn(),
-            None => DEFAULT_AGGREGATE_OUTPUT.read().unwrap().open_scope_raw_dyn(),
+            Some(ref out) => out.output_dyn(),
+            None => DEFAULT_AGGREGATE_OUTPUT.read().unwrap().output_dyn(),
         };
 
         self.flush_to(pub_scope.borrow(), stats_fn.as_ref())?;
@@ -118,7 +118,7 @@ impl InnerBucket {
                 for score in metric.2 {
                     let filtered = (stats_fn)(metric.1, metric.0.clone(), score);
                     if let Some((kind, name, value)) = filtered {
-                        let metric: OutputMetric = publish_scope.new_metric_raw(name, kind);
+                        let metric: OutputMetric = publish_scope.new_metric(name, kind);
                         metric.write(value)
                     }
                 }
@@ -164,7 +164,7 @@ impl Bucket {
     }
 
     /// Install a new receiver for all aggregateed metrics, replacing any previous receiver.
-    pub fn set_default_target(default_config: impl OutputDyn + Send + Sync + 'static) {
+    pub fn set_default_target(default_config: impl Output + Send + Sync + 'static) {
         *DEFAULT_AGGREGATE_OUTPUT.write().unwrap() = Arc::new(default_config);
     }
 
@@ -187,7 +187,7 @@ impl Bucket {
     }
 
     /// Install a new receiver for all aggregated metrics, replacing any previous receiver.
-    pub fn set_target(&self, new_config: impl OutputDyn + Send + Sync + 'static) {
+    pub fn set_target(&self, new_config: impl Output + Send + Sync + 'static) {
         self.inner.write().expect("Aggregator").output = Some(Arc::new(new_config))
     }
 
@@ -204,7 +204,7 @@ impl Bucket {
 
 }
 
-impl Scope for Bucket {
+impl InputScope for Bucket {
     /// Lookup or create a scoreboard for the requested metric.
     fn new_metric(&self, name: Name, kind: Kind) -> InputMetric {
         let scoreb = self.inner

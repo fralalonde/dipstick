@@ -2,7 +2,7 @@
 
 // TODO parameterize templates
 use core::{Name, AddPrefix, Value, Kind, OutputScope, WithAttributes, Attributes,
-           WithBuffering, OutputMetric, Output, WithMetricCache, WithOutputQueue, Flush};
+           WithBuffering, OutputMetric, Output, Flush};
 use error;
 use std::sync::{RwLock, Arc};
 use std::io::{Write, self};
@@ -23,60 +23,23 @@ pub fn print_name_value_line(output: &mut impl Write, template: &[String], value
 }
 
 /// Buffered metrics text output.
-pub struct TextOutput<W: Write + Send + Sync + 'static> {
+pub struct Text<W: Write + Send + Sync + 'static> {
     attributes: Attributes,
     inner: Arc<RwLock<W>>,
     format_fn: Arc<Fn(&Name, Kind) -> Vec<String> + Send + Sync>,
     print_fn: Arc<Fn(&mut Vec<u8>, &[String], Value) -> error::Result<()> + Send + Sync>,
 }
 
-// FIXME manual Clone impl required because auto-derive is borked (https://github.com/rust-lang/rust/issues/26925)
-impl<W: Write + Send + Sync + 'static> Clone for TextOutput<W> {
-    fn clone(&self) -> Self {
-        TextOutput {
-            attributes: self.attributes.clone(),
-            inner: self.inner.clone(),
-            format_fn: self.format_fn.clone(),
-            print_fn: self.print_fn.clone(),
-        }
-    }
-}
+use queue_out;
+use cache_out;
 
-impl<W: Write + Send + Sync + 'static> WithAttributes for TextOutput<W> {
-    fn get_attributes(&self) -> &Attributes { &self.attributes }
-    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
-}
+impl<W: Write + Send + Sync + 'static> queue_out::WithOutputQueue for Text<W> {}
+impl<W: Write + Send + Sync + 'static> cache_out::WithOutputCache for Text<W> {}
 
-impl<W: Write + Send + Sync + 'static> WithMetricCache for TextOutput<W> {}
-
-impl<W: Write + Send + Sync + 'static> WithOutputQueue for TextOutput<W> {}
-
-impl<W: Write + Send + Sync + 'static> WithBuffering for TextOutput<W> {}
-
-impl<W: Write + Send + Sync + 'static> Output for TextOutput<W> {
-
-    type SCOPE = Text<W>;
-
-    fn open_scope_raw(&self) -> Self::SCOPE {
-        Text {
-            attributes: self.attributes.clone(),
-            entries: Rc::new(RefCell::new(Vec::new())),
-            output: self.clone(),
-        }
-    }
-}
-
-/// A scope for text metrics.
-pub struct Text<W: Write + Send + Sync + 'static> {
-    attributes: Attributes,
-    entries: Rc<RefCell<Vec<Vec<u8>>>>,
-    output: TextOutput<W>,
-}
-
-impl<W: Write + Send + Sync + 'static> Text<W> {
+impl<W: Write + Send + Sync + 'static>  Text<W> {
     /// Write metric values to provided Write target.
-    pub fn output(write: W) -> TextOutput<W> {
-        TextOutput {
+    pub fn write_to(write: W) -> Text<W> {
+        Text {
             attributes: Attributes::default(),
             inner: Arc::new(RwLock::new(write)),
             format_fn: Arc::new(format_name),
@@ -85,23 +48,25 @@ impl<W: Write + Send + Sync + 'static> Text<W> {
     }
 
     /// Write metric values to stdout.
-    pub fn stdout() -> TextOutput<io::Stdout> {
-        Text::output(io::stdout())
+    pub fn stdout() -> Text<io::Stdout> {
+        Text::write_to(io::stdout())
     }
 
     /// Write metric values to stdout.
-    pub fn stderr() -> TextOutput<io::Stderr> {
-        Text::output(io::stderr())
+    pub fn stderr() -> Text<io::Stderr> {
+        Text::write_to(io::stderr())
     }
+
 }
 
-
+// FIXME manual Clone impl required because auto-derive is borked (https://github.com/rust-lang/rust/issues/26925)
 impl<W: Write + Send + Sync + 'static> Clone for Text<W> {
     fn clone(&self) -> Self {
         Text {
             attributes: self.attributes.clone(),
-            entries: self.entries.clone(),
-            output: self.output.clone(),
+            inner: self.inner.clone(),
+            format_fn: self.format_fn.clone(),
+            print_fn: self.print_fn.clone(),
         }
     }
 }
@@ -113,8 +78,45 @@ impl<W: Write + Send + Sync + 'static> WithAttributes for Text<W> {
 
 impl<W: Write + Send + Sync + 'static> WithBuffering for Text<W> {}
 
-impl<W: Write + Send + Sync + 'static> OutputScope for Text<W> {
-    fn new_metric_raw(&self, name: Name, kind: Kind) -> OutputMetric {
+impl<W: Write + Send + Sync + 'static> Output for Text<W> {
+    type SCOPE = TextScope<W>;
+
+    fn output(&self) -> Self::SCOPE {
+        TextScope {
+            attributes: self.attributes.clone(),
+            entries: Rc::new(RefCell::new(Vec::new())),
+            output: self.clone(),
+        }
+    }
+}
+
+/// A scope for text metrics.
+pub struct TextScope<W: Write + Send + Sync + 'static> {
+    attributes: Attributes,
+    entries: Rc<RefCell<Vec<Vec<u8>>>>,
+    output: Text<W>,
+}
+
+
+impl<W: Write + Send + Sync + 'static> Clone for TextScope<W> {
+    fn clone(&self) -> Self {
+        TextScope {
+            attributes: self.attributes.clone(),
+            entries: self.entries.clone(),
+            output: self.output.clone(),
+        }
+    }
+}
+
+impl<W: Write + Send + Sync + 'static> WithAttributes for TextScope<W> {
+    fn get_attributes(&self) -> &Attributes { &self.attributes }
+    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
+}
+
+impl<W: Write + Send + Sync + 'static> WithBuffering for TextScope<W> {}
+
+impl<W: Write + Send + Sync + 'static> OutputScope for TextScope<W> {
+    fn new_metric(&self, name: Name, kind: Kind) -> OutputMetric {
         let name = self.qualified_name(name);
         let template = (self.output.format_fn)(&name, kind);
 
@@ -150,7 +152,7 @@ impl<W: Write + Send + Sync + 'static> OutputScope for Text<W> {
     }
 }
 
-impl<W: Write + Send + Sync + 'static> Flush for Text<W> {
+impl<W: Write + Send + Sync + 'static> Flush for TextScope<W> {
 
     fn flush(&self) -> error::Result<()> {
         let mut entries = self.entries.borrow_mut();
@@ -165,7 +167,7 @@ impl<W: Write + Send + Sync + 'static> Flush for Text<W> {
     }
 }
 
-impl<W: Write + Send + Sync + 'static> Drop for Text<W> {
+impl<W: Write + Send + Sync + 'static> Drop for TextScope<W> {
     fn drop(&mut self) {
         if let Err(e) = self.flush() {
             warn!("Could not flush text metrics on Drop. {}", e)
@@ -180,7 +182,7 @@ mod test {
 
     #[test]
     fn sink_print() {
-        let c = super::Text::output(io::stdout()).open_scope();
+        let c = super::Text::write_to(io::stdout()).output();
         let m = c.new_metric("test".into(), Kind::Marker);
         m.write(33);
     }

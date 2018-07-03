@@ -21,22 +21,39 @@ const MAX_UDP_PAYLOAD: usize = 576;
 /// Statsd output holds a datagram (UDP) socket to a statsd server.
 /// The socket is shared between scopes opened from the output.
 #[derive(Clone, Debug)]
-pub struct StatsdOutput {
+pub struct Statsd {
     attributes: Attributes,
     socket: Arc<UdpSocket>,
 }
 
-impl WithBuffering for StatsdOutput {}
-impl WithSampling for StatsdOutput {}
+impl Statsd {
+    /// Send metrics to a statsd server at the address and port provided.
+    pub fn send_to<ADDR: ToSocketAddrs>(address: ADDR) -> error::Result<Statsd> {
+        let socket = Arc::new(UdpSocket::bind("0.0.0.0:0")?);
+        socket.set_nonblocking(true)?;
+        socket.connect(address)?;
 
-impl WithMetricCache for StatsdOutput {}
-impl WithQueue for StatsdOutput {}
+        Ok(Statsd {
+            attributes: Attributes::default(),
+            socket,
+        })
+    }
+}
 
-impl Output for StatsdOutput {
-    type SCOPE = Statsd;
+impl WithBuffering for Statsd {}
+impl WithSampling for Statsd {}
 
-    fn open_scope_raw(&self) -> Statsd {
-        Statsd {
+use queue_out;
+use cache_out;
+
+impl queue_out::WithOutputQueue for Statsd {}
+impl cache_out::WithOutputCache for Statsd {}
+
+impl Output for Statsd {
+    type SCOPE = StatsdScope;
+
+    fn output(&self) -> Self::SCOPE {
+        StatsdScope {
             attributes: self.attributes.clone(),
             buffer: Rc::new(RefCell::new(String::with_capacity(MAX_UDP_PAYLOAD))),
             socket: self.socket.clone(),
@@ -44,38 +61,24 @@ impl Output for StatsdOutput {
     }
 }
 
-impl WithAttributes for StatsdOutput {
+impl WithAttributes for Statsd {
     fn get_attributes(&self) -> &Attributes { &self.attributes }
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
 /// Statsd Input
 #[derive(Debug, Clone)]
-pub struct Statsd {
+pub struct StatsdScope {
     attributes: Attributes,
     buffer: Rc<RefCell<String>>,
     socket: Arc<UdpSocket>,
 }
 
-impl Statsd {
-    /// Send metrics to a statsd server at the address and port provided.
-    pub fn output<ADDR: ToSocketAddrs>(address: ADDR) -> error::Result<StatsdOutput> {
-        let socket = Arc::new(UdpSocket::bind("0.0.0.0:0")?);
-        socket.set_nonblocking(true)?;
-        socket.connect(address)?;
+impl WithSampling for StatsdScope {}
 
-        Ok(StatsdOutput {
-            attributes: Attributes::default(),
-            socket,
-        })
-    }
-}
-
-impl WithSampling for Statsd {}
-
-impl OutputScope for Statsd {
+impl OutputScope for StatsdScope {
     /// Define a metric of the specified type.
-    fn new_metric_raw(&self, name: Name, kind: Kind) -> OutputMetric {
+    fn new_metric(&self, name: Name, kind: Kind) -> OutputMetric {
         let mut prefix = self.qualified_name(name).join(".");
         prefix.push(':');
 
@@ -115,7 +118,7 @@ impl OutputScope for Statsd {
     }
 }
 
-impl Flush for Statsd {
+impl Flush for StatsdScope {
 
     fn flush(&self) -> error::Result<()> {
         let buf = self.buffer.borrow_mut();
@@ -123,7 +126,7 @@ impl Flush for Statsd {
     }
 }
 
-impl Statsd {
+impl StatsdScope {
     fn print(&self, metric: &StatsdMetric, value: Value)  {
         let scaled_value = value / metric.scale;
         let value_str = scaled_value.to_string();
@@ -176,12 +179,12 @@ impl Statsd {
     }
 }
 
-impl WithAttributes for Statsd {
+impl WithAttributes for StatsdScope {
     fn get_attributes(&self) -> &Attributes { &self.attributes }
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
-impl WithBuffering for Statsd {}
+impl WithBuffering for StatsdScope {}
 
 /// Key of a statsd metric.
 #[derive(Debug, Clone)]
@@ -192,7 +195,7 @@ pub struct StatsdMetric {
 }
 
 /// Any remaining buffered data is flushed on Drop.
-impl Drop for Statsd {
+impl Drop for StatsdScope {
     fn drop(&mut self) {
         if let Err(err) = self.flush() {
             warn!("Could not flush statsd metrics upon Drop: {}", err)
@@ -209,17 +212,17 @@ mod bench {
 
     #[bench]
     pub fn immediate_statsd(b: &mut test::Bencher) {
-        let sd = Statsd::output("localhost:2003").unwrap().open_scope_raw();
-        let timer = sd.new_metric_raw("timer".into(), Kind::Timer);
+        let sd = Statsd::send_to("localhost:2003").unwrap().input();
+        let timer = sd.new_metric("timer".into(), Kind::Timer);
 
         b.iter(|| test::black_box(timer.write(2000)));
     }
 
     #[bench]
     pub fn buffering_statsd(b: &mut test::Bencher) {
-        let sd = Statsd::output("localhost:2003").unwrap()
-            .with_buffering(Buffering::BufferSize(65465)).open_scope_raw();
-        let timer = sd.new_metric_raw("timer".into(), Kind::Timer);
+        let sd = Statsd::send_to("localhost:2003").unwrap()
+            .with_buffering(Buffering::BufferSize(65465)).input();
+        let timer = sd.new_metric("timer".into(), Kind::Timer);
 
         b.iter(|| test::black_box(timer.write(2000)));
     }
