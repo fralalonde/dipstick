@@ -17,31 +17,7 @@ pub use num::ToPrimitive;
 /// Base type for recorded metric values.
 pub type Value = u64;
 
-/// Used to differentiate between metric kinds in the backend.
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-pub enum Kind {
-    /// Handling one item at a time.
-    Marker,
-    /// Handling quantities or multiples.
-    Counter,
-    /// Reporting instant measurement of a resource at a point in time.
-    Gauge,
-    /// Measuring a time interval, internal to the app or provided by an external source.
-    Timer,
-}
-
-/// Used by the metrics! macro to obtain the Kind from the stringified type.
-impl<'a> From<&'a str> for Kind {
-    fn from(s: &str) -> Kind {
-        match s {
-            "Marker" => Kind::Marker,
-            "Counter" => Kind::Counter,
-            "Gauge" => Kind::Gauge,
-            "Timer" => Kind::Timer,
-            _ => panic!("No Kind '{}' defined", s)
-        }
-    }
-}
+/////// ATTRIBUTES
 
 /// The actual distribution (random, fixed-cycled, etc) depends on selected sampling method.
 #[derive(Debug, Clone, Copy)]
@@ -159,9 +135,9 @@ impl<T: WithAttributes> AddPrefix for T {
 }
 
 /// Apply statistical sampling to collected metrics data.
-pub trait WithSampling: WithAttributes {
+pub trait Sampled: WithAttributes {
     /// Perform random sampling of values according to the specified rate.
-    fn with_sampling(&self, sampling: Sampling) -> Self {
+    fn sampled(&self, sampling: Sampling) -> Self {
         self.with_attributes(|new_attr| new_attr.sampling = sampling)
     }
 
@@ -174,14 +150,14 @@ pub trait WithSampling: WithAttributes {
 /// Determine scope buffering strategy, if supported by output.
 /// Changing this only affects scopes opened afterwards.
 /// Buffering is done on best effort, meaning flush will occur if buffer capacity is exceeded.
-pub trait WithBuffering: WithAttributes {
+pub trait Buffered: WithAttributes {
     /// Return a clone with the specified buffering set.
-    fn with_buffering(&self, buffering: Buffering) -> Self {
+    fn buffered(&self, buffering: Buffering) -> Self {
         self.with_attributes(|new_attr| new_attr.buffering = buffering)
     }
 
     /// Is this component using buffering?
-    fn is_buffering(&self) -> bool {
+    fn is_buffered(&self) -> bool {
         match self.get_buffering() {
             Buffering::Unbuffered => false,
             _ => true
@@ -259,6 +235,8 @@ impl<S: Into<String>> From<S> for Name {
     }
 }
 
+////// INPUT
+
 lazy_static! {
     /// The reference instance identifying an uninitialized metric config.
     pub static ref NO_METRIC_OUTPUT: Arc<InputDyn + Send + Sync> = Arc::new(Void::metrics());
@@ -289,9 +267,11 @@ impl<T: Input + Send + Sync + 'static> InputDyn for T {
     }
 }
 
+/// InputScope
 /// Define metrics, write values and flush them.
 pub trait InputScope: Flush {
-    /// Define a metric of the specified type.
+    /// Define a generic metric of the specified type.
+    /// It is preferable to use counter() / marker() / timer() / gauge() methods.
     fn new_metric(&self, name: Name, kind: Kind) -> InputMetric;
 
     /// Define a counter.
@@ -312,16 +292,6 @@ pub trait InputScope: Flush {
     /// Define a gauge.
     fn gauge(&self, name: &str) -> Gauge {
         self.new_metric(name.into(), Kind::Gauge).into()
-    }
-
-}
-
-/// Both InputScope and OutputScope share the ability to flush the recorded data.
-pub trait Flush {
-
-    /// Flush does nothing by default.
-    fn flush(&self) -> error::Result<()> {
-        Ok(())
     }
 
 }
@@ -351,6 +321,32 @@ impl InputMetric {
     }
 }
 
+
+////// OUTPUT
+
+/// Define metrics, write values and flush them.
+pub trait OutputScope: Flush {
+
+    /// Define a raw metric of the specified type.
+    fn new_metric(&self, name: Name, kind: Kind) -> OutputMetric;
+
+}
+
+impl OutputMetric {
+    /// Utility constructor
+    pub fn new<F: Fn(Value) + 'static>(metric: F) -> OutputMetric {
+        OutputMetric { inner: Rc::new(metric) }
+    }
+
+    /// Some may prefer the `metric.write(value)` form to the `(metric)(value)` form.
+    /// This shouldn't matter as metrics should be of type Counter, Marker, etc.
+    #[inline]
+    pub fn write(&self, value: Value) {
+        (self.inner)(value)
+    }
+}
+
+
 /// A function trait that opens a new metric capture scope.
 pub trait Output: Send + Sync + 'static + OutputDyn {
     /// The type of Scope returned byt this output.
@@ -372,6 +368,21 @@ impl<T: Output + Send + Sync + 'static> OutputDyn for T {
         Rc::new(self.output())
     }
 }
+
+//////// FLUSH
+
+/// Both InputScope and OutputScope share the ability to flush the recorded data.
+pub trait Flush {
+
+    /// Flush does nothing by default.
+    fn flush(&self) -> error::Result<()> {
+        Ok(())
+    }
+
+}
+
+///////// LOCKING INPUT -> OUTPUT ADAPTER
+
 
 /// Provide thread-safe locking to RawScope implementers.
 #[derive(Clone)]
@@ -417,13 +428,7 @@ impl<T: Output + Send + Sync + 'static> Input for T {
     }
 }
 
-/// Define metrics, write values and flush them.
-pub trait OutputScope: Flush {
-
-    /// Define a raw metric of the specified type.
-    fn new_metric(&self, name: Name, kind: Kind) -> OutputMetric;
-
-}
+///////// UNSAFE INPUT -> OUTPUT ADAPTER
 
 /// Wrap a RawScope to make it Send + Sync, allowing it to travel the world of threads.
 /// Obviously, it should only still be used from a single thread or dragons may occur.
@@ -459,22 +464,37 @@ impl fmt::Debug for OutputMetric {
     }
 }
 
-impl OutputMetric {
-    /// Utility constructor
-    pub fn new<F: Fn(Value) + 'static>(metric: F) -> OutputMetric {
-        OutputMetric { inner: Rc::new(metric) }
-    }
-
-    /// Some may prefer the `metric.write(value)` form to the `(metric)(value)` form.
-    /// This shouldn't matter as metrics should be of type Counter, Marker, etc.
-    #[inline]
-    pub fn write(&self, value: Value) {
-        (self.inner)(value)
-    }
-}
-
 unsafe impl Send for OutputMetric {}
 unsafe impl Sync for OutputMetric {}
+
+
+////////////// INSTRUMENTS
+
+/// Used to differentiate between metric kinds in the backend.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub enum Kind {
+    /// Handling one item at a time.
+    Marker,
+    /// Handling quantities or multiples.
+    Counter,
+    /// Reporting instant measurement of a resource at a point in time.
+    Gauge,
+    /// Measuring a time interval, internal to the app or provided by an external source.
+    Timer,
+}
+
+/// Used by the metrics! macro to obtain the Kind from the stringified type.
+impl<'a> From<&'a str> for Kind {
+    fn from(s: &str) -> Kind {
+        match s {
+            "Marker" => Kind::Marker,
+            "Counter" => Kind::Counter,
+            "Gauge" => Kind::Gauge,
+            "Timer" => Kind::Timer,
+            _ => panic!("No Kind '{}' defined", s)
+        }
+    }
+}
 
 /// A monotonic counter metric.
 /// Since value is only ever increased by one, no value parameter is provided,
@@ -587,6 +607,9 @@ impl From<InputMetric> for Marker {
         Marker { inner: metric }
     }
 }
+
+
+/// VOID INPUT & OUTPUT
 
 /// Discard metrics output.
 #[derive(Clone)]

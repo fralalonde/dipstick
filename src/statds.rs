@@ -40,14 +40,14 @@ impl Statsd {
     }
 }
 
-impl WithBuffering for Statsd {}
-impl WithSampling for Statsd {}
+impl Buffered for Statsd {}
+impl Sampled for Statsd {}
 
 use queue_out;
 use cache_out;
 
-impl queue_out::WithOutputQueue for Statsd {}
-impl cache_out::WithOutputCache for Statsd {}
+impl queue_out::QueuedOutput for Statsd {}
+impl cache_out::CachedOutput for Statsd {}
 
 impl Output for Statsd {
     type SCOPE = StatsdScope;
@@ -74,7 +74,7 @@ pub struct StatsdScope {
     socket: Arc<UdpSocket>,
 }
 
-impl WithSampling for StatsdScope {}
+impl Sampled for StatsdScope {}
 
 impl OutputScope for StatsdScope {
     /// Define a metric of the specified type.
@@ -154,7 +154,7 @@ impl StatsdScope {
             buffer.push_str(&metric.suffix);
         }
 
-        if !self.is_buffering() {
+        if !self.is_buffered() {
             if let Err(e) = self.flush_inner(buffer) {
                 debug!("Could not send to statsd {}", e)
             }
@@ -184,7 +184,7 @@ impl WithAttributes for StatsdScope {
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
-impl WithBuffering for StatsdScope {}
+impl Buffered for StatsdScope {}
 
 /// Key of a statsd metric.
 #[derive(Debug, Clone)]
@@ -221,7 +221,7 @@ mod bench {
     #[bench]
     pub fn buffering_statsd(b: &mut test::Bencher) {
         let sd = Statsd::send_to("localhost:2003").unwrap()
-            .with_buffering(Buffering::BufferSize(65465)).input();
+            .buffered(Buffering::BufferSize(65465)).input();
         let timer = sd.new_metric("timer".into(), Kind::Timer);
 
         b.iter(|| test::black_box(timer.write(2000)));

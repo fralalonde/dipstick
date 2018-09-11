@@ -10,7 +10,7 @@ fn main() {
     let metrics =
         Statsd::send_to("localhost:8125")
             .expect("Connected")
-            .with_sampling(Sampling::Random(0.2))
+            .sampled(Sampling::Random(0.2))
             .add_prefix("my_app")
             .input();
 

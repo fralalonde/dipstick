@@ -8,9 +8,9 @@ use std::rc::Rc;
 /// Wrap an output with a metric definition cache.
 /// This is useless if all metrics are statically declared but can provide performance
 /// benefits if some metrics are dynamically defined at runtime.
-pub trait WithOutputCache: Output + Send + Sync + 'static + Sized {
+pub trait CachedOutput: Output + Send + Sync + 'static + Sized {
     /// Wrap this output with an asynchronous dispatch queue of specified length.
-    fn with_cache(self, max_size: usize) -> OutputCache {
+    fn cached(self, max_size: usize) -> OutputCache {
         OutputCache::wrap(self, max_size)
     }
 }

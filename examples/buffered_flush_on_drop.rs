@@ -9,7 +9,7 @@ use std::io;
 use dipstick::*;
 
 fn main() {
-    let input = Text::write_to(io::stdout()).with_buffering(Buffering::Unlimited);
+    let input = Text::write_to(io::stdout()).buffered(Buffering::Unlimited);
 
     loop {
         println!("\n------- open scope");

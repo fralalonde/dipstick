@@ -2,7 +2,7 @@
 
 // TODO parameterize templates
 use core::{Name, AddPrefix, Value, Kind, OutputScope, WithAttributes, Attributes,
-           WithBuffering, OutputMetric, Output, Flush};
+           Buffered, OutputMetric, Output, Flush};
 use error;
 use std::sync::{RwLock, Arc};
 use std::io::{Write, self};
@@ -33,8 +33,8 @@ pub struct Text<W: Write + Send + Sync + 'static> {
 use queue_out;
 use cache_out;
 
-impl<W: Write + Send + Sync + 'static> queue_out::WithOutputQueue for Text<W> {}
-impl<W: Write + Send + Sync + 'static> cache_out::WithOutputCache for Text<W> {}
+impl<W: Write + Send + Sync + 'static> queue_out::QueuedOutput for Text<W> {}
+impl<W: Write + Send + Sync + 'static> cache_out::CachedOutput for Text<W> {}
 
 impl<W: Write + Send + Sync + 'static>  Text<W> {
     /// Write metric values to provided Write target.
@@ -76,7 +76,7 @@ impl<W: Write + Send + Sync + 'static> WithAttributes for Text<W> {
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
-impl<W: Write + Send + Sync + 'static> WithBuffering for Text<W> {}
+impl<W: Write + Send + Sync + 'static> Buffered for Text<W> {}
 
 impl<W: Write + Send + Sync + 'static> Output for Text<W> {
     type SCOPE = TextScope<W>;
@@ -113,7 +113,7 @@ impl<W: Write + Send + Sync + 'static> WithAttributes for TextScope<W> {
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
-impl<W: Write + Send + Sync + 'static> WithBuffering for TextScope<W> {}
+impl<W: Write + Send + Sync + 'static> Buffered for TextScope<W> {}
 
 impl<W: Write + Send + Sync + 'static> OutputScope for TextScope<W> {
     fn new_metric(&self, name: Name, kind: Kind) -> OutputMetric {
@@ -123,7 +123,7 @@ impl<W: Write + Send + Sync + 'static> OutputScope for TextScope<W> {
         let print_fn = self.output.print_fn.clone();
         let entries = self.entries.clone();
 
-        if self.is_buffering() {
+        if self.is_buffered() {
             OutputMetric::new(move |value| {
                 let mut buffer = Vec::with_capacity(32);
                 match (print_fn)(&mut buffer, &template, value) {
