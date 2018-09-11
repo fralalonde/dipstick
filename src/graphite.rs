@@ -53,7 +53,7 @@ impl WithAttributes for Graphite {
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
-impl WithBuffering for Graphite {}
+impl Buffered for Graphite {}
 
 /// Graphite Input
 #[derive(Debug, Clone)]
@@ -120,7 +120,7 @@ impl GraphiteScope {
             }
         };
 
-        if !self.is_buffering() {
+        if !self.is_buffered() {
             if let Err(e) = self.flush_inner(buffer) {
                 debug!("Could not send to graphite {}", e)
             }
@@ -153,13 +153,13 @@ impl WithAttributes for GraphiteScope {
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
-impl WithBuffering for GraphiteScope {}
+impl Buffered for GraphiteScope {}
 
 use queue_out;
 use cache_out;
 
-impl queue_out::WithOutputQueue for Graphite {}
-impl cache_out::WithOutputCache for Graphite {}
+impl queue_out::QueuedOutput for Graphite {}
+impl cache_out::CachedOutput for Graphite {}
 
 /// Its hard to see how a single scope could get more metrics than this.
 // TODO make configurable?
@@ -199,7 +199,7 @@ mod bench {
     #[bench]
     pub fn buffering_graphite(b: &mut test::Bencher) {
         let sd = Graphite::send_to("localhost:2003").unwrap()
-            .with_buffering(Buffering::BufferSize(65465)).input();
+            .buffered(Buffering::BufferSize(65465)).input();
         let timer = sd.new_metric("timer".into(), Kind::Timer);
 
         b.iter(|| test::black_box(timer.write(2000)));

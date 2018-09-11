@@ -13,10 +13,10 @@ use std::thread;
 use cache_in;
 
 /// Wrap this raw output behind an asynchronous metrics dispatch queue.
-pub trait WithOutputQueue: Output + Sized {
-    /// Wrap this output with an asynchronous dispatch queue of specified length.
-    fn with_queue(self, queue_length: usize) -> OutputQueue {
-        OutputQueue::new(self, queue_length)
+pub trait QueuedOutput: Output + Sized {
+    /// Wrap this output with an asynchronous dispatch queue.
+    fn queued(self, max_size: usize) -> OutputQueue {
+        OutputQueue::new(self, max_size)
     }
 }
 
@@ -66,7 +66,7 @@ impl WithAttributes for OutputQueue {
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
-impl cache_in::WithInputCache for OutputQueue {}
+impl cache_in::CachedInput for OutputQueue {}
 
 impl Input for OutputQueue {
     type SCOPE = OutputQueueScope;

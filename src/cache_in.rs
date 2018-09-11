@@ -7,9 +7,9 @@ use std::sync::{Arc, RwLock};
 /// Wrap an output with a metric definition cache.
 /// This is useless if all metrics are statically declared but can provide performance
 /// benefits if some metrics are dynamically defined at runtime.
-pub trait WithInputCache: Input + Send + Sync + 'static + Sized {
+pub trait CachedInput: Input + Send + Sync + 'static + Sized {
     /// Wrap this output with an asynchronous dispatch queue of specified length.
-    fn with_cache(self, max_size: usize) -> InputCache {
+    fn cached(self, max_size: usize) -> InputCache {
         InputCache::wrap(self, max_size)
     }
 }

@@ -5,7 +5,7 @@ use core::{InputScope, Value, InputMetric, Name, Kind, AddPrefix, Input,
            WithAttributes, Attributes, Flush, InputDyn};
 use error;
 use metrics;
-use cache_in::WithInputCache;
+use cache_in::CachedInput;
 
 use std::sync::Arc;
 use std::sync::mpsc;
@@ -14,10 +14,10 @@ use std::thread;
 /// Wrap this output behind an asynchronous metrics dispatch queue.
 /// This is not strictly required for multi threading since the provided scopes
 /// are already Send + Sync but might be desired to lower the latency
-pub trait WithInputQueue: Input + Send + Sync + 'static + Sized {
+pub trait QueuedInput: Input + Send + Sync + 'static + Sized {
     /// Wrap this output with an asynchronous dispatch queue of specified length.
-    fn with_queue(self, queue_length: usize) -> InputQueue {
-        InputQueue::new(self, queue_length)
+    fn queued(self, max_size: usize) -> InputQueue {
+        InputQueue::new(self, max_size)
     }
 }
 
@@ -61,7 +61,7 @@ impl InputQueue {
     }
 }
 
-impl WithInputCache for InputQueue {}
+impl CachedInput for InputQueue {}
 
 impl WithAttributes for InputQueue {
     fn get_attributes(&self) -> &Attributes { &self.attributes }

@@ -1,5 +1,5 @@
 use core::{Name, AddPrefix, Value, InputMetric, Kind, Input, InputScope, WithAttributes, Attributes,
-           WithBuffering, Flush};
+           Buffered, Flush};
 use error;
 use std::sync::{RwLock, Arc};
 use text;
@@ -32,7 +32,7 @@ impl WithAttributes for Log {
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
-impl WithBuffering for Log {}
+impl Buffered for Log {}
 
 /// A scope for metrics log output.
 #[derive(Clone)]
@@ -59,13 +59,13 @@ impl WithAttributes for LogScope {
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
-impl WithBuffering for LogScope {}
+impl Buffered for LogScope {}
 
 use queue_in;
 use cache_in;
 
-impl queue_in::WithInputQueue for Log {}
-impl cache_in::WithInputCache for Log {}
+impl queue_in::QueuedInput for Log {}
+impl cache_in::CachedInput for Log {}
 
 impl InputScope for LogScope {
     fn new_metric(&self, name: Name, kind: Kind) -> InputMetric {
@@ -75,7 +75,7 @@ impl InputScope for LogScope {
         let print_fn = self.output.print_fn.clone();
         let entries = self.entries.clone();
 
-        if self.is_buffering() {
+        if self.is_buffered() {
             InputMetric::new(move |value| {
                 let mut buffer = Vec::with_capacity(32);
                 match (print_fn)(&mut buffer, &template, value) {

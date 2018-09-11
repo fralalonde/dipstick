@@ -28,7 +28,7 @@ pub use error::{Error, Result};
 pub mod core;
 pub use core::{Value, Kind, Marker, Timer, Counter, Gauge,
                Flush, InputScope, Input, WithAttributes,
-               Name, AddPrefix, WithSampling, Sampling, Buffering, WithBuffering,
+               Name, AddPrefix, Sampled, Sampling, Buffering, Buffered,
                OutputScope, Output, OutputMetric, UnsafeScope,
                output_none, Void};
 
@@ -72,10 +72,10 @@ mod socket;
 pub use socket::RetrySocket;
 
 mod cache_in;
-pub use cache_in::{InputScopeCache, InputCache, WithInputCache};
+pub use cache_in::{InputScopeCache, InputCache, CachedInput};
 
 mod cache_out;
-pub use cache_out::{OutputScopeCache, OutputCache, WithOutputCache};
+pub use cache_out::{OutputScopeCache, OutputCache, CachedOutput};
 
 mod multi_in;
 pub use multi_in::{MultiInput, MultiInputScope};
@@ -84,10 +84,10 @@ mod multi_out;
 pub use multi_out::{MultiOutput, MultiOutputScope};
 
 mod queue_in;
-pub use queue_in::{InputQueueScope, InputQueue, WithInputQueue};
+pub use queue_in::{InputQueueScope, InputQueue, QueuedInput};
 
 mod queue_out;
-pub use queue_out::{OutputQueueScope, OutputQueue, WithOutputQueue};
+pub use queue_out::{OutputQueueScope, OutputQueue, QueuedOutput};
 
 mod scheduler;
 pub use scheduler::{set_schedule, CancelHandle, ScheduleFlush};
