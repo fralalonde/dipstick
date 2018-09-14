@@ -1,6 +1,6 @@
 //! Task scheduling facilities.
 
-use core::InputScope;
+use core::input::InputScope;
 
 use std::time::Duration;
 use std::thread;

@@ -1,20 +1,28 @@
 //! Standard stateless metric outputs.
 
 // TODO parameterize templates
-use core::{Name, AddPrefix, Value, Kind, OutputScope, WithAttributes, Attributes,
-           Buffered, OutputMetric, Output, Flush};
-use error;
+
+use core::{Flush, Value};
+use core::input::Kind;
+use core::component::{Attributes, WithAttributes, Buffered, Name, AddPrefix};
+use core::output::{Output, OutputMetric, OutputScope};
+use core::error;
+use cache::cache_out;
+use queue::queue_out;
+
 use std::sync::{RwLock, Arc};
 use std::io::{Write, self};
 use std::rc::Rc;
 use std::cell::RefCell;
 
+/// Join metric name parts into a friendly '.' separated String
 pub fn format_name(name: &Name, _kind: Kind) -> Vec<String> {
     let mut z = name.join(".");
     z.push_str(" ");
     vec![z]
 }
 
+/// Output template-formatted value
 pub fn print_name_value_line(output: &mut impl Write, template: &[String], value: Value) -> error::Result<()> {
     write!(output, "{}", template[0])?;
     write!(output, "{}", value)?;
@@ -29,9 +37,6 @@ pub struct Text<W: Write + Send + Sync + 'static> {
     format_fn: Arc<Fn(&Name, Kind) -> Vec<String> + Send + Sync>,
     print_fn: Arc<Fn(&mut Vec<u8>, &[String], Value) -> error::Result<()> + Send + Sync>,
 }
-
-use queue_out;
-use cache_out;
 
 impl<W: Write + Send + Sync + 'static> queue_out::QueuedOutput for Text<W> {}
 impl<W: Write + Send + Sync + 'static> cache_out::CachedOutput for Text<W> {}
@@ -177,7 +182,8 @@ impl<W: Write + Send + Sync + 'static> Drop for TextScope<W> {
 
 #[cfg(test)]
 mod test {
-    use core::*;
+    use super::*;
+    use core::input::Kind;
     use std::io;
 
     #[test]

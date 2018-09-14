@@ -1,7 +1,10 @@
 //! Dispatch metrics to multiple sinks.
 
-use core::{Input, InputScope, Name, AddPrefix, Kind, InputMetric, WithAttributes, Attributes, Flush, InputDyn};
-use error;
+use core::Flush;
+use core::input::{Kind, Input, InputScope, InputMetric, InputDyn};
+use core::component::{Attributes, WithAttributes, Name, AddPrefix};
+use core::error;
+
 use std::sync::Arc;
 
 /// Wrap this output behind an asynchronous metrics dispatch queue.

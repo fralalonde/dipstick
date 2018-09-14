@@ -1,8 +1,7 @@
+use core::input::Kind;
+use core::Value;
+
 use std::mem;
-
-use core::*;
-use core::Kind::*;
-
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::*;
 use std::usize;
@@ -61,7 +60,7 @@ impl Scoreboard {
         let value = value as usize;
         self.scores[0].fetch_add(1, AcqRel);
         match self.kind {
-            Marker => {}
+            Kind::Marker => {}
             _ => {
                 // optimization - these fields are unused for Marker stats
                 self.scores[1].fetch_add(value, AcqRel);
@@ -94,16 +93,16 @@ impl Scoreboard {
 
             let mut snapshot = Vec::new();
             match self.kind {
-                Marker => {
+                Kind::Marker => {
                     snapshot.push(Count(scores[0] as u64));
                     snapshot.push(Rate(scores[0] as f64 / duration_seconds))
                 }
-                Gauge => {
+                Kind::Gauge => {
                     snapshot.push(Max(scores[2] as u64));
                     snapshot.push(Min(scores[3] as u64));
                     snapshot.push(Mean(scores[1] as f64 / scores[0] as f64));
                 }
-                Timer => {
+                Kind::Timer => {
                     snapshot.push(Count(scores[0] as u64));
                     snapshot.push(Sum(scores[1] as u64));
 
@@ -113,7 +112,7 @@ impl Scoreboard {
                     // timer rate uses the COUNT of timer calls per second (not SUM)
                     snapshot.push(Rate(scores[0] as f64 / duration_seconds))
                 }
-                Counter => {
+                Kind::Counter => {
                     snapshot.push(Count(scores[0] as u64));
                     snapshot.push(Sum(scores[1] as u64));
 
@@ -148,24 +147,26 @@ fn swap_if(counter: &AtomicUsize, new_value: usize, compare: fn(usize, usize) ->
 #[cfg(feature = "bench")]
 mod bench {
 
+    use core::input::Kind;
+
     use super::*;
     use test;
 
     #[bench]
     fn update_marker(b: &mut test::Bencher) {
-        let metric = Scoreboard::new(Marker);
+        let metric = Scoreboard::new(Kind::Marker);
         b.iter(|| test::black_box(metric.update(1)));
     }
 
     #[bench]
     fn update_count(b: &mut test::Bencher) {
-        let metric = Scoreboard::new(Counter);
+        let metric = Scoreboard::new(Kind::Counter);
         b.iter(|| test::black_box(metric.update(4)));
     }
 
     #[bench]
     fn empty_snapshot(b: &mut test::Bencher) {
-        let metric = Scoreboard::new(Counter);
+        let metric = Scoreboard::new(Kind::Counter);
         let scores = &mut Scoreboard::blank();
         b.iter(|| test::black_box(metric.snapshot(scores)));
     }

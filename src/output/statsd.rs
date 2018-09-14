@@ -1,15 +1,17 @@
 //! Send metrics to a statsd server.
 
-use core::*;
-use error;
-use metrics;
+use core::component::{Buffered, Attributes, Sampled, Sampling, WithAttributes, Name, AddPrefix};
+use core::pcg32;
+use core::{Flush, Value};
+use core::input::Kind;
+use core::metrics;
+use core::output::{Output, OutputScope, OutputMetric};
+use core::error;
+use cache::cache_out;
+use queue::queue_out;
 
 use std::net::ToSocketAddrs;
-
 use std::sync::Arc;
-
-use pcg32;
-
 use std::net::UdpSocket;
 use std::rc::Rc;
 use std::cell::{RefCell, RefMut};
@@ -42,9 +44,6 @@ impl Statsd {
 
 impl Buffered for Statsd {}
 impl Sampled for Statsd {}
-
-use queue_out;
-use cache_out;
 
 impl queue_out::QueuedOutput for Statsd {}
 impl cache_out::CachedOutput for Statsd {}

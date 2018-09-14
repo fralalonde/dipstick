@@ -1,8 +1,14 @@
 //! Send metrics to a graphite server.
 
-use core::*;
-use error;
-use metrics;
+use core::component::{Buffered, Attributes, WithAttributes, Name, AddPrefix};
+use core::{Flush, Value};
+use core::input::Kind;
+use core::metrics;
+use core::output::{Output, OutputScope, OutputMetric};
+use core::error;
+use queue::queue_out;
+use cache::cache_out;
+use output::socket::RetrySocket;
 
 use std::net::ToSocketAddrs;
 
@@ -11,7 +17,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use std::io::Write;
 use std::fmt::Debug;
 
-use socket::RetrySocket;
 use std::rc::Rc;
 use std::cell::{RefCell, RefMut};
 
@@ -154,9 +159,6 @@ impl WithAttributes for GraphiteScope {
 }
 
 impl Buffered for GraphiteScope {}
-
-use queue_out;
-use cache_out;
 
 impl queue_out::QueuedOutput for Graphite {}
 impl cache_out::CachedOutput for Graphite {}

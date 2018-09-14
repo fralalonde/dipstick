@@ -120,8 +120,8 @@ macro_rules! __in_context {
 
 #[cfg(test)]
 mod test {
-    use core::*;
-    use proxy::Proxy;
+    use core::input::*;
+    use core::proxy::Proxy;
 
     metrics!{TEST: Proxy = "test_prefix" => {
         M1: Marker = "failed";

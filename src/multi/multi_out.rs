@@ -1,7 +1,11 @@
 //! Dispatch metrics to multiple sinks.
 
-use core::{Output, OutputScope, Name, AddPrefix, Kind, OutputMetric, WithAttributes, Attributes, Flush, OutputDyn};
-use error;
+use core::Flush;
+use core::component::{Attributes, WithAttributes, Name, AddPrefix};
+use core::input::Kind;
+use core::output::{Output, OutputMetric, OutputScope, OutputDyn};
+use core::error;
+
 use std::rc::Rc;
 use std::sync::Arc;
 

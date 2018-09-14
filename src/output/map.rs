@@ -1,4 +1,8 @@
-use core::{Value, OutputMetric, Kind, Name, OutputScope, Flush};
+use core::{Flush, Value};
+use core::input::Kind;
+use core::component::Name;
+use core::output::{OutputMetric, OutputScope};
+
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::BTreeMap;

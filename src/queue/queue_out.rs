@@ -1,16 +1,22 @@
 //! Queue metrics for write on a separate thread,
 //! RawMetrics definitions are still synchronous.
 //! If queue size is exceeded, calling code reverts to blocking.
-use core::{Value, OutputMetric, Name, Kind, AddPrefix, Output, OutputDyn,
-           WithAttributes, Attributes, InputScope, Input, InputMetric, UnsafeScope, Flush};
-use error;
-use metrics;
+//!
+use core::component::{Attributes, Name, WithAttributes, AddPrefix};
+use core::input::{Kind, Input, InputScope, InputMetric};
+use core::output::{OutputDyn, OutputScope, OutputMetric, Output};
+use core::{Value, Flush};
+use core::metrics;
+use cache::cache_in;
+use core::error;
+
+use std::rc::Rc;
+use std::ops;
+use std::fmt;
 
 use std::sync::Arc;
 use std::sync::mpsc;
 use std::thread;
-
-use cache_in;
 
 /// Wrap this raw output behind an asynchronous metrics dispatch queue.
 pub trait QueuedOutput: Output + Sized {
@@ -86,7 +92,9 @@ impl Input for OutputQueue {
 /// This is only `pub` because `error` module needs to know about it.
 /// Async commands should be of no concerns to applications.
 pub enum OutputQueueCmd {
+    /// Send metric write
     Write(Arc<OutputMetric>, Value),
+    /// Send metric flush
     Flush(Arc<UnsafeScope>),
 }
 
@@ -130,4 +138,36 @@ impl Flush for OutputQueueScope {
         }
     }
 }
+
+/// Wrap an OutputScope to make it Send + Sync, allowing it to travel the world of threads.
+/// Obviously, it should only still be used from a single thread or dragons may occur.
+#[derive(Clone)]
+pub struct UnsafeScope(Rc<OutputScope + 'static> );
+
+unsafe impl Send for UnsafeScope {}
+unsafe impl Sync for UnsafeScope {}
+
+impl UnsafeScope {
+    /// Wrap a dynamic RawScope to make it Send + Sync.
+    pub fn new(scope: Rc<OutputScope + 'static>) -> Self {
+        UnsafeScope(scope)
+    }
+}
+
+impl ops::Deref for UnsafeScope {
+    type Target = OutputScope + 'static;
+    fn deref(&self) -> &Self::Target {
+        Rc::as_ref(&self.0)
+    }
+}
+
+
+impl fmt::Debug for OutputMetric {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Box<Fn(Value)>")
+    }
+}
+
+unsafe impl Send for OutputMetric {}
+unsafe impl Sync for OutputMetric {}
 

@@ -1,5 +1,6 @@
 use std::ops::Add;
 use std::time::{Duration, Instant};
+
 use core::Value;
 
 #[derive(Debug, Copy, Clone)]
@@ -14,7 +15,7 @@ impl TimeHandle {
         TimeHandle(now())
     }
 
-    /// Get the elapsed time in microseconds since TimeHanduule was obtained.
+    /// Get the elapsed time in microseconds since TimeHandle was obtained.
     pub fn elapsed_us(self) -> Value {
         let duration = now() - self.0;
         duration.as_secs() * 1000000 + (duration.subsec_nanos() / 1000) as Value
