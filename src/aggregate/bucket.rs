@@ -1,13 +1,12 @@
 //! Maintain aggregated metrics for deferred reporting,
-//!
-use core::{Kind, Value, Name, AddPrefix, output_none, InputScope, InputMetric, WithAttributes, Attributes,
-           OutputScope, OutputMetric, Output, Flush, OutputDyn};
-use clock::TimeHandle;
-use core::Kind::*;
-use error;
 
-use scores::{ScoreType, Scoreboard};
-use scores::ScoreType::*;
+use core::component::{Attributes, Name, WithAttributes, AddPrefix};
+use core::input::{Kind, InputScope, InputMetric};
+use core::output::{OutputDyn, OutputScope, OutputMetric, Output, output_none};
+use core::clock::TimeHandle;
+use core::{Value, Flush};
+use aggregate::scores::{Scoreboard, ScoreType};
+use core::error;
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
@@ -112,7 +111,7 @@ impl InnerBucket {
         } else {
             // TODO add switch for metadata such as PERIOD_LENGTH
             if self.publish_metadata {
-                snapshot.push((&PERIOD_LENGTH, Timer, vec![Sum((duration_seconds * 1000.0) as u64)]));
+                snapshot.push((&PERIOD_LENGTH, Kind::Timer, vec![ScoreType::Sum((duration_seconds * 1000.0) as u64)]));
             }
             for metric in snapshot {
                 for score in metric.2 {
@@ -237,12 +236,12 @@ impl WithAttributes for Bucket {
 #[allow(dead_code)]
 pub fn stats_all(kind: Kind, name: Name, score: ScoreType) -> Option<(Kind, Name, Value)> {
     match score {
-        Count(hit) => Some((Counter, name.concat("count"), hit)),
-        Sum(sum) => Some((kind, name.concat("sum"), sum)),
-        Mean(mean) => Some((kind, name.concat("mean"), mean.round() as Value)),
-        Max(max) => Some((Gauge, name.concat("max"), max)),
-        Min(min) => Some((Gauge, name.concat("min"), min)),
-        Rate(rate) => Some((Gauge, name.concat("rate"), rate.round() as Value)),
+        ScoreType::Count(hit) => Some((Kind::Counter, name.concat("count"), hit)),
+        ScoreType::Sum(sum) => Some((kind, name.concat("sum"), sum)),
+        ScoreType::Mean(mean) => Some((kind, name.concat("mean"), mean.round() as Value)),
+        ScoreType::Max(max) => Some((Kind::Gauge, name.concat("max"), max)),
+        ScoreType::Min(min) => Some((Kind::Gauge, name.concat("min"), min)),
+        ScoreType::Rate(rate) => Some((Kind::Gauge, name.concat("rate"), rate.round() as Value)),
     }
 }
 
@@ -253,12 +252,12 @@ pub fn stats_all(kind: Kind, name: Name, score: ScoreType) -> Option<(Kind, Name
 #[allow(dead_code)]
 pub fn stats_average(kind: Kind, name: Name, score: ScoreType) -> Option<(Kind, Name, Value)> {
     match kind {
-        Marker => match score {
-            Count(count) => Some((Counter, name, count)),
+        Kind::Marker => match score {
+            ScoreType::Count(count) => Some((Kind::Counter, name, count)),
             _ => None,
         },
         _ => match score {
-            Mean(avg) => Some((Gauge, name, avg.round() as Value)),
+            ScoreType::Mean(avg) => Some((Kind::Gauge, name, avg.round() as Value)),
             _ => None,
         },
     }
@@ -273,16 +272,16 @@ pub fn stats_average(kind: Kind, name: Name, score: ScoreType) -> Option<(Kind, 
 #[allow(dead_code)]
 pub fn stats_summary(kind: Kind, name: Name, score: ScoreType) -> Option<(Kind, Name, Value)> {
     match kind {
-        Marker => match score {
-            Count(count) => Some((Counter, name, count)),
+        Kind::Marker => match score {
+            ScoreType::Count(count) => Some((Kind::Counter, name, count)),
             _ => None,
         },
-        Counter | Timer => match score {
-            Sum(sum) => Some((kind, name, sum)),
+        Kind::Counter | Kind::Timer => match score {
+            ScoreType::Sum(sum) => Some((kind, name, sum)),
             _ => None,
         },
-        Gauge => match score {
-            Mean(mean) => Some((Gauge, name, mean.round() as Value)),
+        Kind::Gauge => match score {
+            ScoreType::Mean(mean) => Some((Kind::Gauge, name, mean.round() as Value)),
             _ => None,
         },
     }
@@ -292,8 +291,8 @@ pub fn stats_summary(kind: Kind, name: Name, score: ScoreType) -> Option<(Kind, 
 mod bench {
 
     use test;
-    use core::*;
-    use bucket::Bucket;
+    use core::clock::*;
+    use super::*;
 
     #[bench]
     fn aggregate_marker(b: &mut test::Bencher) {
@@ -313,10 +312,9 @@ mod bench {
 
 #[cfg(test)]
 mod test {
-    use core::*;
-    use bucket::{Bucket, stats_all, stats_summary, stats_average, StatsFn};
-    use clock::{mock_clock_advance, mock_clock_reset};
-    use map::StatsMap;
+    use super::*;
+    use core::clock::{mock_clock_advance, mock_clock_reset};
+    use output::map::StatsMap;
 
     use std::time::Duration;
     use std::collections::BTreeMap;

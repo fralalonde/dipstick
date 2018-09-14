@@ -1,11 +1,13 @@
 //! Queue metrics for write on a separate thread,
 //! Metrics definitions are still synchronous.
 //! If queue size is exceeded, calling code reverts to blocking.
-use core::{InputScope, Value, InputMetric, Name, Kind, AddPrefix, Input,
-           WithAttributes, Attributes, Flush, InputDyn};
-use error;
-use metrics;
-use cache_in::CachedInput;
+
+use core::component::{Attributes, Name, WithAttributes, AddPrefix};
+use core::input::{Kind, Input, InputScope, InputDyn, InputMetric};
+use core::{Value, Flush};
+use core::metrics;
+use cache::cache_in::CachedInput;
+use core::error;
 
 use std::sync::Arc;
 use std::sync::mpsc;
@@ -85,7 +87,9 @@ impl Input for InputQueue {
 /// This is only `pub` because `error` module needs to know about it.
 /// Async commands should be of no concerns to applications.
 pub enum InputQueueCmd {
+    /// Send metric write
     Write(InputMetric, Value),
+    /// Send metric flush
     Flush(Arc<InputScope + Send + Sync + 'static>),
 }
 

@@ -1,10 +1,13 @@
-use core::{Name, AddPrefix, Value, InputMetric, Kind, Input, InputScope, WithAttributes, Attributes,
-           Buffered, Flush};
-use error;
-use std::sync::{RwLock, Arc};
-use text;
-use std::io::Write;
+use core::{Flush, Value};
+use core::input::{Kind, Input, InputScope, InputMetric};
+use core::component::{Attributes, WithAttributes, Buffered, Name, AddPrefix};
+use core::error;
+use cache::cache_in;
+use queue::queue_in;
+use output::text;
 
+use std::sync::{RwLock, Arc};
+use std::io::Write;
 use log;
 
 /// Buffered metrics log output.
@@ -60,9 +63,6 @@ impl WithAttributes for LogScope {
 }
 
 impl Buffered for LogScope {}
-
-use queue_in;
-use cache_in;
 
 impl queue_in::QueuedInput for Log {}
 impl cache_in::CachedInput for Log {}
@@ -123,7 +123,7 @@ impl Drop for LogScope {
 
 #[cfg(test)]
 mod test {
-    use core::*;
+    use core::input::*;
 
     #[test]
     fn test_to_log() {

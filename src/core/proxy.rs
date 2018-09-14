@@ -1,7 +1,10 @@
 //! Decouple metric definition from configuration with trait objects.
 
-use core::{Name, AddPrefix, Kind, InputScope, InputMetric, NO_METRIC_OUTPUT, WithAttributes, Attributes, Flush};
-use error;
+use core::component::{Attributes, WithAttributes, Name, AddPrefix};
+use core::Flush;
+use core::input::{Kind, InputMetric, InputScope};
+use core::void::VOID_INPUT;
+use core::error;
 
 use std::collections::{HashMap, BTreeMap};
 use std::sync::{Arc, RwLock, Weak};
@@ -118,7 +121,7 @@ impl InnerProxy {
         }
 
         let (up_target, up_nslen) = self.get_effective_target(namespace)
-            .unwrap_or_else(|| (NO_METRIC_OUTPUT.input_dyn(), 0));
+            .unwrap_or_else(|| (VOID_INPUT.input_dyn(), 0));
 
         // update all affected metrics to next upper targeted namespace
         for (name, metric) in self.metrics.range_mut(namespace..) {
@@ -209,7 +212,7 @@ impl InputScope for Proxy {
                 let name2 = name.clone();
                 // not found, define new
                 let (target, target_namespace_length) = inner.get_effective_target(&name)
-                    .unwrap_or_else(|| (NO_METRIC_OUTPUT.input_dyn(), 0));
+                    .unwrap_or_else(|| (VOID_INPUT.input_dyn(), 0));
                 let metric_object = target.new_metric(name.clone(), kind);
                 let proxy = Arc::new(ProxyMetric {
                     name,
@@ -239,10 +242,9 @@ impl WithAttributes for Proxy {
 #[cfg(feature = "bench")]
 mod bench {
 
-    use core::*;
-    use proxy::*;
+    use super::*;
     use test;
-    use bucket::Bucket;
+    use aggregate::bucket::Bucket;
 
     #[bench]
     fn proxy_marker_to_aggregate(b: &mut test::Bencher) {

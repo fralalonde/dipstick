@@ -5,8 +5,8 @@ use std::error;
 use std::fmt::{self, Display, Formatter};
 use std::result;
 use std::sync::mpsc;
-use queue_in;
-use queue_out;
+use queue::queue_in;
+use queue::queue_out;
 
 use self::Error::*;
 

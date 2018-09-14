@@ -5,8 +5,11 @@
 //! - Serve metrics with basic HTTP server
 //! - Print metrics to a buffer provided by an HTTP framework.
 
-use core::*;
-use error;
+use core::{Flush, Value};
+use core::input::{Kind, Input, InputScope, InputMetric};
+use core::component::{Attributes, WithAttributes, Buffered, Buffering, Name, AddPrefix};
+use core::output::{Output, OutputMetric, OutputScope};
+use core::error;
 
 use std::net::ToSocketAddrs;
 use std::sync::Arc;

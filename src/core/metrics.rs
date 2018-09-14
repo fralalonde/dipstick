@@ -2,8 +2,9 @@
 //! Because the possibly high volume of data, this is pre-set to use aggregation.
 //! This is also kept in a separate module because it is not to be exposed outside of the crate.
 
-use core::{Marker, AddPrefix, InputScope, Counter};
-use proxy::Proxy;
+use core::component::AddPrefix;
+use core::input::{Marker, InputScope, Counter};
+use core::proxy::Proxy;
 
 metrics!{
     /// Dipstick's own internal metrics.
