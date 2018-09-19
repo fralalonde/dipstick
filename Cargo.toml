@@ -1,6 +1,6 @@
 [package]
 name = "dipstick"
-version = "0.6.12-alpha.0"
+version = "0.7.0"
 authors = ["Francis Lalonde <fralalonde@gmail.com>"]
 
 description = """A fast and modular metrics library decoupling app instrumentation from reporting backend.
@@ -13,7 +13,6 @@ repository = "https://github.com/fralalonde/dipstick"
 readme = "README.md"
 keywords = ["metrics", "statsd", "graphite", "timer", "monitoring"]
 license = "MIT/Apache-2.0"
-build = "build.rs"
 
 [badges]
 travis-ci = { repository = "fralalonde/dipstick", branch = "master" }
@@ -21,24 +20,33 @@ travis-ci = { repository = "fralalonde/dipstick", branch = "master" }
 [dependencies]
 log = "0.4"
 lazy_static = "1"
-time = "0.1"
-derivative = "1.0"
+atomic_refcell = "0.1"
 skeptic = { version = "0.13", optional = true }
+num = { version = "0.1", default-features = false }
+
+# FIXME required only for random seed for sampling
+time = "0.1"
+
+# optional dep for prometheus binary format
+protobuf = { version = "2", optional = true }
+
+# optional dep for standalone http pull metrics
+tiny_http = { version = "0.6", optional = true }
 
 [build-dependencies]
 skeptic = { version = "0.13", optional = true }
-
-[dependencies.num]
-default-features = false
-version = "0.1"
+protoc-rust = { version = "2", optional = true }
 
 [features]
-default = []
+default-features = [ "prometheus", "self_metrics", "proto", "tiny_http" ]
 bench = []
+self_metrics = []
+proto = [ "protoc-rust", "protobuf" ]
+prometheus = []
 
 [package.metadata.release]
 #sign-commit = true
-#upload-doc = true
+#upload-handbook = true
 pre-release-replacements = [
-  {file="README.md", search="^dipstick = \"[a-z0-9\\.-]+\"", replace="dipstick = \"{{version}}\""}
+  {file="README.md", search="dipstick = \"[a-z0-9\\.-]+\"", replace="dipstick = \"{{version}}\""}
   ]

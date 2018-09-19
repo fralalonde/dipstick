@@ -1,8 +1,6 @@
 //! Publicly exposed metric macros are defined here.
-//! Although `dipstick` does not have a macro-based API,
-//! in some situations they can make instrumented code simpler.
 
-// TODO add #[timer("name")] method annotation processors
+// TODO add #[timer("name")] custom derive
 
 /// A convenience macro to wrap a block or an expression with a start / stop timer.
 /// Elapsed time is sent to the supplied statsd client after the computation has been performed.
@@ -14,192 +12,129 @@ macro_rules! time {
         let value = $body;
         $timer.stop(start_time);
         value
+    }};
+}
+
+/// Metrics can be used from anywhere (public), does not need to declare metrics in this block.
+#[macro_export]
+macro_rules! metrics {
+    // BRANCH NODE - public type decl
+    ($(#[$attr:meta])* pub $IDENT:ident: $TYPE:ty = $e:expr => { $($BRANCH:tt)*} $($REST:tt)*) => {
+        lazy_static! { $(#[$attr])* pub static ref $IDENT: $TYPE = $e.into(); }
+        __in_context!{ $IDENT; $TYPE; $($BRANCH)* }
+        metrics!{ $($REST)* }
+    };
+
+    // BRANCH NODE - private typed decl
+    ($(#[$attr:meta])* $IDENT:ident: $TYPE:ty = $e:expr => { $($BRANCH:tt)* } $($REST:tt)*) => {
+        lazy_static! { $(#[$attr])* static ref $IDENT: $TYPE = $e.into(); }
+        __in_context!{ $IDENT; $TYPE; $($BRANCH)* }
+        metrics!{ $($REST)* }
+    };
+
+    // BRANCH NODE - public untyped decl
+    ($(#[$attr:meta])* pub $IDENT:ident = $e:expr => { $($BRANCH:tt)* } $($REST:tt)*) => {
+        lazy_static! { $(#[$attr])* pub static ref $IDENT: Proxy = $e.into(); }
+        __in_context!{ $IDENT; Proxy; $($BRANCH)* }
+        metrics!{ $($REST)* }
+    };
+
+    // BRANCH NODE - private untyped decl
+    ($(#[$attr:meta])* $IDENT:ident = $e:expr => { $($BRANCH:tt)* } $($REST:tt)*) => {
+        lazy_static! { $(#[$attr])* static ref $IDENT: Proxy = $e.into(); }
+        __in_context!{ $IDENT; Proxy; $($BRANCH)* }
+        metrics!{ $($REST)* }
+    };
+
+    // BRANCH NODE - untyped expr
+    ($e:expr => { $($BRANCH:tt)+ } $($REST:tt)*) => {
+        __in_context!{ $e; Proxy; $($BRANCH)* }
+        metrics!{ $($REST)* }
+    };
+
+    // LEAF NODE - public typed decl
+    ($(#[$attr:meta])* pub $IDENT:ident: $TYPE:ty = $e:expr; $($REST:tt)*) => {
+        __in_context!{ Proxy::default_root(); Proxy; $(#[$attr])* pub $IDENT: $TYPE = $e; }
+        metrics!{ $($REST)* }
+    };
+
+    // LEAF NODE - private typed decl
+    ($(#[$attr:meta])* $IDENT:ident: $TYPE:ty = $e:expr; $($REST:tt)*) => {
+        __in_context!{ Proxy::default_root(); Proxy; $(#[$attr])* $IDENT: $TYPE = $e; }
+        metrics!{ $($REST)* }
+    };
+
+    // END NODE
+    () => ()
+}
+
+/// Internal macro required to abstract over pub/non-pub versions of the macro
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __in_context {
+    // METRIC NODE - public
+    ($WITH:expr; $TY:ty; $(#[$attr:meta])* pub $IDENT:ident: $MTY:ty = $METRIC_NAME:expr; $($REST:tt)*) => {
+        lazy_static! { $(#[$attr])* pub static ref $IDENT: $MTY =
+            $WITH.new_metric($METRIC_NAME.into(), stringify!($MTY).into()).into();
+        }
+        __in_context!{ $WITH; $TY; $($REST)* }
+    };
+
+    // METRIC NODE - private
+    ($WITH:expr; $TY:ty; $(#[$attr:meta])* $IDENT:ident: $MTY:ty = $METRIC_NAME:expr; $($REST:tt)*) => {
+        lazy_static! { $(#[$attr])* static ref $IDENT: $MTY =
+            $WITH.new_metric($METRIC_NAME.into(), stringify!($MTY).into()).into();
+        }
+        __in_context!{ $WITH; $TY; $($REST)* }
+    };
+
+    // SUB BRANCH NODE - public identifier
+    ($WITH:expr; $TY:ty; $(#[$attr:meta])* pub $IDENT:ident = $e:expr => { $($BRANCH:tt)*} $($REST:tt)*) => {
+        lazy_static! { $(#[$attr])* pub static ref $IDENT = $WITH.add_prefix($e); }
+        __in_context!($IDENT; $TY; $($BRANCH)*);
+        __in_context!($WITH; $TY; $($REST)*);
+    };
+
+    // SUB BRANCH NODE - private identifier
+    ($WITH:expr; $TY:ty; $(#[$attr:meta])* $IDENT:ident = $e:expr => { $($BRANCH:tt)*} $($REST:tt)*) => {
+        lazy_static! { $(#[$attr])* static ref $IDENT = $WITH.add_prefix($e); }
+        __in_context!($IDENT; $TY; $($BRANCH)*);
+        __in_context!($WITH; $TY; $($REST)*);
+    };
+
+    // SUB BRANCH NODE (not yet)
+    ($WITH:expr; $TY:ty; $(#[$attr:meta])* pub $e:expr => { $($BRANCH:tt)*} $($REST:tt)*) => {
+        __in_context!($WITH.add_prefix($e); $TY; $($BRANCH)*);
+        __in_context!($WITH; $TY; $($REST)*);
+    };
+
+    // SUB BRANCH NODE (not yet)
+    ($WITH:expr; $TY:ty; $(#[$attr:meta])* $e:expr => { $($BRANCH:tt)*} $($REST:tt)*) => {
+        __in_context!($WITH.add_prefix($e); $TY; $($BRANCH)*);
+        __in_context!($WITH; $TY; $($REST)*);
+    };
+
+    ($WITH:expr; $TYPE:ty;) => ()
+}
+
+
+#[cfg(test)]
+mod test {
+    use core::input::*;
+    use core::proxy::Proxy;
+
+    metrics!{TEST: Proxy = "test_prefix" => {
+        M1: Marker = "failed";
+        C1: Counter = "failed";
+        G1: Gauge = "failed";
+        T1: Timer = "failed";
     }}
-}
-
-/////////////
-// APP SCOPE
-
-/// Define application-scoped metrics.
-#[macro_export]
-macro_rules! app_metrics {
-    ($type_param: ty, $metric_id: ident = ($($app_metrics: expr),+ $(,)*)) => {
-        lazy_static! { pub static ref $metric_id: AppMetrics<$type_param> = app_metrics(($($app_metrics),*)); }
-    };
-    ($type_param: ty, $metric_id: ident = [$($app_metrics: expr),+ $(,)*]) => {
-        lazy_static! { pub static ref $metric_id: AppMetrics<$type_param> = app_metrics(&[$($app_metrics),*][..],); }
-    };
-    ($type_param: ty, $metric_id: ident = $app_metrics: expr) => {
-        lazy_static! { pub static ref $metric_id: AppMetrics<$type_param> = $app_metrics.into(); }
-    };
-}
-
-/// Define application-scoped markers.
-#[macro_export]
-macro_rules! app_marker {
-    ($type_param: ty, $app_metrics: expr, { $($metric_id: ident: $metric_name: expr),* $(,)* } ) => {
-        lazy_static! { $(pub static ref $metric_id: AppMarker<$type_param> = $app_metrics.marker( $metric_name );)* }
-    };
-}
-
-/// Define application-scoped counters.
-#[macro_export]
-macro_rules! app_counter {
-    ($type_param: ty, $app_metrics: expr, { $($metric_id: ident: $metric_name: expr),* $(,)* } ) => {
-        lazy_static! { $(pub static ref $metric_id: AppCounter<$type_param> = $app_metrics.counter( $metric_name );)* }
-    };
-}
-
-/// Define application-scoped gauges.
-#[macro_export]
-macro_rules! app_gauge {
-    ($type_param: ty, $app_metrics: expr, { $($metric_id: ident: $metric_name: expr),* $(,)* } ) => {
-        lazy_static! { $(pub static ref $metric_id: AppGauge<$type_param> = $app_metrics.gauge( $metric_name );)* }
-    };
-}
-
-/// Define application-scoped timers.
-#[macro_export]
-macro_rules! app_timer {
-    ($type_param: ty, $app_metrics: expr, { $($metric_id: ident: $metric_name: expr),* $(,)* } ) => {
-        lazy_static! { $(pub static ref $metric_id: AppTimer<$type_param> = $app_metrics.timer( $metric_name );)* }
-    };
-}
-
-
-/////////////
-// MOD SCOPE
-
-/// Define module-scoped metrics.
-#[macro_export]
-macro_rules! mod_metrics {
-    ($type_param: ty, $metric_id: ident = ($($app_metrics: expr),+ $(,)*)) => {
-        lazy_static! { static ref $metric_id: AppMetrics<$type_param> = app_metrics(($($app_metrics),*)); }
-    };
-    ($type_param: ty, $metric_id: ident = [$($app_metrics: expr),+ $(,)*]) => {
-        lazy_static! { static ref $metric_id: AppMetrics<$type_param> = app_metrics(&[$($app_metrics),*][..],); }
-    };
-    ($type_param: ty, $metric_id: ident = $mod_metrics: expr) => {
-        lazy_static! { static ref $metric_id: AppMetrics<$type_param> = $mod_metrics.into(); }
-    };
-}
-
-/// Define module-scoped markers.
-#[macro_export]
-macro_rules! mod_marker {
-    ($type_param: ty, $mod_metrics: expr, { $($metric_id: ident: $metric_name: expr),* $(,)* } ) => {
-        lazy_static! { $(static ref $metric_id: AppMarker<$type_param> = $mod_metrics.marker( $metric_name );)* }
-    };
-}
-
-/// Define module-scoped counters.
-#[macro_export]
-macro_rules! mod_counter {
-    ($type_param: ty, $mod_metrics: expr, { $($metric_id: ident: $metric_name: expr),* $(,)* } ) => {
-        lazy_static! { $(static ref $metric_id: AppCounter<$type_param> = $mod_metrics.counter( $metric_name );)* }
-    };
-}
-
-/// Define module-scoped gauges.
-#[macro_export]
-macro_rules! mod_gauge {
-    ($type_param: ty, $mod_metrics: expr, { $($metric_id: ident: $metric_name: expr),* $(,)* } ) => {
-        lazy_static! { $(static ref $metric_id: AppGauge<$type_param> = $mod_metrics.gauge( $metric_name );)* }
-    };
-    ($type_param: ty, $mod_metrics: expr, $metric_id: ident: $metric_name: expr) => {
-        lazy_static! { static ref $metric_id: AppGauge<$type_param> = $mod_metrics.gauge( $metric_name ); }
-    }
-}
-
-/// Define module-scoped timers.
-#[macro_export]
-macro_rules! mod_timer {
-    ($type_param: ty, $mod_metrics: expr, { $($metric_id: ident: $metric_name: expr),* $(,)* } ) => {
-        lazy_static! { $(static ref $metric_id: AppTimer<$type_param> = $mod_metrics.timer( $metric_name );)* }
-    };
-}
-
-#[cfg(test)]
-mod test_app {
-    use self_metrics::*;
-
-    app_metrics!(Aggregate, TEST_METRICS = DIPSTICK_METRICS.with_prefix("test_prefix"));
-
-    app_marker!(Aggregate, TEST_METRICS, {
-        M1: "failed",
-        M2: "success",
-    });
-
-    app_counter!(Aggregate, TEST_METRICS, {
-        C1: "failed",
-        C2: "success",
-    });
-
-    app_gauge!(Aggregate, TEST_METRICS, {
-        G1: "failed",
-        G2: "success",
-    });
-
-    app_timer!(Aggregate, TEST_METRICS, {
-        T1: "failed",
-        T2: "success",
-    });
-
 
     #[test]
-    fn call_macro_defined_metrics() {
+    fn call_new_macro_defined_metrics() {
         M1.mark();
-        M2.mark();
-
         C1.count(1);
-        C2.count(2);
-
         G1.value(1);
-        G2.value(2);
-
         T1.interval_us(1);
-        T2.interval_us(2);
-    }
-}
-
-#[cfg(test)]
-mod test_mod {
-    use self_metrics::*;
-
-    mod_metrics!(Aggregate, TEST_METRICS = DIPSTICK_METRICS.with_prefix("test_prefix"));
-
-    mod_marker!(Aggregate, TEST_METRICS, {
-        M1: "failed",
-        M2: "success",
-    });
-
-    mod_counter!(Aggregate, TEST_METRICS, {
-        C1: "failed",
-        C2: "success",
-    });
-
-    mod_gauge!(Aggregate, TEST_METRICS, {
-        G1: "failed",
-        G2: "success",
-    });
-
-    mod_timer!(Aggregate, TEST_METRICS, {
-        T1: "failed",
-        T2: "success",
-    });
-
-    #[test]
-    fn call_macro_defined_metrics() {
-        M1.mark();
-        M2.mark();
-
-        C1.count(1);
-        C2.count(2);
-
-        G1.value(1);
-        G2.value(2);
-
-        T1.interval_us(1);
-        T2.interval_us(2);
     }
 }

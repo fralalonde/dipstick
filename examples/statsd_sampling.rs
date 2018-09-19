@@ -8,14 +8,18 @@ use std::time::Duration;
 
 fn main() {
     let metrics =
-        Graphite::send_to("localhost:2003")
+        Statsd::send_to("localhost:8125")
             .expect("Connected")
+            .sampled(Sampling::Random(0.2))
             .add_prefix("my_app")
             .input();
 
+    let counter = metrics.counter("counter_a");
+
     loop {
-        metrics.counter("counter_a").count(123);
-        metrics.timer("timer_a").interval_us(2000000);
-        std::thread::sleep(Duration::from_millis(40));
+        for i in 1..11 {
+            counter.count(i);
+        }
+        std::thread::sleep(Duration::from_millis(3000));
     }
 }

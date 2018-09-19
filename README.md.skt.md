@@ -14,13 +14,14 @@ fn main() {{
 ```rust,skt-fail
 extern crate dipstick;
 use dipstick::*;
+use dipstick::error::Error;
 use std::result::Result;
 
 fn main() {{
     run().ok();
 }}
 
-fn run() -> Result<(), dipstick::error::Error> {{
+fn run() -> Result<(), Error> {{
     {}
     Ok(())
 }}
