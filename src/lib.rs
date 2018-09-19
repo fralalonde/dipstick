@@ -1,19 +1,9 @@
-/*!
-A quick, modular metrics toolkit for Rust applications.
-
-*/
+//! A quick, modular metrics toolkit for Rust applications.
 
 #![cfg_attr(feature = "bench", feature(test))]
-#![warn(
-missing_copy_implementations,
-missing_docs,
-trivial_casts,
-trivial_numeric_casts,
-unused_extern_crates,
-unused_import_braces,
-unused_qualifications,
-// variant_size_differences,
-)]
+#![warn(missing_docs, trivial_casts, trivial_numeric_casts, unused_extern_crates,
+        unused_import_braces, unused_qualifications)]
+#![recursion_limit="32"]
 
 #[cfg(feature = "bench")]
 extern crate test;
@@ -22,67 +12,49 @@ extern crate test;
 extern crate log;
 
 #[macro_use]
-extern crate derivative;
-#[macro_use]
 extern crate lazy_static;
-extern crate time;
+extern crate atomic_refcell;
 extern crate num;
 
-mod pcg32;
-mod lru_cache;
+#[cfg(feature="protobuf")]
+extern crate protobuf;
 
-pub mod error;
+// FIXME required only for pcg32 seed (for sampling)
+extern crate time;
 
 #[macro_use]
-pub mod macros;
+mod macros;
 
-pub mod core;
-pub use core::*;
+mod core;
+pub use core::{Flush, Value};
+pub use core::component::*;
+pub use core::input::*;
+pub use core::output::*;
+pub use core::scheduler::*;
+pub use core::out_lock::*;
+pub use core::error::{Error, Result};
+pub use core::clock::{TimeHandle, mock_clock_advance, mock_clock_reset};
+pub use core::proxy::Proxy;
 
 mod output;
-pub use output::*;
-
-mod app_metrics;
-pub use app_metrics::*;
-
-mod sample;
-pub use sample::*;
-
-mod scores;
-pub use scores::*;
+pub use output::text::*;
+pub use output::graphite::*;
+pub use output::statsd::*;
+pub use output::map::*;
+pub use output::logging::*;
 
 mod aggregate;
-pub use aggregate::*;
-
-mod publish;
-pub use publish::*;
-
-mod statsd;
-pub use statsd::*;
-
-mod namespace;
-pub use namespace::*;
-
-mod graphite;
-pub use graphite::*;
-
-mod http;
-pub use http::*;
-
-mod socket;
-pub use socket::*;
+pub use aggregate::bucket::*;
+pub use aggregate::scores::*;
 
 mod cache;
-pub use cache::*;
+pub use cache::cache_in::CachedInput;
+pub use cache::cache_out::CachedOutput;
 
 mod multi;
-pub use multi::*;
+pub use multi::multi_in::*;
+pub use multi::multi_out::*;
 
-mod async_queue;
-pub use async_queue::*;
-
-mod schedule;
-pub use schedule::*;
-
-mod self_metrics;
-pub use self_metrics::snapshot;
+mod queue;
+pub use queue::queue_in::*;
+pub use queue::queue_out::*;
