@@ -58,8 +58,3 @@ pub use multi::multi_out::*;
 mod queue;
 pub use queue::queue_in::*;
 pub use queue::queue_out::*;
-
-// FIXME using * to prevent "use of deprecated" warnings. #[allow(dead_code)] doesnt work?
-//#[macro_use]
-//mod deprecated;
-//pub use deprecated::*;
