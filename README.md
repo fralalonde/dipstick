@@ -1,33 +1,23 @@
-# dipstick
 
-A configurable structured metrics library for Rust applications.
-
-Like logging frameworks but with counters, markers, gauges and timers.
+![a dipstick picture](https://raw.githubusercontent.com/fralalonde/dipstick/master/assets/dipstick_single_ok_horiz_transparent.png)
 
 [![crates.io](https://img.shields.io/crates/v/dipstick.svg)](https://crates.io/crates/dipstick)
 [![docs.rs](https://docs.rs/dipstick/badge.svg)](https://docs.rs/dipstick)
-[![downloads](https://img.shields.io/crates/d/dipstick.svg)](https://crates.io/crates/dipstick)
 [![Build Status](https://travis-ci.org/fralalonde/dipstick.svg?branch=master)](https://travis-ci.org/fralalonde/dipstick)
-[![license-mit](http://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/fralalonde/dipstick/blob/master/LICENSE-MIT)
-[![license-apache](http://img.shields.io/badge/license-APACHE-blue.svg)](https://github.com/fralalonde/dipstick/blob/master/LICENSE-APACHE)
-[![Join the chat at https://gitter.im/fralalonde/dipstick](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/fralalonde/dipstick?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
-[![Coverage Status](https://coveralls.io/repos/fralalonde/dipstick/badge.svg?branch=master)](https://coveralls.io/r/fralalonde/dipstick?branch=master)
 
-![a dipstick picture](https://raw.githubusercontent.com/fralalonde/dipstick/master/assets/dipstick_red_small.jpg)
+# dipstick
 
-Dipstick aims to be the one-stop shop for metrics _collection_ and _routing_ in rust applications.
-As such, it strives to offer:
- - the nicest, most ergonomic metrics configuration and collection APIs
- - the best performance with less impact on applications
- - the greatest choice of outputs to popular metrics systems
-
-For convenience, dipstick builds on stable Rust with minimal, feature-gated dependencies.
+A one-stop shop metrics library for Rust applications with lots of features,  
+minimal impact on applications and a choice of output to downstream systems.
 
 ## Features
 
-Because dipstick is packaged as a toolkit,
-applications configure it to suit their needs.
-Dipstick-enabled apps _can_:
+Dipstick is a toolkit to help all sorts of application collect and send out metrics.
+As such, it needs a bit of set up to suit one's needs.
+Skimming through the handbook [handbook](https://github.com/fralalonde/dipstick/tree/master/handbook) 
+should help you get an idea of the possible configurations.
+
+In short, dipstick-enabled apps _can_:
 
   - Send metrics to console, log, statsd, graphite or prometheus (one or many)
   - Serve metrics over HTTP
@@ -40,16 +30,16 @@ Dipstick-enabled apps _can_:
   - Choose between buffered or immediate output
   - Switch between metric backends at runtime
 
+For convenience, dipstick builds on stable Rust with minimal, feature-gated dependencies.
+
 ### Non-goals
 
-By design, dipstick will not
-- calculate ad-hoc statistics from previously recorded data
+For performance reasons, dipstick will not
 - plot graphs
 - send alerts
 - track histograms
 
-These are all best done by downstream software,
-such as timeseries visualization and monitoring tools.
+These are all best done by downstream timeseries visualization and monitoring tools.
 
 ## Show me the code!
 
