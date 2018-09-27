@@ -1,7 +1,8 @@
 //! Dispatch metrics to multiple sinks.
 
 use core::Flush;
-use core::component::{Attributes, WithAttributes, Name, AddPrefix};
+use core::component::{Attributes, WithAttributes, Naming};
+use core::name::Name;
 use core::input::Kind;
 use core::output::{Output, OutputMetric, OutputScope, OutputDyn};
 use core::error;
@@ -30,7 +31,7 @@ impl Output for MultiOutput {
 
 impl MultiOutput {
     /// Create a new multi-output.
-    pub fn metrics() -> MultiOutput {
+    pub fn output() -> MultiOutput {
         MultiOutput {
             attributes: Attributes::default(),
             outputs: vec![],
@@ -76,7 +77,7 @@ impl MultiOutputScope {
 
 impl OutputScope for MultiOutputScope {
     fn new_metric(&self, name: Name, kind: Kind) -> OutputMetric {
-        let ref name = self.qualified_name(name);
+        let ref name = self.qualify(name);
         let metrics: Vec<OutputMetric> = self.scopes.iter()
             .map(move |scope| scope.new_metric(name.clone(), kind))
             .collect();

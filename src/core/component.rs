@@ -1,13 +1,11 @@
 use std::sync::Arc;
-use std::ops;
-use std::collections::HashMap;
+use std::collections::{HashMap};
+
+use core::name::{Namespace, Name};
 
 /// The actual distribution (random, fixed-cycled, etc) depends on selected sampling method.
 #[derive(Debug, Clone, Copy)]
 pub enum Sampling {
-    /// Do not sample, use all data.
-    Full,
-
     /// Floating point sampling rate
     /// - 1.0+ records everything
     /// - 0.5 records one of two values
@@ -15,20 +13,11 @@ pub enum Sampling {
     Random(f64)
 }
 
-impl Default for Sampling {
-    fn default() -> Self {
-        Sampling::Full
-    }
-}
-
 /// A metrics buffering strategy.
 /// All strategies other than `Unbuffered` are applied as a best-effort, meaning that the buffer
 /// may be flushed at any moment before reaching the limit, for any or no reason in particular.
 #[derive(Debug, Clone, Copy)]
 pub enum Buffering {
-    /// No buffering is performed (default).
-    Unbuffered,
-
     /// A buffer of maximum specified size is used.
     BufferSize(usize),
 
@@ -36,24 +25,15 @@ pub enum Buffering {
     Unlimited,
 }
 
-impl Default for Buffering {
-    fn default() -> Self {
-        Buffering::Unbuffered
-    }
-}
-
 /// One struct to rule them all.
 /// Possible attributes of metric outputs and scopes.
 /// Private trait used by impls of specific With* traits.
 /// Not all attributes are used by all structs!
-/// This is a design choice to centralize code at the expense of slight waste of memory.
-/// Fields have also not been made `pub` to make it easy to change this mechanism.
-/// Field access must go through `is_` and `get_` methods declared in sub-traits.
 #[derive(Debug, Clone, Default)]
 pub struct Attributes {
-    namespace: Name,
-    sampling: Sampling,
-    buffering: Buffering,
+    namespace: Namespace,
+    sampling: Option<Sampling>,
+    buffering: Option<Buffering>,
 }
 
 /// The only trait that requires concrete impl by metric components.
@@ -79,15 +59,15 @@ pub trait WithAttributes: Clone {
 }
 
 /// Name operations support.
-pub trait AddPrefix {
-    /// Return the namespace of the component.
-    fn get_namespace(&self) -> &Name;
+pub trait Naming {
+    /// Returns namespace of component.
+    fn get_namespace(&self) -> &Namespace;
 
     /// Join namespace and prepend in newly defined metrics.
-    fn add_prefix(&self, name: &str) -> Self;
+    fn namespace<S: Into<String>>(&self, name: S) -> Self;
 
     /// Append the specified name to the local namespace and return the concatenated result.
-    fn qualified_name(&self, metric_name: Name) -> Name;
+    fn qualify<S: Into<Name>>(&self, name: S) -> Name;
 }
 
 /// Name operations support.
@@ -100,20 +80,22 @@ pub trait Label {
 
 }
 
-impl<T: WithAttributes> AddPrefix for T {
-    fn get_namespace(&self) -> &Name {
+impl<T: WithAttributes> Naming for T {
+
+    /// Returns namespace of component.
+    fn get_namespace(&self) -> &Namespace {
         &self.get_attributes().namespace
     }
 
     /// Join namespace and prepend in newly defined metrics.
-    fn add_prefix(&self, name: &str) -> Self {
-        self.with_attributes(|new_attr| new_attr.namespace = new_attr.namespace.concat(name))
+    fn namespace<S: Into<String>>(&self, name: S) -> Self {
+        let name = name.into();
+        self.with_attributes(|new_attr| new_attr.namespace.push_back(name.clone()))
     }
 
     /// Append the specified name to the local namespace and return the concatenated result.
-    fn qualified_name(&self, name: Name) -> Name {
-        // FIXME (perf) store name in reverse to prepend with an actual push() to the vec
-        self.get_attributes().namespace.concat(name)
+    fn qualify<S: Into<Name>>(&self, name: S) -> Name {
+        name.into().append(self.get_attributes().namespace.clone())
     }
 }
 
@@ -121,11 +103,11 @@ impl<T: WithAttributes> AddPrefix for T {
 pub trait Sampled: WithAttributes {
     /// Perform random sampling of values according to the specified rate.
     fn sampled(&self, sampling: Sampling) -> Self {
-        self.with_attributes(|new_attr| new_attr.sampling = sampling)
+        self.with_attributes(|new_attr| new_attr.sampling = Some(sampling))
     }
 
     /// Get the sampling strategy for this component, if any.
-    fn get_sampling(&self) -> Sampling {
+    fn get_sampling(&self) -> Option<Sampling> {
         self.get_attributes().sampling
     }
 }
@@ -136,85 +118,11 @@ pub trait Sampled: WithAttributes {
 pub trait Buffered: WithAttributes {
     /// Return a clone with the specified buffering set.
     fn buffered(&self, buffering: Buffering) -> Self {
-        self.with_attributes(|new_attr| new_attr.buffering = buffering)
-    }
-
-    /// Is this component using buffering?
-    fn is_buffered(&self) -> bool {
-        match self.get_buffering() {
-            Buffering::Unbuffered => false,
-            _ => true
-        }
+        self.with_attributes(|new_attr| new_attr.buffering = Some(buffering))
     }
 
     /// Return the buffering.
-    fn get_buffering(&self) -> Buffering {
+    fn get_buffering(&self) -> Option<Buffering> {
         self.get_attributes().buffering
     }
 }
-
-/// A namespace for metrics.
-/// Does _not_ include the metric's "short" name itself.
-/// Can be empty.
-#[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd, Default)]
-pub struct Name {
-    inner: Vec<String>,
-}
-
-impl Name {
-
-    /// Concatenate with another namespace into a new one.
-    pub fn concat(&self, name: impl Into<Name>) -> Self {
-        let mut cloned = self.clone();
-        cloned.inner.extend_from_slice(&name.into().inner);
-        cloned
-    }
-
-    /// Returns true if the specified namespace is a subset or is equal to this namespace.
-    pub fn starts_with(&self, name: &Name) -> bool {
-        (self.inner.len() >= name.inner.len()) && (name.inner[..] == self.inner[..name.inner.len()])
-    }
-
-    /// Combine name parts into a string.
-    pub fn join(&self, separator: &str) -> String {
-
-        let mut buf = String::with_capacity(64);
-        let mut i = self.inner.iter();
-        if let Some(n) = i.next() {
-            buf.push_str(n.as_ref());
-        } else {
-            return "".into()
-        }
-        for n in i {
-            buf.push_str(separator);
-            buf.push_str(n.as_ref());
-        }
-        buf
-    }
-}
-
-impl ops::Deref for Name {
-    type Target = Vec<String>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-
-impl ops::DerefMut for Name {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
-    }
-}
-
-impl<S: Into<String>> From<S> for Name {
-    fn from(name: S) -> Name {
-        let name: String = name.into();
-        if name.is_empty() {
-            Name::default()
-        } else {
-            Name { inner: vec![name] }
-        }
-    }
-}
-

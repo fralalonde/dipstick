@@ -2,8 +2,8 @@
 //! Because the possibly high volume of data, this is pre-set to use aggregation.
 //! This is also kept in a separate module because it is not to be exposed outside of the crate.
 
-use core::component::AddPrefix;
 use core::input::{Marker, InputScope, Counter};
+use core::component::Naming;
 use core::proxy::Proxy;
 
 metrics!{

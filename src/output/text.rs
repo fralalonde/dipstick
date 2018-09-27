@@ -4,7 +4,8 @@
 
 use core::{Flush, Value};
 use core::input::Kind;
-use core::component::{Attributes, WithAttributes, Buffered, Name, AddPrefix};
+use core::component::{Attributes, WithAttributes, Buffered, Naming};
+use core::name::Name;
 use core::output::{Output, OutputMetric, OutputScope};
 use core::error;
 use cache::cache_out;
@@ -122,13 +123,13 @@ impl<W: Write + Send + Sync + 'static> Buffered for TextScope<W> {}
 
 impl<W: Write + Send + Sync + 'static> OutputScope for TextScope<W> {
     fn new_metric(&self, name: Name, kind: Kind) -> OutputMetric {
-        let name = self.qualified_name(name);
+        let name = self.qualify(name);
         let template = (self.output.format_fn)(&name, kind);
 
         let print_fn = self.output.print_fn.clone();
         let entries = self.entries.clone();
 
-        if self.is_buffered() {
+        if let Some(_buffering) = self.get_buffering() {
             OutputMetric::new(move |value| {
                 let mut buffer = Vec::with_capacity(32);
                 match (print_fn)(&mut buffer, &template, value) {
@@ -140,6 +141,7 @@ impl<W: Write + Send + Sync + 'static> OutputScope for TextScope<W> {
                 }
             })
         } else {
+            // unbuffered
             let output = self.output.clone();
             OutputMetric::new(move |value| {
                 let mut buffer = Vec::with_capacity(32);

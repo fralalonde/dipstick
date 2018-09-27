@@ -19,12 +19,12 @@ fn main() {
 
             // prepend and append to metric name
             (_, ScoreType::Count(count)) => {
-                if let Some(last) = name.pop() {
-                    name.push("customized_add_prefix".into());
-                    name.push(format!("{}_and_a_suffix", last));
+                if let Some(last) = name.pop_back() {
+//                    let name = ;
                     Some((
                         Kind::Counter,
-                        name,
+                        name.append("customized_add_prefix")
+                            .append(format!("{}_and_a_suffix", last)),
                         count,
                     ))
                 } else {
@@ -33,7 +33,7 @@ fn main() {
             },
 
             // scaling the score value and appending unit to name
-            (kind, ScoreType::Sum(sum)) => Some((kind, name.concat("per_thousand"), sum / 1000)),
+            (kind, ScoreType::Sum(sum)) => Some((kind, name.append("per_thousand"), sum / 1000)),
 
             // using the unmodified metric name
             (kind, ScoreType::Mean(avg)) => Some((kind, name, avg.round() as u64)),

@@ -1,6 +1,7 @@
 //! Decouple metric definition from configuration with trait objects.
 
-use core::component::{Attributes, WithAttributes, Name, AddPrefix};
+use core::component::{Attributes, WithAttributes, Naming};
+use core::name::{Name, Namespace};
 use core::Flush;
 use core::input::{Kind, InputMetric, InputScope};
 use core::void::VOID_INPUT;
@@ -24,7 +25,7 @@ lazy_static! {
 #[derive(Debug)]
 struct ProxyMetric {
     // basic info for this metric, needed to recreate new corresponding trait object if target changes
-    name: Name,
+    name: Namespace,
     kind: Kind,
 
     // the metric trait object to proxy metric values to
@@ -62,9 +63,9 @@ impl Proxy {
 
 struct InnerProxy {
     // namespaces can target one, many or no metrics
-    targets: HashMap<Name, Arc<InputScope + Send + Sync>>,
+    targets: HashMap<Namespace, Arc<InputScope + Send + Sync>>,
     // last part of the namespace is the metric's name
-    metrics: BTreeMap<Name, Weak<ProxyMetric>>,
+    metrics: BTreeMap<Namespace, Weak<ProxyMetric>>,
 }
 
 impl fmt::Debug for InnerProxy {
@@ -83,30 +84,31 @@ impl InnerProxy {
         }
     }
 
-    fn set_target(&mut self, target_name: Name, target_scope: Arc<InputScope + Send + Sync>) {
-        self.targets.insert(target_name.clone(), target_scope.clone());
-        for (metric_name, metric) in self.metrics.range_mut(target_name.clone()..) {
+    fn set_target(&mut self, namespace: &Namespace, target_scope: Arc<InputScope + Send + Sync>) {
+        self.targets.insert(namespace.clone(), target_scope.clone());
+
+        for (metric_name, metric) in self.metrics.range_mut(namespace.clone()..) {
             if let Some(metric) = metric.upgrade() {
                 // check for range end
-                if !metric_name.starts_with(&target_name) { break }
+                if !metric_name.is_within(namespace) { break }
 
                 // check if metric targeted by _lower_ namespace
-                if metric.target.borrow().1 > target_name.len() { continue }
+                if metric.target.borrow().1 > namespace.len() { continue }
 
-                let target_metric = target_scope.new_metric(metric.name.clone(), metric.kind);
-                *metric.target.borrow_mut() = (target_metric, target_name.len());
+                let target_metric = target_scope.new_metric(metric.name.leaf(), metric.kind);
+                *metric.target.borrow_mut() = (target_metric, namespace.len());
             }
         }
     }
 
-    fn get_effective_target(&self, name: &Name) -> Option<(Arc<InputScope + Send + Sync>, usize)> {
-        if let Some(target) = self.targets.get(name) {
-            return Some((target.clone(), name.len()));
+    fn get_effective_target(&self, namespace: &Namespace) -> Option<(Arc<InputScope + Send + Sync>, usize)> {
+        if let Some(target) = self.targets.get(namespace) {
+            return Some((target.clone(), namespace.len()));
         }
 
         // no 1:1 match, scan upper namespaces
-        let mut name = name.clone();
-        while let Some(_popped) = name.pop() {
+        let mut name = namespace.clone();
+        while let Some(_popped) = name.pop_back() {
             if let Some(target) = self.targets.get(&name) {
                 return Some((target.clone(), name.len()))
             }
@@ -114,7 +116,7 @@ impl InnerProxy {
         None
     }
 
-    fn unset_target(&mut self, namespace: &Name) {
+    fn unset_target(&mut self, namespace: &Namespace) {
         if self.targets.remove(namespace).is_none() {
             // nothing to do
             return
@@ -124,27 +126,27 @@ impl InnerProxy {
             .unwrap_or_else(|| (VOID_INPUT.input_dyn(), 0));
 
         // update all affected metrics to next upper targeted namespace
-        for (name, metric) in self.metrics.range_mut(namespace..) {
+        for (name, metric) in self.metrics.range_mut(namespace.clone()..) {
             // check for range end
-            if !name.starts_with(namespace) { break }
+            if !name.is_within(namespace) { break }
 
             if let Some(mut metric) = metric.upgrade() {
                 // check if metric targeted by _lower_ namespace
                 if metric.target.borrow().1 > namespace.len() { continue }
 
-                let new_metric = up_target.new_metric(name.clone(), metric.kind);
+                let new_metric = up_target.new_metric(name.leaf(), metric.kind);
                 *metric.target.borrow_mut() = (new_metric, up_nslen);
             }
         }
     }
 
-    fn drop_metric(&mut self, name: &Name) {
+    fn drop_metric(&mut self, name: &Namespace) {
         if self.metrics.remove(name).is_none() {
             panic!("Could not remove DelegatingMetric weak ref from delegation point")
         }
     }
 
-    fn flush(&self, namespace: &Name) -> error::Result<()> {
+    fn flush(&self, namespace: &Namespace) -> error::Result<()> {
         if let Some((target, _nslen)) = self.get_effective_target(namespace) {
             target.flush()
         } else {
@@ -171,7 +173,7 @@ impl Proxy {
     /// Replace target for this proxy and it's children.
     pub fn set_target<T: InputScope + Send + Sync + 'static>(&self, target: T) {
         let mut inner = self.inner.write().expect("Dispatch Lock");
-        inner.set_target(self.get_namespace().clone(), Arc::new(target));
+        inner.set_target(self.get_namespace(), Arc::new(target));
     }
 
     /// Replace target for this proxy and it's children.
@@ -194,14 +196,14 @@ impl Proxy {
 
 impl<S: AsRef<str>> From<S> for Proxy {
     fn from(name: S) -> Proxy {
-        Proxy::new().add_prefix(name.as_ref())
+        Proxy::new().namespace(name.as_ref())
     }
 }
 
 impl InputScope for Proxy {
     /// Lookup or create a proxy stub for the requested metric.
     fn new_metric(&self, name: Name, kind: Kind) -> InputMetric {
-        let name = self.qualified_name(name);
+        let name: Name = self.qualify(name);
         let mut inner = self.inner.write().expect("Dispatch Lock");
         let proxy = inner
             .metrics
@@ -209,19 +211,21 @@ impl InputScope for Proxy {
             // TODO validate that Kind matches existing
             .and_then(|proxy_ref| Weak::upgrade(proxy_ref))
             .unwrap_or_else(|| {
-                let name2 = name.clone();
-                // not found, define new
-                let (target, target_namespace_length) = inner.get_effective_target(&name)
-                    .unwrap_or_else(|| (VOID_INPUT.input_dyn(), 0));
-                let metric_object = target.new_metric(name.clone(), kind);
-                let proxy = Arc::new(ProxyMetric {
-                    name,
-                    kind,
-                    target: AtomicRefCell::new((metric_object, target_namespace_length)),
-                    proxy: self.inner.clone(),
-                });
-                inner.metrics.insert(name2, Arc::downgrade(&proxy));
-                proxy
+                let namespace = &*name;
+                {
+                    // not found, define new
+                    let (target, target_namespace_length) = inner.get_effective_target(namespace)
+                        .unwrap_or_else(|| (VOID_INPUT.input_dyn(), 0));
+                    let metric_object = target.new_metric(namespace.leaf(), kind);
+                    let proxy = Arc::new(ProxyMetric {
+                        name: namespace.clone(),
+                        kind,
+                        target: AtomicRefCell::new((metric_object, target_namespace_length)),
+                        proxy: self.inner.clone(),
+                    });
+                    inner.metrics.insert(namespace.clone(), Arc::downgrade(&proxy));
+                    proxy
+                }
             });
         InputMetric::new(move |value| proxy.target.borrow().0.write(value))
     }
