@@ -1,5 +1,10 @@
+#[cfg(test)]
 use std::ops::Add;
-use std::time::{Duration, Instant};
+
+#[cfg(test)]
+use std::time::Duration;
+
+use std::time::Instant;
 
 use core::Value;
 
@@ -37,6 +42,7 @@ thread_local! {
 /// Enables writing reproducible metrics tests in combination with #mock_clock_advance()
 /// Should be called at beginning of test, before the metric scope is created.
 /// Not feature-gated so it stays visible to outside crates but may not be used outside of tests.
+#[cfg(test)]
 pub fn mock_clock_reset() {
     if !cfg!(not(test)) {
         warn!("Mock clock used outside of cfg[]tests has no effect")
@@ -51,6 +57,7 @@ pub fn mock_clock_reset() {
 /// Enables writing reproducible metrics tests in combination with #mock_clock_reset()
 /// Should be after metrics have been produced but before they are published.
 /// Not feature-gated so it stays visible to outside crates but may not be used outside of tests.
+#[cfg(test)]
 pub fn mock_clock_advance(period: Duration) {
     MOCK_CLOCK.with(|now| {
         let mut now = now.borrow_mut();
