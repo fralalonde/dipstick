@@ -1,6 +1,6 @@
 use core::clock::TimeHandle;
 use core::{Value, Flush};
-use core::component::Name;
+use core::name::Name;
 
 use std::sync::Arc;
 use std::fmt;

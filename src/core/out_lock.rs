@@ -1,6 +1,7 @@
 use core::input::{InputScope, InputMetric, Input, Kind};
 use core::output::{Output, OutputScope};
-use core::component::{Attributes, WithAttributes, Name, AddPrefix};
+use core::component::{Attributes, WithAttributes, Naming};
+use core::name::Name;
 use core::Flush;
 use core::error;
 use std::rc::Rc;
@@ -23,7 +24,7 @@ impl WithAttributes for LockingScopeBox {
 impl InputScope for LockingScopeBox {
 
     fn new_metric(&self, name: Name, kind: Kind) -> InputMetric {
-        let name = self.qualified_name(name);
+        let name = self.qualify(name);
         let raw_metric = self.inner.lock().expect("RawScope Lock").new_metric(name, kind);
         let mutex = self.inner.clone();
         InputMetric::new(move |value| {

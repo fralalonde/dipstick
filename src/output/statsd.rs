@@ -1,6 +1,7 @@
 //! Send metrics to a statsd server.
 
-use core::component::{Buffered, Attributes, Sampled, Sampling, WithAttributes, Name, AddPrefix};
+use core::component::{Buffered, Attributes, Sampled, Sampling, WithAttributes, Naming};
+use core::name::Name;
 use core::pcg32;
 use core::{Flush, Value};
 use core::input::Kind;
@@ -78,7 +79,7 @@ impl Sampled for StatsdScope {}
 impl OutputScope for StatsdScope {
     /// Define a metric of the specified type.
     fn new_metric(&self, name: Name, kind: Kind) -> OutputMetric {
-        let mut prefix = self.qualified_name(name).join(".");
+        let mut prefix = self.qualify(name).join(".");
         prefix.push(':');
 
         let mut suffix = String::with_capacity(16);
@@ -97,7 +98,7 @@ impl OutputScope for StatsdScope {
 
         let cloned = self.clone();
 
-        if let Sampling::Random(float_rate) = self.get_sampling() {
+        if let Some(Sampling::Random(float_rate)) = self.get_sampling() {
             suffix.push_str(&format!{"|@{}\n", float_rate});
             let int_sampling_rate = pcg32::to_int_rate(float_rate);
             let metric = StatsdMetric { prefix, suffix, scale };
@@ -153,7 +154,7 @@ impl StatsdScope {
             buffer.push_str(&metric.suffix);
         }
 
-        if !self.is_buffered() {
+        if self.get_buffering().is_none() {
             if let Err(e) = self.flush_inner(buffer) {
                 debug!("Could not send to statsd {}", e)
             }
@@ -205,7 +206,8 @@ impl Drop for StatsdScope {
 #[cfg(feature = "bench")]
 mod bench {
 
-    use core::*;
+    use core::component::*;
+    use core::input::*;
     use super::*;
     use test;
 

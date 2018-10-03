@@ -2,23 +2,11 @@
 
 use core::Flush;
 use core::input::{Kind, Input, InputScope, InputMetric, InputDyn};
-use core::component::{Attributes, WithAttributes, Name, AddPrefix};
+use core::component::{Attributes, WithAttributes, Naming};
+use core::name::Name;
 use core::error;
 
 use std::sync::Arc;
-
-/// Wrap this output behind an asynchronous metrics dispatch queue.
-/// This is not strictly required for multi threading since the provided scopes
-/// are already Send + Sync but might be desired to lower the latency
-pub trait WithMultiInputScope: InputScope + Send + Sync + 'static + Sized {
-    /// Wrap this output with an asynchronous dispatch queue of specified length.
-    fn add_target<OUT: InputScope + Send + Sync + 'static>(self, target: OUT) -> MultiInputScope {
-        MultiInputScope::new().add_target(self).add_target(target)
-    }
-}
-
-/// Blanket scope concatenation.
-impl<T: InputScope + Send + Sync + 'static + Sized> WithMultiInputScope for T {}
 
 /// Opens multiple scopes at a time from just as many outputs.
 #[derive(Clone)]
@@ -42,7 +30,7 @@ impl Input for MultiInput {
 impl MultiInput {
 
     /// Create a new multi-output.
-    pub fn inputs() -> MultiInput {
+    pub fn input() -> MultiInput {
         MultiInput {
             attributes: Attributes::default(),
             outputs: vec![],
@@ -88,7 +76,7 @@ impl MultiInputScope {
 
 impl InputScope for MultiInputScope {
     fn new_metric(&self, name: Name, kind: Kind) -> InputMetric {
-        let ref name = self.qualified_name(name);
+        let ref name = self.qualify(name);
         let metrics: Vec<InputMetric> = self.scopes.iter()
             .map(move |scope| scope.new_metric(name.clone(), kind))
             .collect();

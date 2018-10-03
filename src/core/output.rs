@@ -1,6 +1,6 @@
 use core::{Flush, Value};
 use core::input::Kind;
-use core::component::Name;
+use core::name::Name;
 use core::void::Void;
 
 use std::rc::Rc;

@@ -1,6 +1,7 @@
 use core::{Flush, Value};
 use core::input::{Kind, Input, InputScope, InputMetric};
-use core::component::{Attributes, WithAttributes, Buffered, Name, AddPrefix};
+use core::component::{Attributes, WithAttributes, Buffered, Naming};
+use core::name::Name;
 use core::error;
 use cache::cache_in;
 use queue::queue_in;
@@ -69,13 +70,13 @@ impl cache_in::CachedInput for Log {}
 
 impl InputScope for LogScope {
     fn new_metric(&self, name: Name, kind: Kind) -> InputMetric {
-        let name = self.qualified_name(name);
+        let name = self.qualify(name);
         let template = (self.output.format_fn)(&name, kind);
 
         let print_fn = self.output.print_fn.clone();
         let entries = self.entries.clone();
 
-        if self.is_buffered() {
+        if let Some(_buffering) = self.get_buffering() {
             InputMetric::new(move |value| {
                 let mut buffer = Vec::with_capacity(32);
                 match (print_fn)(&mut buffer, &template, value) {
@@ -87,6 +88,7 @@ impl InputScope for LogScope {
                 }
             })
         } else {
+            // unbuffered
             InputMetric::new(move |value| {
                 let mut buffer = Vec::with_capacity(32);
                 match (print_fn)(&mut buffer, &template, value) {
