@@ -1,11 +1,8 @@
-
-![a dipstick picture](https://raw.githubusercontent.com/fralalonde/dipstick/master/assets/dipstick_single_ok_horiz_transparent.png)
-
 [![crates.io](https://img.shields.io/crates/v/dipstick.svg)](https://crates.io/crates/dipstick)
 [![docs.rs](https://docs.rs/dipstick/badge.svg)](https://docs.rs/dipstick)
 [![Build Status](https://travis-ci.org/fralalonde/dipstick.svg?branch=master)](https://travis-ci.org/fralalonde/dipstick)
 
-# dipstick
+# dipstick ![a dipstick picture](https://raw.githubusercontent.com/fralalonde/dipstick/master/assets/dipstick_single_ok_horiz_transparent_small.png)
 
 A one-stop shop metrics library for Rust applications with lots of features,  
 minimal impact on applications and a choice of output to downstream systems.

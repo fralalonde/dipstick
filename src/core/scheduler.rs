@@ -29,7 +29,7 @@ impl CancelHandle {
 
 /// Schedule a task to run periodically.
 /// Starts a new thread for every task.
-pub fn set_schedule<F>(every: Duration, operation: F) -> CancelHandle
+fn set_schedule<F>(every: Duration, operation: F) -> CancelHandle
 where
     F: Fn() -> () + Send + 'static,
 {

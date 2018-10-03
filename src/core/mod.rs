@@ -1,4 +1,5 @@
 pub mod error;
+pub mod name;
 pub mod component;
 pub mod input;
 pub mod output;
@@ -38,11 +39,10 @@ pub mod test {
 #[cfg(feature = "bench")]
 pub mod bench {
 
-    use core::{TimeHandle, Marker, Input};
-    use aggregate::bucket::Bucket;
-    use super::clock::TimeHandle;
+    use super::input::*;
+    use super::clock::*;
+    use super::super::aggregate::bucket::*;
     use test;
-    use aggregate::Bucket;
 
     #[bench]
     fn get_instant(b: &mut test::Bencher) {

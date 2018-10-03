@@ -1,7 +1,8 @@
 //! Cache metric definitions.
 
 use core::Flush;
-use core::component::{Attributes, WithAttributes, Name, AddPrefix};
+use core::component::{Attributes, WithAttributes, Naming};
+use core::name::Name;
 use core::output::{Output, OutputMetric, OutputScope, OutputDyn};
 use core::input::Kind;
 use cache::lru_cache as lru;
@@ -72,7 +73,7 @@ impl WithAttributes for OutputScopeCache {
 
 impl OutputScope for OutputScopeCache {
     fn new_metric(&self, name: Name, kind: Kind) -> OutputMetric {
-        let name = self.qualified_name(name);
+        let name = self.qualify(name);
         let lookup = {
             let mut cache = self.cache.write().expect("Cache Lock");
             cache.get(&name).map(|found| found.clone())

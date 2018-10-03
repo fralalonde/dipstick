@@ -1,6 +1,6 @@
 use core::output::{Output, OutputScope, OutputMetric};
-use core::component::Name;
-use core::input::{Kind, InputDyn};
+use core::name::Name;
+use core::input::{Kind, InputDyn, InputScope};
 use core::Flush;
 
 use std::sync::Arc;
@@ -9,8 +9,8 @@ lazy_static! {
     /// The reference instance identifying an uninitialized metric config.
     pub static ref VOID_INPUT: Arc<InputDyn + Send + Sync> = Arc::new(Void::metrics());
 
-//    /// The reference instance identifying an uninitialized metric scope.
-//    pub static ref NO_METRIC_SCOPE: Arc<InputScope + Send + Sync> = VOID_INPUT.input_dyn();
+    /// The reference instance identifying an uninitialized metric scope.
+    pub static ref NO_METRIC_SCOPE: Arc<InputScope + Send + Sync> = VOID_INPUT.input_dyn();
 }
 
 /// Discard metrics output.

@@ -11,7 +11,7 @@ fn main() {
         Statsd::send_to("localhost:8125")
             .expect("Connected")
             .sampled(Sampling::Random(0.2))
-            .add_prefix("my_app")
+            .namespace("my_app")
             .input();
 
     let counter = metrics.counter("counter_a");
