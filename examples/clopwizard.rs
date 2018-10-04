@@ -36,7 +36,7 @@ fn main() {
         .namespace("machine_name");
 
     // send application metrics to aggregator
-    Proxy::default_root().set_target(all_buckets);
+    Proxy::default().set_target(all_buckets);
     Bucket::set_default_target(Text::write_to(io::stdout()));
     Bucket::set_default_stats(stats_all);
 

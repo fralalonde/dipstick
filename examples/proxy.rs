@@ -9,7 +9,7 @@ use dipstick::{Proxy, Text, InputScope, Input, Naming};
 
 
 fn main() {
-    let root = Proxy::default_root();
+    let root = Proxy::default();
     let sub = root.namespace("sub");
 
     let count1 = root.counter("counter_a");
