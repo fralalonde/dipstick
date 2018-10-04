@@ -54,12 +54,13 @@ pub struct Proxy {
     inner: Arc<RwLock<InnerProxy>>,
 }
 
-impl Proxy {
+impl Default for Proxy {
     /// Return the default root metric proxy.
-    pub fn default_root() -> Proxy {
+    fn default() -> Self {
         ROOT_PROXY.clone()
     }
 }
+
 
 struct InnerProxy {
     // namespaces can target one, many or no metrics

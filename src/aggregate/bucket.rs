@@ -123,7 +123,7 @@ impl InnerBucket {
                     }
                 }
             }
-            Ok(publish_scope.flush()?)
+            publish_scope.flush()
         }
     }
 

@@ -35,12 +35,14 @@ impl Namespace {
         true
     }
 
+    /// Make a name in this namespace
     pub fn qualify<S: Into<String>>(&self, leaf: S) -> Name {
         let mut nodes = self.clone();
         nodes.push_back(leaf.into());
         Name { nodes }
     }
 
+    /// Create a new Name using only the last part (leaf)
     pub fn leaf(&self) -> Name {
         self.back().expect("Short metric name").clone().into()
     }

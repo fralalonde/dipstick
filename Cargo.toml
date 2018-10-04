@@ -22,7 +22,7 @@ log = "0.4"
 lazy_static = "1"
 atomic_refcell = "0.1"
 skeptic = { version = "0.13", optional = true }
-num = { version = "0.1", default-features = false }
+num = { version = "0.2", default-features = false }
 
 # FIXME required only for random seed for sampling
 time = "0.1"

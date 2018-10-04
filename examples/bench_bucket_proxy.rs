@@ -11,11 +11,11 @@ use std::env::args;
 use std::str::FromStr;
 
 fn main() {
-    let event = Proxy::default_root().marker("a");
+    let event = Proxy::default().marker("a");
 
     let bucket = Bucket::new();
 
-    Proxy::default_root().set_target(bucket.clone());
+    Proxy::default().set_target(bucket.clone());
 
     let args = &mut args();
     args.next();

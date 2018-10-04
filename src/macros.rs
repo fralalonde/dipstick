@@ -54,13 +54,13 @@ macro_rules! metrics {
 
     // LEAF NODE - public typed decl
     ($(#[$attr:meta])* pub $IDENT:ident: $TYPE:ty = $e:expr; $($REST:tt)*) => {
-        __in_context!{ Proxy::default_root(); Proxy; $(#[$attr])* pub $IDENT: $TYPE = $e; }
+        __in_context!{ Proxy::default(); Proxy; $(#[$attr])* pub $IDENT: $TYPE = $e; }
         metrics!{ $($REST)* }
     };
 
     // LEAF NODE - private typed decl
     ($(#[$attr:meta])* $IDENT:ident: $TYPE:ty = $e:expr; $($REST:tt)*) => {
-        __in_context!{ Proxy::default_root(); Proxy; $(#[$attr])* $IDENT: $TYPE = $e; }
+        __in_context!{ Proxy::default(); Proxy; $(#[$attr])* $IDENT: $TYPE = $e; }
         metrics!{ $($REST)* }
     };
 
