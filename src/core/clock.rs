@@ -23,7 +23,7 @@ impl TimeHandle {
     /// Get the elapsed time in microseconds since TimeHandle was obtained.
     pub fn elapsed_us(self) -> Value {
         let duration = now() - self.0;
-        duration.as_secs() * 1000000 + (duration.subsec_nanos() / 1000) as Value
+        duration.as_secs() * 1_000_000 + (duration.subsec_nanos() / 1000) as Value
     }
 
     /// Get the elapsed time in microseconds since TimeHandle was obtained.

@@ -46,10 +46,10 @@ impl<K: Clone + Hash + Eq, V> LRUCache<K, V> {
             self.ensure_room();
             // Update old head
             let idx = self.entries.len();
-            self.first.map(|e| {
+            if let Some(e) = self.first {
                 let prev = Some(idx);
                 self.entries[e].prev = prev;
-            });
+            }
             // This is the new head
             self.entries.push(CacheEntry {
                 key: key.clone(),
@@ -88,7 +88,7 @@ impl<K: Clone + Hash + Eq, V> LRUCache<K, V> {
 
     /// Promotes the specified key to the top of the cache.
     fn access(&mut self, key: &K) {
-        let i = *self.table.get(key).unwrap();
+        let i = self.table[key];
         self.remove_from_list(i);
         self.first = Some(i);
     }

@@ -23,6 +23,9 @@ examples:
 bench:
 	$(CARGO_CMD) +nightly bench --features "bench"
 
+lint:
+	$(CARGO_CMD) clippy
+
 clean:
 	$(CARGO_CMD) clean
 

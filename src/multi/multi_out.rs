@@ -52,7 +52,7 @@ impl WithAttributes for MultiOutput {
 }
 
 /// Dispatch metric values to a list of scopes.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct MultiOutputScope {
     attributes: Attributes,
     scopes: Vec<Rc<OutputScope>>,
@@ -77,7 +77,7 @@ impl MultiOutputScope {
 
 impl OutputScope for MultiOutputScope {
     fn new_metric(&self, name: Name, kind: Kind) -> OutputMetric {
-        let ref name = self.qualify(name);
+        let name = &self.qualify(name);
         let metrics: Vec<OutputMetric> = self.scopes.iter()
             .map(move |scope| scope.new_metric(name.clone(), kind))
             .collect();

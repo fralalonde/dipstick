@@ -51,7 +51,7 @@ impl WithAttributes for MultiInput {
 }
 
 /// Dispatch metric values to a list of scopes.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct MultiInputScope {
     attributes: Attributes,
     scopes: Vec<Arc<InputScope + Send + Sync>>,
@@ -76,7 +76,7 @@ impl MultiInputScope {
 
 impl InputScope for MultiInputScope {
     fn new_metric(&self, name: Name, kind: Kind) -> InputMetric {
-        let ref name = self.qualify(name);
+        let name = &self.qualify(name);
         let metrics: Vec<InputMetric> = self.scopes.iter()
             .map(move |scope| scope.new_metric(name.clone(), kind))
             .collect();

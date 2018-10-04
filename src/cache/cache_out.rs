@@ -75,8 +75,7 @@ impl OutputScope for OutputScopeCache {
     fn new_metric(&self, name: Name, kind: Kind) -> OutputMetric {
         let name = self.qualify(name);
         let lookup = {
-            let mut cache = self.cache.write().expect("Cache Lock");
-            cache.get(&name).map(|found| found.clone())
+            self.cache.write().expect("Cache Lock").get(&name).cloned()
         };
         lookup.unwrap_or_else(|| {
             let new_metric: OutputMetric = self.target.new_metric(name.clone(), kind);
