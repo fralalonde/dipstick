@@ -1,6 +1,8 @@
 //! PCG32 random number generation for fast sampling
 //! Kept here for low dependency count.
 
+#![cfg_attr(feature = "tool_lints", allow(clippy::unreadable_literal))]
+
 use std::cell::RefCell;
 use time;
 
@@ -20,12 +22,12 @@ fn pcg32_random() -> u32 {
     }
 
     PCG32_STATE.with(|state| {
-        let oldstate: u64 = *state.borrow();
+        let old_state: u64 = *state.borrow();
         // XXX could generate the increment from the thread ID
-        *state.borrow_mut() = oldstate
+        *state.borrow_mut() = old_state
             .wrapping_mul(6364136223846793005)
             .wrapping_add(1442695040888963407);
-        ((((oldstate >> 18) ^ oldstate) >> 27) as u32).rotate_right((oldstate >> 59) as u32)
+        ((((old_state >> 18) ^ old_state) >> 27) as u32).rotate_right((old_state >> 59) as u32)
     })
 }
 
