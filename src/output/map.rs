@@ -9,16 +9,9 @@ use std::collections::BTreeMap;
 
 /// A HashMap wrapper to receive metrics or stats values.
 /// Every received value for a metric replaces the previous one (if any).
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct StatsMap {
     inner: Rc<RefCell<BTreeMap<String, Value>>>,
-}
-
-impl StatsMap {
-    /// Create a new StatsMap.
-    pub fn new() -> Self {
-        StatsMap { inner: Rc::new(RefCell::new(BTreeMap::new())) }
-    }
 }
 
 impl OutputScope for StatsMap {

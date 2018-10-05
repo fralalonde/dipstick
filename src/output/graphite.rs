@@ -1,6 +1,6 @@
 //! Send metrics to a graphite server.
 
-use core::component::{Buffered, Attributes, WithAttributes, Naming};
+use core::attributes::{Buffered, Attributes, WithAttributes, Naming};
 use core::name::Name;
 use core::{Flush, Value};
 use core::input::Kind;
@@ -72,7 +72,7 @@ pub struct GraphiteScope {
 impl OutputScope for GraphiteScope {
     /// Define a metric of the specified type.
     fn new_metric(&self, name: Name, kind: Kind) -> OutputMetric {
-        let mut prefix = self.qualify(name).join(".");
+        let mut prefix = self.naming_prepend(name).join(".");
         prefix.push(' ');
 
         let scale = match kind {
@@ -187,7 +187,7 @@ impl Drop for GraphiteScope {
 #[cfg(feature = "bench")]
 mod bench {
 
-    use core::component::*;
+    use core::attributes::*;
     use core::input::*;
     use super::*;
     use test;

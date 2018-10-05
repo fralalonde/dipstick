@@ -10,7 +10,7 @@ fn main() {
     let metrics =
         Graphite::send_to("localhost:2003")
             .expect("Connected")
-            .namespace("my_app")
+            .add_naming("my_app")
             .input();
 
     loop {

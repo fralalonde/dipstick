@@ -1,7 +1,7 @@
 //! Decouple metric definition from configuration with trait objects.
 
-use core::component::{Attributes, WithAttributes, Naming};
-use core::name::{Name, Namespace};
+use core::attributes::{Attributes, WithAttributes, Naming};
+use core::name::{Name, NameParts};
 use core::Flush;
 use core::input::{Kind, InputMetric, InputScope};
 use core::void::VOID_INPUT;
@@ -25,7 +25,7 @@ lazy_static! {
 #[derive(Debug)]
 struct ProxyMetric {
     // basic info for this metric, needed to recreate new corresponding trait object if target changes
-    name: Namespace,
+    name: NameParts,
     kind: Kind,
 
     // the metric trait object to proxy metric values to
@@ -64,9 +64,9 @@ impl Default for Proxy {
 
 struct InnerProxy {
     // namespaces can target one, many or no metrics
-    targets: HashMap<Namespace, Arc<InputScope + Send + Sync>>,
+    targets: HashMap<NameParts, Arc<InputScope + Send + Sync>>,
     // last part of the namespace is the metric's name
-    metrics: BTreeMap<Namespace, Weak<ProxyMetric>>,
+    metrics: BTreeMap<NameParts, Weak<ProxyMetric>>,
 }
 
 impl fmt::Debug for InnerProxy {
@@ -85,7 +85,7 @@ impl InnerProxy {
         }
     }
 
-    fn set_target(&mut self, namespace: &Namespace, target_scope: Arc<InputScope + Send + Sync>) {
+    fn set_target(&mut self, namespace: &NameParts, target_scope: Arc<InputScope + Send + Sync>) {
         self.targets.insert(namespace.clone(), target_scope.clone());
 
         for (metric_name, metric) in self.metrics.range_mut(namespace.clone()..) {
@@ -96,13 +96,13 @@ impl InnerProxy {
                 // check if metric targeted by _lower_ namespace
                 if metric.target.borrow().1 > namespace.len() { continue }
 
-                let target_metric = target_scope.new_metric(metric.name.leaf(), metric.kind);
+                let target_metric = target_scope.new_metric(metric.name.short(), metric.kind);
                 *metric.target.borrow_mut() = (target_metric, namespace.len());
             }
         }
     }
 
-    fn get_effective_target(&self, namespace: &Namespace) -> Option<(Arc<InputScope + Send + Sync>, usize)> {
+    fn get_effective_target(&self, namespace: &NameParts) -> Option<(Arc<InputScope + Send + Sync>, usize)> {
         if let Some(target) = self.targets.get(namespace) {
             return Some((target.clone(), namespace.len()));
         }
@@ -117,7 +117,7 @@ impl InnerProxy {
         None
     }
 
-    fn unset_target(&mut self, namespace: &Namespace) {
+    fn unset_target(&mut self, namespace: &NameParts) {
         if self.targets.remove(namespace).is_none() {
             // nothing to do
             return
@@ -135,19 +135,19 @@ impl InnerProxy {
                 // check if metric targeted by _lower_ namespace
                 if metric.target.borrow().1 > namespace.len() { continue }
 
-                let new_metric = up_target.new_metric(name.leaf(), metric.kind);
+                let new_metric = up_target.new_metric(name.short(), metric.kind);
                 *metric.target.borrow_mut() = (new_metric, up_nslen);
             }
         }
     }
 
-    fn drop_metric(&mut self, name: &Namespace) {
+    fn drop_metric(&mut self, name: &NameParts) {
         if self.metrics.remove(name).is_none() {
             panic!("Could not remove DelegatingMetric weak ref from delegation point")
         }
     }
 
-    fn flush(&self, namespace: &Namespace) -> error::Result<()> {
+    fn flush(&self, namespace: &NameParts) -> error::Result<()> {
         if let Some((target, _nslen)) = self.get_effective_target(namespace) {
             target.flush()
         } else {
@@ -174,13 +174,13 @@ impl Proxy {
     /// Replace target for this proxy and it's children.
     pub fn set_target<T: InputScope + Send + Sync + 'static>(&self, target: T) {
         let mut inner = self.inner.write().expect("Dispatch Lock");
-        inner.set_target(self.get_namespace(), Arc::new(target));
+        inner.set_target(self.get_naming(), Arc::new(target));
     }
 
     /// Replace target for this proxy and it's children.
     pub fn unset_target(&self) {
         let mut inner = self.inner.write().expect("Dispatch Lock");
-        inner.unset_target(self.get_namespace());
+        inner.unset_target(self.get_naming());
     }
 
     /// Replace target for this proxy and it's children.
@@ -197,14 +197,14 @@ impl Proxy {
 
 impl<S: AsRef<str>> From<S> for Proxy {
     fn from(name: S) -> Proxy {
-        Proxy::new().namespace(name.as_ref())
+        Proxy::new().add_naming(name.as_ref())
     }
 }
 
 impl InputScope for Proxy {
     /// Lookup or create a proxy stub for the requested metric.
     fn new_metric(&self, name: Name, kind: Kind) -> InputMetric {
-        let name: Name = self.qualify(name);
+        let name: Name = self.naming_append(name);
         let mut inner = self.inner.write().expect("Dispatch Lock");
         let proxy = inner
             .metrics
@@ -217,7 +217,7 @@ impl InputScope for Proxy {
                     // not found, define new
                     let (target, target_namespace_length) = inner.get_effective_target(namespace)
                         .unwrap_or_else(|| (VOID_INPUT.input_dyn(), 0));
-                    let metric_object = target.new_metric(namespace.leaf(), kind);
+                    let metric_object = target.new_metric(namespace.short(), kind);
                     let proxy = Arc::new(ProxyMetric {
                         name: namespace.clone(),
                         kind,
@@ -235,7 +235,7 @@ impl InputScope for Proxy {
 impl Flush for Proxy {
 
     fn flush(&self) -> error::Result<()> {
-        self.inner.write().expect("Dispatch Lock").flush(self.get_namespace())
+        self.inner.write().expect("Dispatch Lock").flush(self.get_naming())
     }
 }
 

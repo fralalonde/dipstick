@@ -1,28 +1,20 @@
 use std::ops::{Deref,DerefMut};
 use std::collections::{VecDeque};
 
-/// Primitive struct for Namespace and Name
 /// A double-ended vec of strings constituting a metric name or a future part thereof.
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd, Default)]
-pub struct Namespace {
+pub struct NameParts {
     /// Nodes are stored in order or their final appearance in the names
     /// If there is no namespace, the deque is empty.
     nodes: VecDeque<String>,
 }
 
-impl Namespace {
-
-    /// Build a new StringDeque
-    /// This is a private shortcut constructor,
-    /// no one outside this module should need to do that, only use Name or Namespace.
-    fn new() -> Self {
-        Namespace { nodes: VecDeque::new() }
-    }
+impl NameParts {
 
     /// Returns true if this instance is equal to or a subset (more specific) of the target instance.
     /// e.g. `a.b.c` is within `a.b`
     /// e.g. `a.d.c` is not within `a.b`
-    pub fn is_within(&self, other: &Namespace) -> bool {
+    pub fn is_within(&self, other: &NameParts) -> bool {
         // quick check: if this name has less parts it cannot be equal or more specific
         if self.len() < other.nodes.len() {
             return false
@@ -36,32 +28,33 @@ impl Namespace {
     }
 
     /// Make a name in this namespace
-    pub fn qualify<S: Into<String>>(&self, leaf: S) -> Name {
+    pub fn make_name<S: Into<String>>(&self, leaf: S) -> Name {
         let mut nodes = self.clone();
         nodes.push_back(leaf.into());
         Name { nodes }
     }
 
-    /// Create a new Name using only the last part (leaf)
-    pub fn leaf(&self) -> Name {
+    /// Extract a copy of the last name part
+    /// Panics if empty
+    pub fn short(&self) -> Name {
         self.back().expect("Short metric name").clone().into()
     }
 }
 
 /// Turn any string into a StringDeque
-impl<S: Into<String>> From<S> for Namespace {
+impl<S: Into<String>> From<S> for NameParts {
     fn from(name_part: S) -> Self {
         let name: String = name_part.into();
         // can we do better than asserting? empty names should not exist, ever...
         debug_assert!(!name.is_empty());
-        let mut nodes = Namespace::new();
+        let mut nodes = NameParts::default();
         nodes.push_front(name);
         nodes
     }
 }
 
 /// Enable use of VecDeque methods such as len(), push_*, insert()...
-impl Deref for Namespace {
+impl Deref for NameParts {
     type Target = VecDeque<String>;
     fn deref(&self) -> &Self::Target {
         &self.nodes
@@ -69,7 +62,7 @@ impl Deref for Namespace {
 }
 
 /// Enable use of VecDeque methods such as len(), push_*, insert()...
-impl DerefMut for Namespace {
+impl DerefMut for NameParts {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.nodes
     }
@@ -78,14 +71,14 @@ impl DerefMut for Namespace {
 /// The name of a metric, including the concatenated possible namespaces in which it was defined.
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Name {
-    nodes: Namespace,
+    nodes: NameParts,
 }
 
 impl Name {
 
     /// Prepend to the existing namespace.
-    pub fn prepend<S: Into<Namespace>>(mut self, namespace: S) -> Self {
-        let parts: Namespace =  namespace.into();
+    pub fn prepend<S: Into<NameParts>>(mut self, namespace: S) -> Self {
+        let parts: NameParts =  namespace.into();
         parts.iter().rev().for_each(|node|
             self.nodes.push_front(node.clone())
         );
@@ -93,9 +86,9 @@ impl Name {
     }
 
     /// Append to the existing namespace.
-    pub fn append<S: Into<Namespace>>(mut self, namespace: S) -> Self {
+    pub fn append<S: Into<NameParts>>(mut self, namespace: S) -> Self {
         let offset = self.nodes.len() - 1;
-        let parts: Namespace =  namespace.into();
+        let parts: NameParts =  namespace.into();
         for (i, part) in parts.iter().enumerate() {
             self.nodes.insert(i + offset, part.clone())
         }
@@ -110,12 +103,12 @@ impl Name {
 
 impl<S: Into<String>> From<S> for Name {
     fn from(name: S) -> Self {
-        Name { nodes: Namespace::from(name) }
+        Name { nodes: NameParts::from(name) }
     }
 }
 
 impl Deref for Name {
-    type Target = Namespace;
+    type Target = NameParts;
     fn deref(&self) -> &Self::Target {
         &self.nodes
     }
@@ -135,7 +128,7 @@ mod test {
 
     #[test]
     fn string_deque_within_same() {
-        let mut sd1: Namespace = "c".into();
+        let mut sd1: NameParts = "c".into();
         sd1.push_front("b".into());
 
         assert_eq!(true, sd1.is_within(&sd1));
@@ -143,10 +136,10 @@ mod test {
 
     #[test]
     fn string_deque_within_other() {
-        let mut sd1: Namespace = "b".into();
+        let mut sd1: NameParts = "b".into();
         sd1.push_front("a".into());
 
-        let mut sd2: Namespace = "c".into();
+        let mut sd2: NameParts = "c".into();
         sd2.push_front("b".into());
         sd2.push_front("a".into());
 

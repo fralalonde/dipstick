@@ -2,7 +2,7 @@
 
 use core::Flush;
 use core::input::{Kind, Input, InputScope, InputMetric, InputDyn};
-use core::component::{Attributes, WithAttributes, Naming};
+use core::attributes::{Attributes, WithAttributes, Naming};
 use core::name::Name;
 use core::error;
 
@@ -76,7 +76,7 @@ impl MultiInputScope {
 
 impl InputScope for MultiInputScope {
     fn new_metric(&self, name: Name, kind: Kind) -> InputMetric {
-        let name = &self.qualify(name);
+        let name = &self.naming_append(name);
         let metrics: Vec<InputMetric> = self.scopes.iter()
             .map(move |scope| scope.new_metric(name.clone(), kind))
             .collect();

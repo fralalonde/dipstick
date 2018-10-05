@@ -1,6 +1,6 @@
 use core::{Flush, Value};
 use core::input::{Kind, Input, InputScope, InputMetric};
-use core::component::{Attributes, WithAttributes, Buffered, Naming};
+use core::attributes::{Attributes, WithAttributes, Buffered, Naming};
 use core::name::Name;
 use core::error;
 use cache::cache_in;
@@ -70,7 +70,7 @@ impl cache_in::CachedInput for Log {}
 
 impl InputScope for LogScope {
     fn new_metric(&self, name: Name, kind: Kind) -> InputMetric {
-        let name = self.qualify(name);
+        let name = self.naming_append(name);
         let template = (self.output.format_fn)(&name, kind);
 
         let print_fn = self.output.print_fn.clone();
@@ -82,7 +82,7 @@ impl InputScope for LogScope {
                 match (print_fn)(&mut buffer, &template, value) {
                     Ok(()) => {
                         let mut entries = entries.write().expect("TextOutput");
-                        entries.push(buffer.into())
+                        entries.push(buffer)
                     },
                     Err(err) => debug!("Could not format buffered log metric: {}", err),
                 }

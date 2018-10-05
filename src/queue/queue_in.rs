@@ -2,7 +2,7 @@
 //! Metrics definitions are still synchronous.
 //! If queue size is exceeded, calling code reverts to blocking.
 
-use core::component::{Attributes, WithAttributes, Naming};
+use core::attributes::{Attributes, WithAttributes, Naming};
 use core::name::Name;
 use core::input::{Kind, Input, InputScope, InputDyn, InputMetric};
 use core::{Value, Flush};
@@ -121,7 +121,7 @@ impl WithAttributes for InputQueueScope {
 
 impl InputScope for InputQueueScope {
     fn new_metric(&self, name: Name, kind:Kind) -> InputMetric {
-        let name = self.qualify(name);
+        let name = self.naming_append(name);
         let target_metric = self.target.new_metric(name, kind);
         let sender = self.sender.clone();
         InputMetric::new(move |value| {

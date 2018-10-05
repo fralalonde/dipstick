@@ -27,8 +27,8 @@ mod macros;
 
 mod core;
 pub use core::{Flush, Value};
-pub use core::component::{Naming, Sampling, Sampled, Buffered, Buffering};
-pub use core::name::{Name, Namespace};
+pub use core::attributes::{Naming, Sampling, Sampled, Buffered, Buffering};
+pub use core::name::{Name, NameParts};
 pub use core::input::{Input, InputDyn, InputScope, InputMetric, Counter, Timer, Marker, Gauge, Kind};
 pub use core::output::{Output, OutputDyn, OutputScope, OutputMetric};
 pub use core::scheduler::{ScheduleFlush, CancelHandle};

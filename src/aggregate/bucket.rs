@@ -1,6 +1,6 @@
 //! Maintain aggregated metrics for deferred reporting,
 
-use core::component::{Attributes, WithAttributes, Naming};
+use core::attributes::{Attributes, WithAttributes, Naming};
 use core::name::{Name};
 use core::input::{Kind, InputScope, InputMetric};
 use core::output::{OutputDyn, OutputScope, OutputMetric, Output, output_none};
@@ -131,7 +131,7 @@ impl InnerBucket {
 
 impl<S: AsRef<str>> From<S> for Bucket {
     fn from(name: S) -> Bucket {
-        Bucket::new().namespace(name.as_ref())
+        Bucket::new().add_naming(name.as_ref())
     }
 }
 
@@ -211,7 +211,7 @@ impl InputScope for Bucket {
             .write()
             .expect("Aggregator")
             .metrics
-            .entry(self.qualify(name))
+            .entry(self.naming_append(name))
             .or_insert_with(|| Arc::new(Scoreboard::new(kind)))
             .clone();
         InputMetric::new(move |value| scoreb.update(value))
@@ -237,12 +237,12 @@ impl WithAttributes for Bucket {
 #[allow(dead_code)]
 pub fn stats_all(kind: Kind, name: Name, score: ScoreType) -> Option<(Kind, Name, Value)> {
     match score {
-        ScoreType::Count(hit) => Some((Kind::Counter, name.qualify("count"), hit)),
-        ScoreType::Sum(sum) => Some((kind, name.qualify("sum"), sum)),
-        ScoreType::Mean(mean) => Some((kind, name.qualify("mean"), mean.round() as Value)),
-        ScoreType::Max(max) => Some((Kind::Gauge, name.qualify("max"), max)),
-        ScoreType::Min(min) => Some((Kind::Gauge, name.qualify("min"), min)),
-        ScoreType::Rate(rate) => Some((Kind::Gauge, name.qualify("rate"), rate.round() as Value)),
+        ScoreType::Count(hit) => Some((Kind::Counter, name.make_name("count"), hit)),
+        ScoreType::Sum(sum) => Some((kind, name.make_name("sum"), sum)),
+        ScoreType::Mean(mean) => Some((kind, name.make_name("mean"), mean.round() as Value)),
+        ScoreType::Max(max) => Some((Kind::Gauge, name.make_name("max"), max)),
+        ScoreType::Min(min) => Some((Kind::Gauge, name.make_name("min"), min)),
+        ScoreType::Rate(rate) => Some((Kind::Gauge, name.make_name("rate"), rate.round() as Value)),
     }
 }
 
@@ -322,7 +322,7 @@ mod test {
     fn make_stats(stats_fn: &StatsFn) -> BTreeMap<String, Value> {
         mock_clock_reset();
 
-        let metrics = Bucket::new().namespace("test");
+        let metrics = Bucket::new().add_naming("test");
 
         let counter = metrics.counter("counter_a");
         let timer = metrics.timer("timer_a");
@@ -345,7 +345,7 @@ mod test {
         mock_clock_advance(Duration::from_secs(3));
 
         // TODO expose & use flush_to()
-        let stats = StatsMap::new();
+        let stats = StatsMap::default();
         metrics.flush_to(&stats, stats_fn).unwrap();
         stats.into()
     }

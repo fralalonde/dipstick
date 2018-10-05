@@ -4,7 +4,7 @@
 
 use core::{Flush, Value};
 use core::input::Kind;
-use core::component::{Attributes, WithAttributes, Buffered, Naming};
+use core::attributes::{Attributes, WithAttributes, Buffered, Naming};
 use core::name::Name;
 use core::output::{Output, OutputMetric, OutputScope};
 use core::error;
@@ -123,7 +123,7 @@ impl<W: Write + Send + Sync + 'static> Buffered for TextScope<W> {}
 
 impl<W: Write + Send + Sync + 'static> OutputScope for TextScope<W> {
     fn new_metric(&self, name: Name, kind: Kind) -> OutputMetric {
-        let name = self.qualify(name);
+        let name = self.naming_append(name);
         let template = (self.output.format_fn)(&name, kind);
 
         let print_fn = self.output.print_fn.clone();
@@ -135,7 +135,7 @@ impl<W: Write + Send + Sync + 'static> OutputScope for TextScope<W> {
                 match (print_fn)(&mut buffer, &template, value) {
                     Ok(()) => {
                         let mut entries = entries.borrow_mut();
-                        entries.push(buffer.into())
+                        entries.push(buffer)
                     },
                     Err(err) => debug!("{}", err),
                 }
