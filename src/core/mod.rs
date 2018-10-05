@@ -1,6 +1,6 @@
 pub mod error;
 pub mod name;
-pub mod component;
+pub mod attributes;
 pub mod input;
 pub mod output;
 pub mod out_lock;

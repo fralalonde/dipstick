@@ -1,6 +1,6 @@
 //! Send metrics to a statsd server.
 
-use core::component::{Buffered, Attributes, Sampled, Sampling, WithAttributes, Naming};
+use core::attributes::{Buffered, Attributes, Sampled, Sampling, WithAttributes, Naming};
 use core::name::Name;
 use core::pcg32;
 use core::{Flush, Value};
@@ -79,7 +79,7 @@ impl Sampled for StatsdScope {}
 impl OutputScope for StatsdScope {
     /// Define a metric of the specified type.
     fn new_metric(&self, name: Name, kind: Kind) -> OutputMetric {
-        let mut prefix = self.qualify(name).join(".");
+        let mut prefix = self.naming_prepend(name).join(".");
         prefix.push(':');
 
         let mut suffix = String::with_capacity(16);
@@ -206,7 +206,7 @@ impl Drop for StatsdScope {
 #[cfg(feature = "bench")]
 mod bench {
 
-    use core::component::*;
+    use core::attributes::*;
     use core::input::*;
     use super::*;
     use test;

@@ -2,7 +2,7 @@
 
 use core::Flush;
 use core::input::{Kind, Input, InputScope, InputMetric, InputDyn};
-use core::component::{Attributes, WithAttributes, Naming};
+use core::attributes::{Attributes, WithAttributes, Naming};
 use core::name::Name;
 use cache::lru_cache as lru;
 use core::error;
@@ -71,7 +71,7 @@ impl WithAttributes for InputScopeCache {
 
 impl InputScope for InputScopeCache {
     fn new_metric(&self, name: Name, kind: Kind) -> InputMetric {
-        let name = self.qualify(name);
+        let name = self.naming_append(name);
         let lookup = {
             self.cache.write().expect("Cache Lock").get(&name).cloned()
         };

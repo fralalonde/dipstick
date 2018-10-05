@@ -33,7 +33,7 @@ fn main() {
         .add_target(one_minute)
         .add_target(five_minutes)
         .add_target(fifteen_minutes)
-        .namespace("machine_name");
+        .add_naming("machine_name");
 
     // send application metrics to aggregator
     Proxy::default().set_target(all_buckets);

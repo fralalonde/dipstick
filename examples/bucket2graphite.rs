@@ -7,11 +7,11 @@ use std::time::Duration;
 use dipstick::*;
 
 fn main() {
-    let bucket = Bucket::new().namespace("test");
+    let bucket = Bucket::new().add_naming("test");
 
     // Bucket::set_default_output(to_stdout());
     bucket.set_target(Graphite::send_to("localhost:2003").expect("Socket")
-        .namespace("machine1").namespace("application"));
+        .add_naming("machine1").add_naming("application"));
 
     bucket.flush_every(Duration::from_secs(3));
 

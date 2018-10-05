@@ -7,7 +7,7 @@
 
 use core::{Flush, Value};
 use core::input::{Kind, Input, InputScope, InputMetric};
-use core::component::{Attributes, WithAttributes, Buffered, Buffering, Naming};
+use core::attributes::{Attributes, WithAttributes, Buffered, Buffering, Naming};
 use core::name::Name;
 use core::output::{Output, OutputMetric, OutputScope};
 use core::error;
@@ -47,7 +47,8 @@ impl PrometheusScope {
 impl OutputScope for PrometheusScope {
 
     /// Define a metric of the specified type.
-    fn new_metric(&self, _name: Name, _kind: Kind) -> OutputMetric {
+    fn new_metric(&self, name: Name, _kind: Kind) -> OutputMetric {
+        let mut _prefix = self.naming_prepend(name).join(".");
         OutputMetric::new(|_value| {})
     }
 }
@@ -58,4 +59,9 @@ impl Flush for PrometheusScope {
     fn flush(&self) -> error::Result<()> {
         Ok(())
     }
+}
+
+impl WithAttributes for Prometheus {
+    fn get_attributes(&self) -> &Attributes { &self.attributes }
+    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }

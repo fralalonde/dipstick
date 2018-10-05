@@ -90,27 +90,27 @@ macro_rules! __in_context {
 
     // SUB BRANCH NODE - public identifier
     ($WITH:expr; $TY:ty; $(#[$attr:meta])* pub $IDENT:ident = $e:expr => { $($BRANCH:tt)*} $($REST:tt)*) => {
-        lazy_static! { $(#[$attr])* pub static ref $IDENT = $WITH.namespace($e); }
+        lazy_static! { $(#[$attr])* pub static ref $IDENT = $WITH.add_naming($e); }
         __in_context!($IDENT; $TY; $($BRANCH)*);
         __in_context!($WITH; $TY; $($REST)*);
     };
 
     // SUB BRANCH NODE - private identifier
     ($WITH:expr; $TY:ty; $(#[$attr:meta])* $IDENT:ident = $e:expr => { $($BRANCH:tt)*} $($REST:tt)*) => {
-        lazy_static! { $(#[$attr])* static ref $IDENT = $WITH.namespace($e); }
+        lazy_static! { $(#[$attr])* static ref $IDENT = $WITH.add_naming($e); }
         __in_context!($IDENT; $TY; $($BRANCH)*);
         __in_context!($WITH; $TY; $($REST)*);
     };
 
     // SUB BRANCH NODE (not yet)
     ($WITH:expr; $TY:ty; $(#[$attr:meta])* pub $e:expr => { $($BRANCH:tt)*} $($REST:tt)*) => {
-        __in_context!($WITH.namespace($e); $TY; $($BRANCH)*);
+        __in_context!($WITH.add_naming($e); $TY; $($BRANCH)*);
         __in_context!($WITH; $TY; $($REST)*);
     };
 
     // SUB BRANCH NODE (not yet)
     ($WITH:expr; $TY:ty; $(#[$attr:meta])* $e:expr => { $($BRANCH:tt)*} $($REST:tt)*) => {
-        __in_context!($WITH.namespace($e); $TY; $($BRANCH)*);
+        __in_context!($WITH.add_naming($e); $TY; $($BRANCH)*);
         __in_context!($WITH; $TY; $($REST)*);
     };
 

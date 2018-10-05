@@ -15,9 +15,9 @@ fn main() {
 
     // will output metrics twice, once with "cool.yeah" prefix and once with "cool.ouch" prefix.
     let same_type_metrics = MultiInput::input()
-        .add_target(Text::write_to(io::stdout()).namespace("yeah"))
-        .add_target(Text::write_to(io::stdout()).namespace("ouch"))
-        .namespace("cool")
+        .add_target(Text::write_to(io::stdout()).add_naming("yeah"))
+        .add_target(Text::write_to(io::stdout()).add_naming("ouch"))
+        .add_naming("cool")
         .input();
 
     loop {

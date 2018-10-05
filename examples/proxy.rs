@@ -10,7 +10,7 @@ use dipstick::{Proxy, Text, InputScope, Input, Naming};
 
 fn main() {
     let root = Proxy::default();
-    let sub = root.namespace("sub");
+    let sub = root.add_naming("sub");
 
     let count1 = root.counter("counter_a");
 
@@ -22,12 +22,12 @@ fn main() {
         count2.count(2);
 
         // route every metric from the root to stdout with prefix "root"
-        root.set_target(Text::write_to(io::stdout()).namespace("root").input());
+        root.set_target(Text::write_to(io::stdout()).add_naming("root").input());
         count1.count(3);
         count2.count(4);
 
         // route metrics from "sub" to stdout with prefix "mutant"
-        sub.set_target(Text::write_to(io::stdout()).namespace("mutant").input());
+        sub.set_target(Text::write_to(io::stdout()).add_naming("mutant").input());
         count1.count(5);
         count2.count(6);
 

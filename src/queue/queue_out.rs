@@ -2,7 +2,7 @@
 //! RawMetrics definitions are still synchronous.
 //! If queue size is exceeded, calling code reverts to blocking.
 //!
-use core::component::{Attributes, WithAttributes, Naming};
+use core::attributes::{Attributes, WithAttributes, Naming};
 use core::name::Name;
 use core::input::{Kind, Input, InputScope, InputMetric};
 use core::output::{OutputDyn, OutputScope, OutputMetric, Output};
@@ -115,7 +115,7 @@ impl WithAttributes for OutputQueueScope {
 
 impl InputScope for OutputQueueScope {
     fn new_metric(&self, name: Name, kind:Kind) -> InputMetric {
-        let name = self.qualify(name);
+        let name = self.naming_append(name);
         let target_metric = Arc::new(self.target.new_metric(name, kind));
         let sender = self.sender.clone();
         InputMetric::new(move |value| {
