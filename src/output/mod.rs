@@ -2,7 +2,7 @@ pub mod map;
 
 pub mod text;
 
-pub mod logging;
+pub mod log;
 
 pub mod socket;
 
