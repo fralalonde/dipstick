@@ -2,12 +2,14 @@
 
 // TODO parameterize templates
 
-use core::{Flush, Value};
+use core::{Flush};
 use core::input::Kind;
 use core::attributes::{Attributes, WithAttributes, Buffered, Naming};
 use core::name::Name;
 use core::output::{Output, OutputMetric, OutputScope};
 use core::error;
+use ::{Format, LineFormat};
+
 use cache::cache_out;
 use queue::queue_out;
 
@@ -16,27 +18,11 @@ use std::io::{Write, self};
 use std::rc::Rc;
 use std::cell::RefCell;
 
-/// Join metric name parts into a friendly '.' separated String
-pub fn format_name(name: &Name, _kind: Kind) -> Vec<String> {
-    let mut z = name.join(".");
-    z.push_str(" ");
-    vec![z]
-}
-
-/// Output template-formatted value
-pub fn print_name_value_line(output: &mut impl Write, template: &[String], value: Value) -> error::Result<()> {
-    write!(output, "{}", template[0])?;
-    write!(output, "{}", value)?;
-    writeln!(output)?;
-    Ok(())
-}
-
 /// Buffered metrics text output.
 pub struct Text<W: Write + Send + Sync + 'static> {
     attributes: Attributes,
+    format: Arc<Format + Send + Sync>,
     inner: Arc<RwLock<W>>,
-    format_fn: Arc<Fn(&Name, Kind) -> Vec<String> + Send + Sync>,
-    print_fn: Arc<Fn(&mut Vec<u8>, &[String], Value) -> error::Result<()> + Send + Sync>,
 }
 
 impl<W: Write + Send + Sync + 'static> queue_out::QueuedOutput for Text<W> {}
@@ -47,9 +33,8 @@ impl<W: Write + Send + Sync + 'static>  Text<W> {
     pub fn write_to(write: W) -> Text<W> {
         Text {
             attributes: Attributes::default(),
+            format: Arc::new(LineFormat::default()),
             inner: Arc::new(RwLock::new(write)),
-            format_fn: Arc::new(format_name),
-            print_fn: Arc::new(print_name_value_line),
         }
     }
 }
@@ -74,9 +59,8 @@ impl<W: Write + Send + Sync + 'static> Clone for Text<W> {
     fn clone(&self) -> Self {
         Text {
             attributes: self.attributes.clone(),
+            format: self.format.clone(),
             inner: self.inner.clone(),
-            format_fn: self.format_fn.clone(),
-            print_fn: self.print_fn.clone(),
         }
     }
 }
@@ -128,15 +112,14 @@ impl<W: Write + Send + Sync + 'static> Buffered for TextScope<W> {}
 impl<W: Write + Send + Sync + 'static> OutputScope for TextScope<W> {
     fn new_metric(&self, name: Name, kind: Kind) -> OutputMetric {
         let name = self.naming_append(name);
-        let template = (self.output.format_fn)(&name, kind);
+        let template = self.output.format.template(&name, kind);
 
-        let print_fn = self.output.print_fn.clone();
         let entries = self.entries.clone();
 
         if let Some(_buffering) = self.get_buffering() {
             OutputMetric::new(move |value| {
                 let mut buffer = Vec::with_capacity(32);
-                match (print_fn)(&mut buffer, &template, value) {
+                match template.print(&mut buffer, value) {
                     Ok(()) => {
                         let mut entries = entries.borrow_mut();
                         entries.push(buffer)
@@ -149,7 +132,7 @@ impl<W: Write + Send + Sync + 'static> OutputScope for TextScope<W> {
             let output = self.output.clone();
             OutputMetric::new(move |value| {
                 let mut buffer = Vec::with_capacity(32);
-                match (print_fn)(&mut buffer, &template, value) {
+                match template.print(&mut buffer, value) {
                     Ok(()) => {
                         let mut output = output.inner.write().expect("TextOutput");
                         if let Err(e) = output.write_all(&buffer).and_then(|_| output.flush()) {
@@ -198,5 +181,4 @@ mod test {
         let m = c.new_metric("test".into(), Kind::Marker);
         m.write(33);
     }
-
 }

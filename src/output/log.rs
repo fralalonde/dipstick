@@ -1,11 +1,11 @@
-use core::{Flush, Value};
+use core::{Flush};
 use core::input::{Kind, Input, InputScope, InputMetric};
 use core::attributes::{Attributes, WithAttributes, Buffered, Naming};
 use core::name::Name;
 use core::error;
 use cache::cache_in;
 use queue::queue_in;
-use output::text;
+use ::{Format, LineFormat};
 
 use std::sync::{RwLock, Arc};
 use std::io::Write;
@@ -15,8 +15,7 @@ use log;
 #[derive(Clone)]
 pub struct Log {
     attributes: Attributes,
-    format_fn: Arc<Fn(&Name, Kind) -> Vec<String> + Send + Sync>,
-    print_fn: Arc<Fn(&mut Vec<u8>, &[String], Value) -> error::Result<()> + Send + Sync>,
+    format: Arc<Format>,
 }
 
 impl Input for Log {
@@ -52,8 +51,7 @@ impl Log {
     pub fn log_to() -> Log {
         Log {
             attributes: Attributes::default(),
-            format_fn: Arc::new(text::format_name),
-            print_fn: Arc::new(text::print_name_value_line),
+            format: Arc::new(LineFormat::default()),
         }
     }
 }
@@ -71,15 +69,15 @@ impl cache_in::CachedInput for Log {}
 impl InputScope for LogScope {
     fn new_metric(&self, name: Name, kind: Kind) -> InputMetric {
         let name = self.naming_append(name);
-        let template = (self.output.format_fn)(&name, kind);
 
-        let print_fn = self.output.print_fn.clone();
+            let template = self.output.format.template(&name, kind);
+
         let entries = self.entries.clone();
 
         if let Some(_buffering) = self.get_buffering() {
             InputMetric::new(move |value| {
                 let mut buffer = Vec::with_capacity(32);
-                match (print_fn)(&mut buffer, &template, value) {
+                match template.print(&mut buffer, value) {
                     Ok(()) => {
                         let mut entries = entries.write().expect("TextOutput");
                         entries.push(buffer)
@@ -91,7 +89,7 @@ impl InputScope for LogScope {
             // unbuffered
             InputMetric::new(move |value| {
                 let mut buffer = Vec::with_capacity(32);
-                match (print_fn)(&mut buffer, &template, value) {
+                match template.print(&mut buffer, value) {
                     Ok(()) => log!(log::Level::Debug, "{:?}", &buffer),
                     Err(err) => debug!("Could not format buffered log metric: {}", err),
                 }
