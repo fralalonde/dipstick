@@ -52,18 +52,22 @@ impl<W: Write + Send + Sync + 'static>  Text<W> {
             print_fn: Arc::new(print_name_value_line),
         }
     }
+}
 
-    /// Write metric values to stdout.
-    pub fn stdout() -> Text<io::Stdout> {
-        Text::write_to(io::stdout())
-    }
-
+impl Text<io::Stderr> {
     /// Write metric values to stdout.
     pub fn stderr() -> Text<io::Stderr> {
         Text::write_to(io::stderr())
     }
-
 }
+
+impl Text<io::Stdout> {
+    /// Write metric values to stdout.
+    pub fn stdout() -> Text<io::Stdout> {
+        Text::write_to(io::stdout())
+    }
+}
+
 
 // FIXME manual Clone impl required because auto-derive is borked (https://github.com/rust-lang/rust/issues/26925)
 impl<W: Write + Send + Sync + 'static> Clone for Text<W> {

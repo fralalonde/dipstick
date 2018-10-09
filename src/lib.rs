@@ -46,7 +46,7 @@ pub use output::text::{Text, TextScope};
 pub use output::graphite::{Graphite, GraphiteScope, GraphiteMetric};
 pub use output::statsd::{Statsd, StatsdScope, StatsdMetric};
 pub use output::map::{StatsMap};
-pub use output::logging::{Log, LogScope};
+pub use output::log::{Log, LogScope};
 
 mod aggregate;
 pub use aggregate::bucket::{Bucket, stats_all, stats_average, stats_summary};

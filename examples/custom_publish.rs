@@ -4,7 +4,6 @@
 extern crate dipstick;
 
 use std::time::Duration;
-use std::io;
 use dipstick::*;
 
 fn main() {
@@ -20,7 +19,6 @@ fn main() {
             // prepend and append to metric name
             (_, ScoreType::Count(count)) => {
                 if let Some(last) = name.pop_back() {
-//                    let name = ;
                     Some((
                         Kind::Counter,
                         name.append("customized_add_prefix")
@@ -44,7 +42,7 @@ fn main() {
     }
 
     // send application metrics to aggregator
-    Bucket::set_default_target(Text::write_to(io::stdout()));
+    Bucket::set_default_target(Text::stderr());
     Bucket::set_default_stats(custom_statistics);
 
     let app_metrics = Bucket::new();
