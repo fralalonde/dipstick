@@ -1,3 +1,5 @@
+pub mod format;
+
 pub mod map;
 
 pub mod text;
@@ -15,3 +17,4 @@ pub mod prometheus;
 
 #[cfg(feature="prometheus, proto")]
 pub mod prometheus_proto;
+
