@@ -1,25 +1,39 @@
 use core::name::Name;
 use core::input::Kind;
 use core::Value;
-use self::TemplateCmd::*;
+use self::Print::*;
 
 use std::io;
 
-pub enum TemplateCmd {
-    StringLit(String),
+/// Print commands are steps in the execution of output templates.
+pub enum Print {
+    /// Print a string.
+    Literal(String),
+    /// Print metric value as text.
     ValueAsText,
+    /// Print metric value, divided by the given scale, as text.
+    ScaledValueAsText(Value),
+    /// Print the newline character.
+    NewLine,
 }
 
+/// An sequence of print commands, embodying an output strategy for a single metric.
 pub struct Template {
-    commands: Vec<TemplateCmd>
+    commands: Vec<Print>
 }
 
 impl Template {
+    /// Template execution applies commands in turn, writing to the output.
     pub fn print(&self, output: &mut io::Write, value: Value) -> Result<(), io::Error> {
         for cmd in &self.commands {
             match cmd {
-                StringLit(src) => output.write_all(src.as_ref())?,
+                Literal(src) => output.write_all(src.as_ref())?,
                 ValueAsText => output.write_all(format!("{}", value).as_ref())?,
+                ScaledValueAsText(scale) => {
+                    let scaled = value / scale;
+                    output.write_all(format!("{}", scaled).as_ref())?
+                },
+                NewLine => writeln!(output)?,
             };
         }
         Ok(())
@@ -36,7 +50,9 @@ pub trait Format: Send + Sync {
 
 /// A simple metric output format of "MetricName {Value}"
 #[derive(Default)]
-pub struct LineFormat;
+pub struct LineFormat {
+//    separator: String,
+}
 
 impl Format for LineFormat {
     fn template(&self, name: &Name, _kind: Kind) -> Template {
@@ -44,11 +60,13 @@ impl Format for LineFormat {
         header.push(' ');
         Template {
             commands: vec![
-                StringLit(header),
+                Literal(header),
                 ValueAsText,
-                StringLit("\n".to_owned())
+                NewLine,
             ]
         }
     }
 
 }
+
+
