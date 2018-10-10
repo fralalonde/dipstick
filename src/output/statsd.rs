@@ -203,6 +203,50 @@ impl Drop for StatsdScope {
     }
 }
 
+// TODO use templates for statsd format
+//lazy_static!({
+//    static ref STATSD_FORMAT: StatsdFormat = StatsdFormat;
+//});
+//
+//#[derive(Default)]
+//pub struct StatsdFormat;
+//
+//impl Format for StatsdFormat {
+//    fn template(&self, name: &Name, kind: Kind) -> Template {
+//        let mut before_value = name.join(".");
+//        before_value.push(':');
+//
+//        let mut after_value = String::with_capacity(16);
+//        after_value.push('|');
+//        after_value.push_str(match kind {
+//            Kind::Marker | Kind::Counter => "c",
+//            Kind::Gauge => "g",
+//            Kind::Timer => "ms",
+//        });
+//
+//        // specify sampling rate if any
+//        if let Some(Sampling::Random(float_rate)) = self.get_sampling() {
+//            suffix.push_str(&format! {"|@{}\n", float_rate});
+//        }
+//
+//        // scale timer values
+//        let value_text = match kind {
+//            // timers are in µs, statsd wants ms
+//            Kind::Timer => ScaledValueAsText(1000),
+//            _ => ValueAsText,
+//        };
+//
+//        Template {
+//            commands: vec![
+//                StringLit(before_value),
+//                value_text,
+//                StringLit(after_value),
+//                NewLine,
+//            ]
+//        }
+//    }
+//}
+
 #[cfg(feature = "bench")]
 mod bench {
 
