@@ -18,7 +18,7 @@ impl OutputScope for StatsMap {
     fn new_metric(&self, name: Name, _kind: Kind) -> OutputMetric {
         let write_to = self.inner.clone();
         let name: String = name.join(".");
-        OutputMetric::new(move |value| {
+        OutputMetric::new(move |value, _labels| {
             let _previous = write_to.borrow_mut().insert(name.clone(), value);
         })
     }

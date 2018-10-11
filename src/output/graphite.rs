@@ -84,7 +84,7 @@ impl OutputScope for GraphiteScope {
         let cloned = self.clone();
         let metric = GraphiteMetric { prefix, scale };
 
-        OutputMetric::new(move |value| {
+        OutputMetric::new(move |value, _labels| {
             cloned.print(&metric, value);
         })
     }
@@ -197,7 +197,7 @@ mod bench {
         let sd = Graphite::send_to("localhost:2003").unwrap().input();
         let timer = sd.new_metric("timer".into(), Kind::Timer);
 
-        b.iter(|| test::black_box(timer.write(2000)));
+        b.iter(|| test::black_box(timer.write(2000, vec![])));
     }
 
     #[bench]
@@ -206,7 +206,7 @@ mod bench {
             .buffered(Buffering::BufferSize(65465)).input();
         let timer = sd.new_metric("timer".into(), Kind::Timer);
 
-        b.iter(|| test::black_box(timer.write(2000)));
+        b.iter(|| test::black_box(timer.write(2000, vec![])));
     }
 
 }
