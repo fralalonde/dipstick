@@ -103,7 +103,7 @@ impl OutputScope for StatsdScope {
             let int_sampling_rate = pcg32::to_int_rate(float_rate);
             let metric = StatsdMetric { prefix, suffix, scale };
 
-            OutputMetric::new(move |value| {
+            OutputMetric::new(move |value, _labels| {
                 if pcg32::accept_sample(int_sampling_rate) {
                     cloned.print(&metric, value)
                 }
@@ -111,7 +111,7 @@ impl OutputScope for StatsdScope {
         } else {
             suffix.push_str("\n");
             let metric = StatsdMetric { prefix, suffix, scale };
-            OutputMetric::new(move |value| {
+            OutputMetric::new(move |value, _labels| {
                 cloned.print(&metric, value)
             })
         }
@@ -260,7 +260,7 @@ mod bench {
         let sd = Statsd::send_to("localhost:2003").unwrap().input();
         let timer = sd.new_metric("timer".into(), Kind::Timer);
 
-        b.iter(|| test::black_box(timer.write(2000)));
+        b.iter(|| test::black_box(timer.write(2000, vec![])));
     }
 
     #[bench]
@@ -269,7 +269,7 @@ mod bench {
             .buffered(Buffering::BufferSize(65465)).input();
         let timer = sd.new_metric("timer".into(), Kind::Timer);
 
-        b.iter(|| test::black_box(timer.write(2000)));
+        b.iter(|| test::black_box(timer.write(2000, vec![])));
     }
 
 }

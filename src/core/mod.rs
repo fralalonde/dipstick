@@ -7,6 +7,7 @@ pub mod out_lock;
 pub mod clock;
 pub mod void;
 pub mod proxy;
+pub mod label;
 pub mod pcg32;
 pub mod scheduler;
 pub mod metrics;
@@ -31,7 +32,7 @@ pub mod test {
     fn test_to_void() {
         let c = void::Void::metrics().input();
         let m = c.new_metric("test".into(), input::Kind::Marker);
-        m.write(33);
+        m.write(33, vec![]);
     }
 
 }

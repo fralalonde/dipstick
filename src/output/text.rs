@@ -8,6 +8,7 @@ use core::attributes::{Attributes, WithAttributes, Buffered, Naming};
 use core::name::Name;
 use core::output::{Output, OutputMetric, OutputScope};
 use core::error;
+use ::LabelScope;
 use ::{Format, LineFormat};
 
 use cache::cache_out;
@@ -117,9 +118,9 @@ impl<W: Write + Send + Sync + 'static> OutputScope for TextScope<W> {
         let entries = self.entries.clone();
 
         if let Some(_buffering) = self.get_buffering() {
-            OutputMetric::new(move |value| {
+            OutputMetric::new(move |value, labels| {
                 let mut buffer = Vec::with_capacity(32);
-                match template.print(&mut buffer, value) {
+                match template.print(&mut buffer, value, |key| LabelScope::lookup(key, &labels)) {
                     Ok(()) => {
                         let mut entries = entries.borrow_mut();
                         entries.push(buffer)
@@ -130,11 +131,11 @@ impl<W: Write + Send + Sync + 'static> OutputScope for TextScope<W> {
         } else {
             // unbuffered
             let output = self.output.clone();
-            OutputMetric::new(move |value| {
+            OutputMetric::new(move |value, labels| {
                 let mut buffer = Vec::with_capacity(32);
-                match template.print(&mut buffer, value) {
+                match template.print(&mut buffer, value, |key| LabelScope::lookup(key, &labels)) {
                     Ok(()) => {
-                        let mut output = output.inner.write().expect("TextOutput");
+                        let mut output = output.inner.write().expect("Metrics Text Output");
                         if let Err(e) = output.write_all(&buffer).and_then(|_| output.flush()) {
                             debug!("Could not write text metrics: {}", e)
                         }
@@ -151,7 +152,7 @@ impl<W: Write + Send + Sync + 'static> Flush for TextScope<W> {
     fn flush(&self) -> error::Result<()> {
         let mut entries = self.entries.borrow_mut();
         if !entries.is_empty() {
-            let mut output = self.output.inner.write().expect("TextOutput");
+            let mut output = self.output.inner.write().expect("Metrics Text Output");
             for entry in entries.drain(..) {
                 output.write_all(&entry)?
             }
@@ -179,6 +180,6 @@ mod test {
     fn sink_print() {
         let c = super::Text::write_to(io::stdout()).output();
         let m = c.new_metric("test".into(), Kind::Marker);
-        m.write(33);
+        m.write(33, vec![]);
     }
 }

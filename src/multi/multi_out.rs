@@ -81,8 +81,8 @@ impl OutputScope for MultiOutputScope {
         let metrics: Vec<OutputMetric> = self.scopes.iter()
             .map(move |scope| scope.new_metric(name.clone(), kind))
             .collect();
-        OutputMetric::new(move |value| for metric in &metrics {
-            metric.write(value)
+        OutputMetric::new(move |value, labels| for metric in &metrics {
+            metric.write(value, labels.clone())
         })
     }
 }

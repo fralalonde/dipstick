@@ -228,7 +228,7 @@ impl InputScope for Proxy {
                     proxy
                 }
             });
-        InputMetric::new(move |value| proxy.target.borrow().0.write(value))
+        InputMetric::new(move |value, labels| proxy.target.borrow().0.write(value, labels))
     }
 }
 

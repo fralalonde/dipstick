@@ -2,6 +2,7 @@ use core::name::Name;
 use core::input::Kind;
 use core::Value;
 use self::Print::*;
+use ::LabelValue;
 
 use std::io;
 
@@ -9,12 +10,20 @@ use std::io;
 pub enum Print {
     /// Print a string.
     Literal(String),
+    /// Lookup and print label value for key, if it exists.
+    Label(PrintLabel),
     /// Print metric value as text.
     ValueAsText,
     /// Print metric value, divided by the given scale, as text.
     ScaledValueAsText(Value),
     /// Print the newline character.
     NewLine,
+}
+
+/// Print commands are steps in the execution of output templates.
+pub enum PrintLabel {
+    /// Lookup and print label value for key, if it exists.
+    Value(String),
 }
 
 /// An sequence of print commands, embodying an output strategy for a single metric.
@@ -24,7 +33,7 @@ pub struct Template {
 
 impl Template {
     /// Template execution applies commands in turn, writing to the output.
-    pub fn print(&self, output: &mut io::Write, value: Value) -> Result<(), io::Error> {
+    pub fn print<L: Fn(&str) -> Option<LabelValue>>(&self, output: &mut io::Write, value: Value, lookup: L) -> Result<(), io::Error> {
         for cmd in &self.commands {
             match cmd {
                 Literal(src) => output.write_all(src.as_ref())?,
@@ -34,6 +43,11 @@ impl Template {
                     output.write_all(format!("{}", scaled).as_ref())?
                 },
                 NewLine => writeln!(output)?,
+                Label(PrintLabel::Value(label_key)) => {
+                    if let Some(label_value) = lookup(label_key.as_ref()) {
+                        output.write_all(label_value.as_bytes())?
+                    }
+                }
             };
         }
         Ok(())

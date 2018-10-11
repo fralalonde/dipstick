@@ -10,6 +10,7 @@ use core::{Value, Flush};
 use core::metrics;
 use cache::cache_in;
 use core::error;
+use ::Labels;
 
 use std::rc::Rc;
 use std::ops;
@@ -33,7 +34,7 @@ fn new_async_channel(length: usize) -> Arc<mpsc::SyncSender<OutputQueueCmd>> {
         let mut done = false;
         while !done {
             match receiver.recv() {
-                Ok(OutputQueueCmd::Write(metric, value)) => metric.write(value),
+                Ok(OutputQueueCmd::Write(metric, value, labels)) => metric.write(value, labels),
                 Ok(OutputQueueCmd::Flush(scope)) => if let Err(e) = scope.flush() {
                     debug!("Could not asynchronously flush metrics: {}", e);
                 },
@@ -94,7 +95,7 @@ impl Input for OutputQueue {
 /// Async commands should be of no concerns to applications.
 pub enum OutputQueueCmd {
     /// Send metric write
-    Write(Arc<OutputMetric>, Value),
+    Write(Arc<OutputMetric>, Value, Vec<Labels>),
     /// Send metric flush
     Flush(Arc<UnsafeScope>),
 }
@@ -118,8 +119,9 @@ impl InputScope for OutputQueueScope {
         let name = self.naming_append(name);
         let target_metric = Arc::new(self.target.new_metric(name, kind));
         let sender = self.sender.clone();
-        InputMetric::new(move |value| {
-            if let Err(e) = sender.send(OutputQueueCmd::Write(target_metric.clone(), value)) {
+        InputMetric::new(move |value, labels| {
+            // TODO append snapshot (clone) of thread & app labels from this thread & time
+            if let Err(e) = sender.send(OutputQueueCmd::Write(target_metric.clone(), value, labels)) {
                 metrics::SEND_FAILED.mark();
                 debug!("Failed to send async metrics: {}", e);
             }

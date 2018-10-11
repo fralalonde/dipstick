@@ -80,8 +80,8 @@ impl InputScope for MultiInputScope {
         let metrics: Vec<InputMetric> = self.scopes.iter()
             .map(move |scope| scope.new_metric(name.clone(), kind))
             .collect();
-        InputMetric::new(move |value| for metric in &metrics {
-            metric.write(value)
+        InputMetric::new(move |value, labels| for metric in &metrics {
+            metric.write(value, labels.clone())
         })
     }
 }

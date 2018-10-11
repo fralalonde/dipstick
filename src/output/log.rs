@@ -6,6 +6,7 @@ use core::error;
 use cache::cache_in;
 use queue::queue_in;
 use ::{Format, LineFormat};
+use ::LabelScope;
 
 use std::sync::{RwLock, Arc};
 use std::io::Write;
@@ -75,9 +76,9 @@ impl InputScope for LogScope {
         let entries = self.entries.clone();
 
         if let Some(_buffering) = self.get_buffering() {
-            InputMetric::new(move |value| {
+            InputMetric::new(move |value, labels| {
                 let mut buffer = Vec::with_capacity(32);
-                match template.print(&mut buffer, value) {
+                match template.print(&mut buffer, value, |key| LabelScope::lookup(key, &labels)) {
                     Ok(()) => {
                         let mut entries = entries.write().expect("TextOutput");
                         entries.push(buffer)
@@ -87,9 +88,9 @@ impl InputScope for LogScope {
             })
         } else {
             // unbuffered
-            InputMetric::new(move |value| {
+            InputMetric::new(move |value, labels| {
                 let mut buffer = Vec::with_capacity(32);
-                match template.print(&mut buffer, value) {
+                match template.print(&mut buffer, value, |key| LabelScope::lookup(key, &labels)) {
                     Ok(()) => log!(log::Level::Debug, "{:?}", &buffer),
                     Err(err) => debug!("Could not format buffered log metric: {}", err),
                 }
@@ -129,7 +130,7 @@ mod test {
     fn test_to_log() {
         let c = super::Log::log_to().input();
         let m = c.new_metric("test".into(), Kind::Marker);
-        m.write(33);
+        m.write(33, vec![]);
     }
 
 }

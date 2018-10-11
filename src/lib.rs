@@ -35,6 +35,7 @@ pub use core::scheduler::{ScheduleFlush, CancelHandle};
 pub use core::out_lock::{LockingScopeBox};
 pub use core::error::{Error, Result};
 pub use core::clock::{TimeHandle};
+pub use core::label::{LabelScope, LabelValue, Labels};
 
 #[cfg(test)]
 pub use core::clock::{mock_clock_advance, mock_clock_reset};
