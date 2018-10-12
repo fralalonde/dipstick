@@ -8,38 +8,54 @@ pub type LabelValue = Arc<String>;
 /// A reference table of key / value string pairs that may be used on output for additional metric context.
 #[derive(Default, Debug, Clone)]
 pub struct Labels {
-    pairs: Arc<HashMap<String, LabelValue>>
+    pairs: Option<Arc<HashMap<String, LabelValue>>>
 }
 
 impl Labels {
     fn set(&self, key: String, value: LabelValue) -> Self {
-        let mut copy = self.pairs.as_ref().clone();
-        copy.insert(key, value);
-        Labels { pairs: Arc::new(copy) }
+        let mut new_pairs = match self.pairs {
+            None => HashMap::new(),
+            Some(ref old_pairs) => old_pairs.as_ref().clone()
+        };
+
+        new_pairs.insert(key, value);
+        Labels { pairs: Some(Arc::new(new_pairs)) }
     }
 
     fn unset(&self, key: &str) -> Self {
-        let mut copy = self.pairs.as_ref().clone();
-        if copy.remove(key).is_some() {
-            Labels { pairs: Arc::new(copy) }
-        } else {
-            // key wasn't set, labels unchanged
-            self.clone()
+        match self.pairs {
+            None => self.clone(),
+            Some(ref old_pairs) => {
+                let mut new_pairs = old_pairs.as_ref().clone();
+                if new_pairs.remove(key).is_some() {
+                    if new_pairs.is_empty() {
+                        Labels { pairs: None }
+                    } else {
+                        Labels { pairs: Some(Arc::new(new_pairs)) }
+                    }
+                } else {
+                    // key wasn't set, labels unchanged
+                    self.clone()
+                }
+            }
         }
     }
 
     fn get(&self, key: &str) -> Option<LabelValue> {
-        self.pairs.get(key).cloned()
+        // FIXME should use .and_then(), how?
+        match &self.pairs {
+            None => None,
+            Some(pairs) => pairs.get(key).cloned()
+        }
     }
 }
 
 lazy_static!(
-    ///
-    pub static ref GLOBAL_LABELS: RwLock<Labels> = RwLock::new(Labels::default());
+    static ref GLOBAL_LABELS: RwLock<Labels> = RwLock::new(Labels::default());
 );
 
 thread_local! {
-    pub static THREAD_LABELS: RefCell<Labels> = RefCell::new(Labels::default());
+    static THREAD_LABELS: RefCell<Labels> = RefCell::new(Labels::default());
 }
 
 /// Scopes to which metric labels can be attached.
@@ -53,6 +69,19 @@ pub enum LabelScope {
 }
 
 impl LabelScope {
+
+    /// Freeze the current label values for usage at later time.
+    pub fn export(&self) -> Labels {
+        match *self {
+            LabelScope::APP => GLOBAL_LABELS.read().expect("Global Labels").clone(),
+            LabelScope::THREAD => {
+                // FIXME is there a cleaner way to capture the clone out of the 'with' closure?
+                let mut labels: Option<Labels> = None;
+                THREAD_LABELS.with(|map| labels = Some(map.borrow().clone()));
+                labels.unwrap()
+            },
+        }
+    }
 
     /// Set a new value for the scope.
     /// Replaces any previous value for the key.
