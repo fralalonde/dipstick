@@ -10,18 +10,18 @@ fn main() {
     // will output metrics to graphite and to stdout
     let different_type_metrics = MultiOutput::output()
         .add_target(Graphite::send_to("localhost:2003").expect("Connecting"))
-        .add_target(Text::write_to(io::stdout()))
+        .add_target(Stream::write_to(io::stdout()))
         .input();
 
     // will output metrics twice, once with "cool.yeah" prefix and once with "cool.ouch" prefix.
     let same_type_metrics = MultiOutput::output()
-        .add_target(Text::write_to(io::stderr()).add_naming("out_1"))
-        .add_target(Text::write_to(io::stderr()).add_naming("out_2"))
+        .add_target(Stream::write_to(io::stderr()).add_naming("out_1"))
+        .add_target(Stream::write_to(io::stderr()).add_naming("out_2"))
         .add_naming("out_both").input();
 
     loop {
-        different_type_metrics.new_metric("counter_a".into(), Kind::Counter).write(123);
-        same_type_metrics.new_metric("timer_a".into(), Kind::Timer).write(6677);
+        different_type_metrics.new_metric("counter_a".into(), Kind::Counter).write(123, labels![]);
+        same_type_metrics.new_metric("timer_a".into(), Kind::Timer).write(6677, labels![]);
         std::thread::sleep(Duration::from_millis(400));
     }
 }

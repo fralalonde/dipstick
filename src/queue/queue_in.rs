@@ -9,7 +9,7 @@ use core::{Value, Flush};
 use core::metrics;
 use cache::cache_in::CachedInput;
 use core::error;
-use ::Labels;
+use ::{ Labels};
 
 use std::sync::Arc;
 use std::sync::mpsc;
@@ -90,7 +90,7 @@ impl Input for InputQueue {
 /// Async commands should be of no concerns to applications.
 pub enum InputQueueCmd {
     /// Send metric write
-    Write(InputMetric, Value, Vec<Labels>),
+    Write(InputMetric, Value, Labels),
     /// Send metric flush
     Flush(Arc<InputScope + Send + Sync + 'static>),
 }
@@ -125,8 +125,8 @@ impl InputScope for InputQueueScope {
         let name = self.naming_append(name);
         let target_metric = self.target.new_metric(name, kind);
         let sender = self.sender.clone();
-        InputMetric::new(move |value, labels| {
-            // TODO append snapshot (clone) of thread & app labels from this thread & time
+        InputMetric::new(move |value, mut labels| {
+            labels.save_context();
             if let Err(e) = sender.send(InputQueueCmd::Write(target_metric.clone(), value, labels)) {
                 metrics::SEND_FAILED.mark();
                 debug!("Failed to send async metrics: {}", e);

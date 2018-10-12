@@ -2,8 +2,6 @@
 
 #[macro_use]
 extern crate dipstick;
-#[macro_use]
-pub extern crate lazy_static;
 
 use dipstick::*;
 
@@ -39,7 +37,7 @@ metrics!(LIB_METRICS => {
 });
 
 fn main() {
-    dipstick::Proxy::set_default_target(dipstick::Text::write_to(io::stdout()).input());
+    dipstick::Proxy::set_default_target(dipstick::Stream::write_to(io::stdout()).input());
 
     loop {
         ROOT_COUNTER.count(123);

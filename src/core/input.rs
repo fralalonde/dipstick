@@ -1,7 +1,7 @@
 use core::clock::TimeHandle;
 use core::{Value, Flush};
 use core::name::Name;
-use ::Labels;
+use ::{Labels};
 
 use std::sync::Arc;
 use std::fmt;
@@ -63,7 +63,7 @@ pub trait InputScope: Flush {
 /// A metric is actually a function that knows to write a metric value to a metric output.
 #[derive(Clone)]
 pub struct InputMetric {
-    inner: Arc<Fn(Value, Vec<Labels>) + Send + Sync>
+    inner: Arc<Fn(Value, Labels) + Send + Sync>
 }
 
 impl fmt::Debug for InputMetric {
@@ -74,13 +74,13 @@ impl fmt::Debug for InputMetric {
 
 impl InputMetric {
     /// Utility constructor
-    pub fn new<F: Fn(Value, Vec<Labels>) + Send + Sync + 'static>(metric: F) -> InputMetric {
+    pub fn new<F: Fn(Value, Labels) + Send + Sync + 'static>(metric: F) -> InputMetric {
         InputMetric { inner: Arc::new(metric) }
     }
 
     /// Collect a new value for this metric.
     #[inline]
-    pub fn write(&self, value: Value, labels: Vec<Labels>) {
+    pub fn write(&self, value: Value, labels: Labels) {
         (self.inner)(value, labels)
     }
 }
@@ -122,7 +122,7 @@ pub struct Marker {
 impl Marker {
     /// Record a single event occurence.
     pub fn mark(&self) {
-        self.inner.write(1, vec![])
+        self.inner.write(1, labels![])
     }
 }
 
@@ -135,7 +135,7 @@ pub struct Counter {
 impl Counter {
     /// Record a value count.
     pub fn count<V: ToPrimitive>(&self, count: V) {
-        self.inner.write(count.to_u64().unwrap(), vec![])
+        self.inner.write(count.to_u64().unwrap(), labels![])
     }
 }
 
@@ -148,7 +148,7 @@ pub struct Gauge {
 impl Gauge {
     /// Record a value point for this gauge.
     pub fn value<V: ToPrimitive>(&self, value: V) {
-        self.inner.write(value.to_u64().unwrap(), vec![])
+        self.inner.write(value.to_u64().unwrap(), labels![])
     }
 }
 
@@ -167,7 +167,7 @@ impl Timer {
     /// Record a microsecond interval for this timer
     /// Can be used in place of start()/stop() if an external time interval source is used
     pub fn interval_us<V: ToPrimitive>(&self, interval_us: V) -> V {
-        self.inner.write(interval_us.to_u64().unwrap(), vec![]);
+        self.inner.write(interval_us.to_u64().unwrap(), labels![]);
         interval_us
     }
 
@@ -222,4 +222,3 @@ impl From<InputMetric> for Marker {
         Marker { inner: metric }
     }
 }
-

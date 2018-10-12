@@ -5,7 +5,7 @@ extern crate dipstick;
 use std::thread::sleep;
 use std::time::Duration;
 use std::io;
-use dipstick::{Proxy, Text, InputScope, Input, Naming};
+use dipstick::{Proxy, Stream, InputScope, Input, Naming};
 
 
 fn main() {
@@ -17,17 +17,17 @@ fn main() {
     let count2 = sub.counter("counter_b");
 
     loop {
-        root.set_target(Text::write_to(io::stdout()).input());
+        root.set_target(Stream::write_to(io::stdout()).input());
         count1.count(1);
         count2.count(2);
 
         // route every metric from the root to stdout with prefix "root"
-        root.set_target(Text::write_to(io::stdout()).add_naming("root").input());
+        root.set_target(Stream::write_to(io::stdout()).add_naming("root").input());
         count1.count(3);
         count2.count(4);
 
         // route metrics from "sub" to stdout with prefix "mutant"
-        sub.set_target(Text::write_to(io::stdout()).add_naming("mutant").input());
+        sub.set_target(Stream::write_to(io::stdout()).add_naming("mutant").input());
         count1.count(5);
         count2.count(6);
 
@@ -42,7 +42,7 @@ fn main() {
         count2.count(10);
 
         // go back to initial single un-prefixed route
-        root.set_target(Text::write_to(io::stdout()).input());
+        root.set_target(Stream::write_to(io::stdout()).input());
         count1.count(11);
         count2.count(12);
 

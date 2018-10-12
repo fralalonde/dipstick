@@ -42,7 +42,7 @@ fn main() {
     }
 
     // send application metrics to aggregator
-    Bucket::set_default_target(Text::stderr());
+    Bucket::set_default_target(Stream::stderr());
     Bucket::set_default_stats(custom_statistics);
 
     let app_metrics = Bucket::new();
