@@ -260,7 +260,7 @@ mod bench {
         let sd = Statsd::send_to("localhost:2003").unwrap().input();
         let timer = sd.new_metric("timer".into(), Kind::Timer);
 
-        b.iter(|| test::black_box(timer.write(2000, vec![])));
+        b.iter(|| test::black_box(timer.write(2000, labels![])));
     }
 
     #[bench]
@@ -269,7 +269,7 @@ mod bench {
             .buffered(Buffering::BufferSize(65465)).input();
         let timer = sd.new_metric("timer".into(), Kind::Timer);
 
-        b.iter(|| test::black_box(timer.write(2000, vec![])));
+        b.iter(|| test::black_box(timer.write(2000, labels![])));
     }
 
 }

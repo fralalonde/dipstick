@@ -4,9 +4,6 @@
 #[macro_use]
 extern crate dipstick;
 
-#[macro_use]
-extern crate lazy_static;
-
 use std::time::Duration;
 use dipstick::*;
 use std::thread::sleep;
@@ -37,7 +34,7 @@ fn main() {
 
     // send application metrics to aggregator
     Proxy::default().set_target(all_buckets);
-    Bucket::set_default_target(Text::write_to(io::stdout()));
+    Bucket::set_default_target(Stream::write_to(io::stdout()));
     Bucket::set_default_stats(stats_all);
 
     loop {

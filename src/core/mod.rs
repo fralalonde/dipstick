@@ -32,7 +32,7 @@ pub mod test {
     fn test_to_void() {
         let c = void::Void::metrics().input();
         let m = c.new_metric("test".into(), input::Kind::Marker);
-        m.write(33, vec![]);
+        m.write(33, labels![]);
     }
 
 }

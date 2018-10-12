@@ -1,17 +1,21 @@
 use std::collections::{HashMap};
 use std::sync::{Arc, RwLock};
-use std::cell::{RefCell, Ref};
+use std::cell::RefCell;
 
 /// Label values are immutable but can move around a lot.
-pub type LabelValue = Arc<String>;
+type LabelValue = Arc<String>;
 
 /// A reference table of key / value string pairs that may be used on output for additional metric context.
-#[derive(Default, Debug, Clone)]
-pub struct Labels {
+///
+/// For concurrency reasons, labels are immutable.
+/// All write operations return a mutated clone of the original.
+#[derive(Debug, Clone, Default)]
+struct LabelScope {
     pairs: Option<Arc<HashMap<String, LabelValue>>>
 }
 
-impl Labels {
+impl LabelScope {
+    /// Sets the value on a new copy of the map, then returns that copy.
     fn set(&self, key: String, value: LabelValue) -> Self {
         let mut new_pairs = match self.pairs {
             None => HashMap::new(),
@@ -19,7 +23,7 @@ impl Labels {
         };
 
         new_pairs.insert(key, value);
-        Labels { pairs: Some(Arc::new(new_pairs)) }
+        LabelScope { pairs: Some(Arc::new(new_pairs)) }
     }
 
     fn unset(&self, key: &str) -> Self {
@@ -29,9 +33,9 @@ impl Labels {
                 let mut new_pairs = old_pairs.as_ref().clone();
                 if new_pairs.remove(key).is_some() {
                     if new_pairs.is_empty() {
-                        Labels { pairs: None }
+                        LabelScope { pairs: None }
                     } else {
-                        Labels { pairs: Some(Arc::new(new_pairs)) }
+                        LabelScope { pairs: Some(Arc::new(new_pairs)) }
                     }
                 } else {
                     // key wasn't set, labels unchanged
@@ -51,92 +55,205 @@ impl Labels {
 }
 
 lazy_static!(
-    static ref GLOBAL_LABELS: RwLock<Labels> = RwLock::new(Labels::default());
+    static ref APP_LABELS: RwLock<LabelScope> = RwLock::new(LabelScope::default());
 );
 
 thread_local! {
-    static THREAD_LABELS: RefCell<Labels> = RefCell::new(Labels::default());
+    static THREAD_LABELS: RefCell<LabelScope> = RefCell::new(LabelScope::default());
 }
 
-/// Scopes to which metric labels can be attached.
-pub enum LabelScope {
-    /// Handle metric labels for the whole application (globals).
-    APP,
-    /// Handle metric labels for the current thread.
-    THREAD,
+///// Scopes to which metric labels can be attached.
+//#[derive(Debug, Clone, Copy)]
+//pub enum LabelContext {
+//
 //    #[cfg(feature="tokio")]
+//    /// Handle metric labels for the current tokio "task".
+//    /// Serves the same purpose as thread scope when using shared-thread async frameworks.
 //    TASK,
-}
+//
+//    /// Scope local to this single metric value.
+//    /// Labels are passed explicitly by the calling code.
+//    /// Value scope labels have the highest lookup priority and will override any value specified
+//    /// in lower scopes.
+//    VALUE,
+//}
 
-impl LabelScope {
-
-    /// Freeze the current label values for usage at later time.
-    pub fn export(&self) -> Labels {
-        match *self {
-            LabelScope::APP => GLOBAL_LABELS.read().expect("Global Labels").clone(),
-            LabelScope::THREAD => {
-                // FIXME is there a cleaner way to capture the clone out of the 'with' closure?
-                let mut labels: Option<Labels> = None;
-                THREAD_LABELS.with(|map| labels = Some(map.borrow().clone()));
-                labels.unwrap()
-            },
-        }
-    }
+pub trait LabelContext {
+    /// Retrieve a value for the scope.
+    fn get(key: &str) -> Option<Arc<String>>;
 
     /// Set a new value for the scope.
     /// Replaces any previous value for the key.
-    pub fn set(&self, key: String, value: String) {
-        match *self {
-            LabelScope::APP => {
-                let b = GLOBAL_LABELS.read().expect("Global Labels");
-                *GLOBAL_LABELS.write().expect("Global Labels") = b.set(key, Arc::new(value));
-            },
-            LabelScope::THREAD => {
-                THREAD_LABELS.with(|map| {
-                    let b: Ref<Labels> = map.borrow();
-                    *map.borrow_mut() = b.set(key, Arc::new(value));
-                })
-            },
-        }
-    }
+    fn set(key: String, value: String);
 
     /// Unset a value for the scope.
     /// Has no effect if key was not set.
-    pub fn unset(&self, key: &str) {
-        match *self {
-            LabelScope::APP => {
-                let b = GLOBAL_LABELS.read().expect("Global Labels");
-                *GLOBAL_LABELS.write().expect("Global Labels") = b.unset(key);
-            },
-            LabelScope::THREAD => {
-                THREAD_LABELS.with(|map| {
-                    let b: Ref<Labels> = map.borrow();
-                    *map.borrow_mut() = b.unset(key);
-                })
-            },
-        }
+    fn unset(key: &str);
+
+    /// Freeze the current label values for usage at later time.
+    fn export() -> LabelScope;
+}
+
+/// Handle metric labels for the current thread.
+/// App scope labels have the lowest lookup priority and serve as a fallback to other scopes.
+pub struct ThreadLabel;
+
+impl LabelContext for ThreadLabel {
+    fn get(key: &str) -> Option<Arc<String>> {
+        THREAD_LABELS.with(|map| map.borrow().get(key))
     }
 
-    /// Retrieve a value for the scope.
-    pub fn get(&self, key: &str) -> Option<Arc<String>> {
-        match *self {
-            LabelScope::APP => {
-                let b = GLOBAL_LABELS.read().expect("Global Labels");
-                b.get(key)
-            },
-            LabelScope::THREAD => {
-                THREAD_LABELS.with(|map| {
-                    let b: Ref<Labels> = map.borrow();
-                    b.get(key)
-                })
-            },
+    fn set(key: String, value: String) {
+        let lab_val = Arc::new(value);
+        THREAD_LABELS.with(|map| {
+            let new = { map.borrow().set(key, lab_val) };
+            *map.borrow_mut() = new;
+        });
+    }
+
+    fn unset(key: &str) {
+        THREAD_LABELS.with(|map| {
+            let new = { map.borrow().unset(key) };
+            *map.borrow_mut() = new;
+        });
+    }
+
+    fn export() -> LabelScope {
+        THREAD_LABELS.with(|map| map.borrow().clone())
+    }
+}
+
+/// Handle metric labels for the whole application (globals).
+/// App scope labels have the lowest lookup priority and serve as a fallback to other scopes.
+pub struct AppLabel;
+
+impl LabelContext for AppLabel {
+    fn get(key: &str) -> Option<Arc<String>> {
+        APP_LABELS.read().expect("Global Labels").get(key)
+    }
+
+    fn set(key: String, value: String) {
+        let b = { APP_LABELS.read().expect("Global Labels").set(key, Arc::new(value)) };
+        *APP_LABELS.write().expect("Global Labels") = b;
+    }
+
+    fn unset(key: &str) {
+        let b = { APP_LABELS.read().expect("Global Labels").unset(key) };
+        *APP_LABELS.write().expect("Global Labels") = b;
+    }
+
+    fn export() -> LabelScope {
+        APP_LABELS.read().expect("Global Labels").clone()
+    }
+}
+
+/// Base structure to carry metric labels from the application to the metric backend(s).
+/// Can carry both one-off labels and exported context labels (if async metrics are enabled).
+/// Used in applications through the labels!() macro.
+#[derive(Debug, Clone)]
+pub struct Labels {
+    scopes: Vec<LabelScope>,
+}
+
+impl From<HashMap<String, LabelValue>> for Labels {
+    fn from(map: HashMap<String, LabelValue>) -> Self {
+        Labels {
+            scopes: vec![LabelScope {
+                pairs: Some(Arc::new(map))
+            }]
         }
+    }
+}
+
+impl Default for Labels {
+    /// Create empty labels.
+    /// Only Thread and App labels will be used for lookups.
+    #[inline]
+    fn default() -> Self {
+        Labels { scopes: vec![] }
+    }
+}
+
+impl Labels {
+
+    /// Used to save metric context before enqueuing value for async output.
+    pub fn save_context(&mut self) {
+        self.scopes.push(ThreadLabel::export());
+        self.scopes.push(AppLabel::export());
     }
 
     /// Generic label lookup function.
     /// Searches provided labels, provided scopes or default scopes.
-    pub fn lookup(key: &str, labels: &Vec<Labels>) -> Option<LabelValue> {
-        LabelScope::THREAD.get(key).or_else(|| LabelScope::APP.get(key))
+    // TODO needs less magic, add checks?
+    pub fn lookup(&self, key: &str) -> Option<LabelValue> {
+
+        fn lookup_current_context(key: &str) -> Option<LabelValue> {
+            ThreadLabel::get(key).or_else(|| AppLabel::get(key))
+        }
+
+        match self.scopes.len() {
+            // no value labels, no saved context labels
+            0 => lookup_current_context(key),
+
+            // some value labels, no saved context labels
+            1 => self.scopes[0].get(key).or_else(|| lookup_current_context(key)),
+
+            // some context labels
+            _ => {
+                for src in &self.scopes {
+                    if let Some(label_value) = src.get(key) {
+                        return Some(label_value)
+                    }
+                }
+                None
+            }
+        }
+    }
+}
+
+
+#[cfg(test)]
+pub mod test {
+    use super::*;
+
+    #[test]
+    fn context_labels() {
+        AppLabel::set("abc".into(), "456".into());
+        ThreadLabel::set("abc".into(), "123".into());
+        assert_eq!(Arc::new("123".into()), labels!().lookup("abc").unwrap());
+        ThreadLabel::unset("abc");
+        assert_eq!(Arc::new("456".into()), labels!().lookup("abc").unwrap());
+        AppLabel::unset("abc");
+        assert_eq!(false, labels!().lookup("abc").is_some());
+    }
+
+    #[test]
+    fn labels_macro() {
+        let labels = labels!{
+            "abc" => "789",
+            "xyz" => "123"
+        };
+        assert_eq!(Arc::new("789".into()), labels.lookup("abc").unwrap());
+        assert_eq!(Arc::new("123".into()), labels.lookup("xyz").unwrap());
+    }
+
+
+    #[test]
+    fn value_labels() {
+        AppLabel::set("abc".into(), "456".into());
+        ThreadLabel::set("abc".into(), "123".into());
+        let mut labels = labels!{
+            "abc" => "789",
+        };
+
+        assert_eq!(Arc::new("789".into()), labels.lookup("abc").unwrap());
+        ThreadLabel::unset("abc");
+        assert_eq!(Arc::new("789".into()), labels.lookup("abc").unwrap());
+        AppLabel::unset("abc");
+        assert_eq!(Arc::new("789".into()), labels.lookup("abc").unwrap());
+
+        labels = labels![];
+        assert_eq!(false, labels.lookup("abc").is_some());
     }
 
 }

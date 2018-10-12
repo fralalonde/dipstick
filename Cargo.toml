@@ -43,6 +43,7 @@ bench = []
 self_metrics = []
 proto = [ "protoc-rust", "protobuf" ]
 prometheus = []
+tokio = []
 
 [package.metadata.release]
 #sign-commit = true

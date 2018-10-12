@@ -10,8 +10,9 @@
 For speed and easier maintenance, metrics are usually defined statically:
 
 ```rust,skt-plain
-#[macro_use] extern crate dipstick;
-#[macro_use] extern crate lazy_static;
+#[macro_use] 
+extern crate dipstick;
+
 use dipstick::*;
 
 metrics!("my_app" => {

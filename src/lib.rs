@@ -24,6 +24,7 @@ extern crate time;
 
 #[macro_use]
 mod macros;
+pub use macros::*;
 
 mod core;
 pub use core::{Flush, Value};
@@ -35,7 +36,7 @@ pub use core::scheduler::{ScheduleFlush, CancelHandle};
 pub use core::out_lock::{LockingScopeBox};
 pub use core::error::{Error, Result};
 pub use core::clock::{TimeHandle};
-pub use core::label::{LabelScope, LabelValue, Labels};
+pub use core::label::{Labels, AppLabel, ThreadLabel};
 
 #[cfg(test)]
 pub use core::clock::{mock_clock_advance, mock_clock_reset};
@@ -43,8 +44,8 @@ pub use core::clock::{mock_clock_advance, mock_clock_reset};
 pub use core::proxy::Proxy;
 
 mod output;
-pub use output::format::{Format, LineFormat, Print, Template};
-pub use output::text::{Text, TextScope};
+pub use output::format::{LineFormat, SimpleFormat, LineToken, LineTemplate, Formatting};
+pub use output::stream::{Stream, TextScope};
 pub use output::graphite::{Graphite, GraphiteScope, GraphiteMetric};
 pub use output::statsd::{Statsd, StatsdScope, StatsdMetric};
 pub use output::map::{StatsMap};
