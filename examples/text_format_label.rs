@@ -5,9 +5,7 @@ extern crate dipstick;
 
 use std::thread::sleep;
 use std::time::Duration;
-use dipstick::{Proxy, Stream, Counter, Marker, InputScope, QueuedOutput, Input, SimpleFormat, Formatting, AppLabel};
-use std::io;
-use std::thread;
+use dipstick::{Proxy, Stream, Counter, InputScope, Input, SimpleFormat, Formatting, AppLabel};
 
 metrics!{
     COUNTER: Counter = "counter_a";
@@ -16,6 +14,7 @@ metrics!{
 fn main() {
     Proxy::set_default_target(
         Stream::stderr().formatting(SimpleFormat::default()).input());
+
     AppLabel::set("abc", "xyz");
     loop {
         // report some metric values from our "application" loop
