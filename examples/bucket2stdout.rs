@@ -11,7 +11,7 @@ fn main() {
     let metrics = Bucket::new().add_naming("test");
 
     // Bucket::set_default_output(to_stdout());
-    metrics.set_target(Text::write_to(io::stdout()));
+    metrics.set_target(Stream::write_to(io::stdout()));
 
     metrics.flush_every(Duration::from_secs(3));
 

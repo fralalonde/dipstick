@@ -1,9 +1,10 @@
 //! Use the metrics backend directly to log a metric value.
 //! Applications should use the metrics()-provided instruments instead.
 
+#[macro_use]
 extern crate dipstick;
 
-use dipstick::{Input, InputScope};
+use dipstick::{Input, InputScope, Labels};
 
 fn main() {
     raw_write()
@@ -18,5 +19,5 @@ pub fn raw_write() {
         "count_a".into(),
         dipstick::Kind::Counter,
     );
-    counter.write(1);
+    counter.write(1, labels![]);
 }

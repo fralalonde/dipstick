@@ -27,9 +27,9 @@ impl InputScope for LockingScopeBox {
         let name = self.naming_append(name);
         let raw_metric = self.inner.lock().expect("RawScope Lock").new_metric(name, kind);
         let mutex = self.inner.clone();
-        InputMetric::new(move |value| {
+        InputMetric::new(move |value, labels| {
             let _guard = mutex.lock().expect("OutputMetric Lock");
-            raw_metric.write(value)
+            raw_metric.write(value, labels)
         } )
     }
 

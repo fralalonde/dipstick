@@ -119,7 +119,7 @@ impl InnerBucket {
                     let filtered = (stats_fn)(metric.1, metric.0.clone(), score);
                     if let Some((kind, name, value)) = filtered {
                         let metric: OutputMetric = publish_scope.new_metric(name, kind);
-                        metric.write(value)
+                        metric.write(value, labels![])
                     }
                 }
             }
@@ -214,7 +214,7 @@ impl InputScope for Bucket {
             .entry(self.naming_append(name))
             .or_insert_with(|| Arc::new(Scoreboard::new(kind)))
             .clone();
-        InputMetric::new(move |value| scoreb.update(value))
+        InputMetric::new(move |value, _labels| scoreb.update(value))
     }
 }
 
@@ -298,14 +298,14 @@ mod bench {
     fn aggregate_marker(b: &mut test::Bencher) {
         let sink = Bucket::new();
         let metric = sink.new_metric("event_a".into(), Kind::Marker);
-        b.iter(|| test::black_box(metric.write(1)));
+        b.iter(|| test::black_box(metric.write(1, labels![])));
     }
 
     #[bench]
     fn aggregate_counter(b: &mut test::Bencher) {
         let sink = Bucket::new();
         let metric = sink.new_metric("count_a".into(), Kind::Counter);
-        b.iter(|| test::black_box(metric.write(1)));
+        b.iter(|| test::black_box(metric.write(1, labels![])));
     }
 
 }

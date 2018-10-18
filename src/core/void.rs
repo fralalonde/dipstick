@@ -41,7 +41,7 @@ impl Output for Void {
 
 impl OutputScope for VoidOutput {
     fn new_metric(&self, _name: Name, _kind: Kind) -> OutputMetric {
-        OutputMetric::new(|_value| {})
+        OutputMetric::new(|_value, _labels| {})
     }
 }
 

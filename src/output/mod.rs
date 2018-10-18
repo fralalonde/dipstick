@@ -2,7 +2,7 @@ pub mod format;
 
 pub mod map;
 
-pub mod text;
+pub mod stream;
 
 pub mod log;
 

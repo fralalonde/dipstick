@@ -5,7 +5,7 @@ use core::name::Name;
 use core::error;
 use cache::cache_in;
 use queue::queue_in;
-use ::{Format, LineFormat};
+use output::format::{LineFormat, SimpleFormat, Formatting};
 
 use std::sync::{RwLock, Arc};
 use std::io::Write;
@@ -15,7 +15,7 @@ use log;
 #[derive(Clone)]
 pub struct Log {
     attributes: Attributes,
-    format: Arc<Format>,
+    format: Arc<LineFormat>,
 }
 
 impl Input for Log {
@@ -37,6 +37,14 @@ impl WithAttributes for Log {
 
 impl Buffered for Log {}
 
+impl Formatting for Log {
+    fn formatting(&self, format: impl LineFormat + 'static) -> Self {
+        let mut cloned = self.clone();
+        cloned.format = Arc::new(format);
+        cloned
+    }
+}
+
 /// A scope for metrics log output.
 #[derive(Clone)]
 pub struct LogScope {
@@ -51,7 +59,7 @@ impl Log {
     pub fn log_to() -> Log {
         Log {
             attributes: Attributes::default(),
-            format: Arc::new(LineFormat::default()),
+            format: Arc::new(SimpleFormat::default()),
         }
     }
 }
@@ -75,9 +83,9 @@ impl InputScope for LogScope {
         let entries = self.entries.clone();
 
         if let Some(_buffering) = self.get_buffering() {
-            InputMetric::new(move |value| {
+            InputMetric::new(move |value, labels| {
                 let mut buffer = Vec::with_capacity(32);
-                match template.print(&mut buffer, value) {
+                match template.print(&mut buffer, value, |key| labels.lookup(key)) {
                     Ok(()) => {
                         let mut entries = entries.write().expect("TextOutput");
                         entries.push(buffer)
@@ -87,9 +95,9 @@ impl InputScope for LogScope {
             })
         } else {
             // unbuffered
-            InputMetric::new(move |value| {
+            InputMetric::new(move |value, labels| {
                 let mut buffer = Vec::with_capacity(32);
-                match template.print(&mut buffer, value) {
+                match template.print(&mut buffer, value, |key| labels.lookup(key)) {
                     Ok(()) => log!(log::Level::Debug, "{:?}", &buffer),
                     Err(err) => debug!("Could not format buffered log metric: {}", err),
                 }
@@ -129,7 +137,7 @@ mod test {
     fn test_to_log() {
         let c = super::Log::log_to().input();
         let m = c.new_metric("test".into(), Kind::Marker);
-        m.write(33);
+        m.write(33, labels![]);
     }
 
 }

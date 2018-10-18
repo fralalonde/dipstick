@@ -10,7 +10,7 @@ use dipstick::*;
 
 fn main() {
     // for this demo, print metric values to the console
-    let app_metrics = Text::write_to(io::stdout()).input();
+    let app_metrics = Stream::write_to(io::stdout()).input();
 
     // metrics can be predefined by type and name
     let counter = app_metrics.counter("counter_a");

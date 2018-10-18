@@ -2,6 +2,7 @@ use core::{Flush, Value};
 use core::input::Kind;
 use core::name::Name;
 use core::void::Void;
+use ::{Labels};
 
 use std::rc::Rc;
 
@@ -13,17 +14,23 @@ pub trait OutputScope: Flush {
 
 }
 
+/// Output metrics are not thread safe.
+#[derive(Clone)]
+pub struct OutputMetric {
+    inner: Rc<Fn(Value, Labels)>
+}
+
 impl OutputMetric {
     /// Utility constructor
-    pub fn new<F: Fn(Value) + 'static>(metric: F) -> OutputMetric {
+    pub fn new<F: Fn(Value, Labels) + 'static>(metric: F) -> OutputMetric {
         OutputMetric { inner: Rc::new(metric) }
     }
 
     /// Some may prefer the `metric.write(value)` form to the `(metric)(value)` form.
     /// This shouldn't matter as metrics should be of type Counter, Marker, etc.
     #[inline]
-    pub fn write(&self, value: Value) {
-        (self.inner)(value)
+    pub fn write(&self, value: Value, labels: Labels) {
+        (self.inner)(value, labels)
     }
 }
 
@@ -48,12 +55,6 @@ impl<T: Output + Send + Sync + 'static> OutputDyn for T {
     fn output_dyn(&self) -> Rc<OutputScope + 'static> {
         Rc::new(self.output())
     }
-}
-
-/// Output metrics are not thread safe.
-#[derive(Clone)]
-pub struct OutputMetric {
-    inner: Rc<Fn(Value)>
 }
 
 /// Discard all metric values sent to it.

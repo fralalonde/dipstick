@@ -49,7 +49,7 @@ impl OutputScope for PrometheusScope {
     /// Define a metric of the specified type.
     fn new_metric(&self, name: Name, _kind: Kind) -> OutputMetric {
         let mut _prefix = self.naming_prepend(name).join(".");
-        OutputMetric::new(|_value| {})
+        OutputMetric::new(|_value, _labels| {})
     }
 }
 

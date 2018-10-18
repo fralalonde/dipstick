@@ -3,12 +3,9 @@
 #[macro_use]
 extern crate dipstick;
 
-#[macro_use]
-extern crate lazy_static;
-
 use std::thread::sleep;
 use std::time::Duration;
-use dipstick::{Proxy, Text, Counter, Marker, InputScope, QueuedOutput, Input};
+use dipstick::{Proxy, Stream, Counter, Marker, InputScope, QueuedOutput, Input};
 use std::io;
 use std::thread;
 
@@ -19,7 +16,7 @@ metrics!{
 
 fn main() {
     Proxy::set_default_target(
-        Text::write_to(io::stdout()).queued(100).input());
+        Stream::write_to(io::stdout()).queued(100).input());
     for _ in 0..4 {
         thread::spawn(move || {
             loop {
