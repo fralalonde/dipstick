@@ -62,64 +62,32 @@ thread_local! {
     static THREAD_LABELS: RefCell<LabelScope> = RefCell::new(LabelScope::default());
 }
 
-///// Scopes to which metric labels can be attached.
-//#[derive(Debug, Clone, Copy)]
-//pub enum LabelContext {
-//
-//    #[cfg(feature="tokio")]
-//    /// Handle metric labels for the current tokio "task".
-//    /// Serves the same purpose as thread scope when using shared-thread async frameworks.
-//    TASK,
-//
-//    /// Scope local to this single metric value.
-//    /// Labels are passed explicitly by the calling code.
-//    /// Value scope labels have the highest lookup priority and will override any value specified
-//    /// in lower scopes.
-//    VALUE,
-//}
-
-pub trait LabelContext {
-    /// Retrieve a value for the scope.
-    fn get(key: &str) -> Option<Arc<String>>;
-
-    /// Set a new value for the scope.
-    /// Replaces any previous value for the key.
-    fn set(key: String, value: String);
-
-    /// Unset a value for the scope.
-    /// Has no effect if key was not set.
-    fn unset(key: &str);
-
-    /// Freeze the current label values for usage at later time.
-    fn export() -> LabelScope;
-}
-
 /// Handle metric labels for the current thread.
 /// App scope labels have the lowest lookup priority and serve as a fallback to other scopes.
 pub struct ThreadLabel;
 
-impl LabelContext for ThreadLabel {
-    fn get(key: &str) -> Option<Arc<String>> {
+impl ThreadLabel {
+    /// Retrieve a value from the thread scope.
+    pub fn get(key: &str) -> Option<Arc<String>> {
         THREAD_LABELS.with(|map| map.borrow().get(key))
     }
 
-    fn set(key: String, value: String) {
-        let lab_val = Arc::new(value);
+    /// Set a new value for the thread scope.
+    /// Replaces any previous value for the key.
+    pub fn set<S: Into<String>>(key: S, value: S) {
         THREAD_LABELS.with(|map| {
-            let new = { map.borrow().set(key, lab_val) };
+            let new = { map.borrow().set(key.into(), Arc::new(value.into())) };
             *map.borrow_mut() = new;
         });
     }
 
-    fn unset(key: &str) {
+    /// Unset a value for the app scope.
+    /// Has no effect if key was not set.
+    pub fn unset(key: &str) {
         THREAD_LABELS.with(|map| {
             let new = { map.borrow().unset(key) };
             *map.borrow_mut() = new;
         });
-    }
-
-    fn export() -> LabelScope {
-        THREAD_LABELS.with(|map| map.borrow().clone())
     }
 }
 
@@ -127,25 +95,27 @@ impl LabelContext for ThreadLabel {
 /// App scope labels have the lowest lookup priority and serve as a fallback to other scopes.
 pub struct AppLabel;
 
-impl LabelContext for AppLabel {
-    fn get(key: &str) -> Option<Arc<String>> {
+impl AppLabel {
+    /// Retrieve a value from the app scope.
+    pub fn get(key: &str) -> Option<Arc<String>> {
         APP_LABELS.read().expect("Global Labels").get(key)
     }
 
-    fn set(key: String, value: String) {
-        let b = { APP_LABELS.read().expect("Global Labels").set(key, Arc::new(value)) };
+    /// Set a new value for the app scope.
+    /// Replaces any previous value for the key.
+    pub fn set<S: Into<String>>(key: S, value: S) {
+        let b = { APP_LABELS.read().expect("Global Labels").set(key.into(), Arc::new(value.into())) };
         *APP_LABELS.write().expect("Global Labels") = b;
     }
 
-    fn unset(key: &str) {
+    /// Unset a value for the app scope.
+    /// Has no effect if key was not set.
+    pub fn unset(key: &str) {
         let b = { APP_LABELS.read().expect("Global Labels").unset(key) };
         *APP_LABELS.write().expect("Global Labels") = b;
     }
-
-    fn export() -> LabelScope {
-        APP_LABELS.read().expect("Global Labels").clone()
-    }
 }
+
 
 /// Base structure to carry metric labels from the application to the metric backend(s).
 /// Can carry both one-off labels and exported context labels (if async metrics are enabled).
@@ -178,8 +148,8 @@ impl Labels {
 
     /// Used to save metric context before enqueuing value for async output.
     pub fn save_context(&mut self) {
-        self.scopes.push(ThreadLabel::export());
-        self.scopes.push(AppLabel::export());
+        self.scopes.push(THREAD_LABELS.with(|map| map.borrow().clone()));
+        self.scopes.push(APP_LABELS.read().expect("Global Labels").clone());
     }
 
     /// Generic label lookup function.
@@ -193,12 +163,15 @@ impl Labels {
 
         match self.scopes.len() {
             // no value labels, no saved context labels
+            // just lookup implicit context
             0 => lookup_current_context(key),
 
             // some value labels, no saved context labels
+            // lookup value label, then lookup implicit context
             1 => self.scopes[0].get(key).or_else(|| lookup_current_context(key)),
 
-            // some context labels
+            // value + saved context labels
+            // lookup explicit context in turn
             _ => {
                 for src in &self.scopes {
                     if let Some(label_value) = src.get(key) {

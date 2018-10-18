@@ -101,7 +101,6 @@ impl LineFormat for SimpleFormat {
             ]
         }
     }
-
 }
 
 
