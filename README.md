@@ -44,7 +44,7 @@ Here's a basic aggregating & auto-publish counter metric:
 
 ```$rust,skt-run
 let bucket = Bucket::new();
-bucket.set_target(Text::output(io::stdout()));
+bucket.set_target(Stream::stdout());
 bucket.flush_every(Duration::from_secs(3));
 let counter = bucket.counter("counter_a");
 counter.count(8)
@@ -53,12 +53,13 @@ counter.count(8)
 Persistent apps wanting to declare static metrics will prefer using the `metrics!` macro:
 
 ```$rust,skt-run
-metrics! { METRICS = "my_app" =>
-    pub COUNTER: Counter = "my_counter";
+metrics! { METRICS = "my_app" => {
+        pub COUNTER: Counter = "my_counter";
+    }
 }
 
 fn main() {
-    METRICS.set_target(Graphite::output("graphite.com:2003").unwrap());
+    METRICS.set_target(Graphite::send_to("graphite.com:2003").unwrap().input());
     COUNTER.count(32);
 }
 ```
