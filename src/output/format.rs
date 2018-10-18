@@ -1,17 +1,17 @@
 use core::name::Name;
 use core::input::Kind;
 use core::Value;
-use self::LineToken::*;
+use self::LineOp::*;
 
 use std::io;
 use std::sync::Arc;
 
 /// Print commands are steps in the execution of output templates.
-pub enum LineToken {
+pub enum LineOp {
     /// Print a string.
     Literal(String),
     /// Lookup and print label value for key, if it exists.
-    LabelExists(String, Vec<LabelToken>),
+    LabelExists(String, Vec<LabelOp>),
     /// Print metric value as text.
     ValueAsText,
     /// Print metric value, divided by the given scale, as text.
@@ -21,7 +21,7 @@ pub enum LineToken {
 }
 
 /// Print commands are steps in the execution of output templates.
-pub enum LabelToken {
+pub enum LabelOp {
     /// Print a string.
     Literal(String),
     /// Print the label key.
@@ -32,7 +32,13 @@ pub enum LabelToken {
 
 /// An sequence of print commands, embodying an output strategy for a single metric.
 pub struct LineTemplate {
-    commands: Vec<LineToken>
+    ops: Vec<LineOp>
+}
+
+impl From<Vec<LineOp>> for LineTemplate {
+    fn from(ops: Vec<LineOp>) -> Self {
+        LineTemplate { ops }
+    }
 }
 
 impl LineTemplate {
@@ -40,7 +46,7 @@ impl LineTemplate {
     pub fn print<L>(&self, output: &mut io::Write, value: Value, lookup: L) -> Result<(), io::Error>
     where L: Fn(&str) -> Option<Arc<String>>
     {
-        for cmd in &self.commands {
+        for cmd in &self.ops {
             match cmd {
                 Literal(src) => output.write_all(src.as_ref())?,
                 ValueAsText => output.write_all(format!("{}", value).as_ref())?,
@@ -53,11 +59,11 @@ impl LineTemplate {
                     if let Some(label_value) = lookup(label_key.as_ref()) {
                         for label_cmd in print_label {
                             match label_cmd {
-                                LabelToken::LabelValue =>
+                                LabelOp::LabelValue =>
                                     output.write_all(label_value.as_bytes())?,
-                                LabelToken::LabelKey =>
+                                LabelOp::LabelKey =>
                                     output.write_all(label_key.as_bytes())?,
-                                LabelToken::Literal(src) =>
+                                LabelOp::Literal(src) =>
                                     output.write_all(src.as_ref())?,
                             }
                         }
@@ -94,7 +100,7 @@ impl LineFormat for SimpleFormat {
         let mut header = name.join(".");
         header.push(' ');
         LineTemplate {
-            commands: vec![
+            ops: vec![
                 Literal(header),
                 ValueAsText,
                 NewLine,
@@ -102,6 +108,22 @@ impl LineFormat for SimpleFormat {
         }
     }
 }
+
+//enum Parsed {
+//    Literal(String),
+//    Name()
+//    Value(Value),
+//    StaticLabel(String),
+//    DynamicLabel(String),
+//}
+//
+//struct TemplateFormat {
+//    tokens: Vec<LineToken>
+//}
+//
+//fn parse(template: &str) -> TemplateFormat {
+//
+//}
 
 
 #[cfg(test)]
@@ -118,16 +140,16 @@ pub mod test {
             header.push_str(&name.join("."));
             header.push(' ');
             LineTemplate {
-                commands: vec![
+                ops: vec![
                     Literal(header),
                     ValueAsText,
                     Literal(" ".into()),
                     ScaledValueAsText(1000),
                     Literal(" ".into()),
                     LabelExists("test_key".into(), vec![
-                        LabelToken::LabelKey,
-                        LabelToken::Literal("=".into()),
-                        LabelToken::LabelValue]),
+                        LabelOp::LabelKey,
+                        LabelOp::Literal("=".into()),
+                        LabelOp::LabelValue]),
                     NewLine,
                 ]
             }
