@@ -191,8 +191,8 @@ pub mod test {
 
     #[test]
     fn context_labels() {
-        AppLabel::set("abc".into(), "456".into());
-        ThreadLabel::set("abc".into(), "123".into());
+        AppLabel::set("abc", "456");
+        ThreadLabel::set("abc", "123");
         assert_eq!(Arc::new("123".into()), labels!().lookup("abc").unwrap());
         ThreadLabel::unset("abc");
         assert_eq!(Arc::new("456".into()), labels!().lookup("abc").unwrap());
@@ -213,8 +213,8 @@ pub mod test {
 
     #[test]
     fn value_labels() {
-        AppLabel::set("abc".into(), "456".into());
-        ThreadLabel::set("abc".into(), "123".into());
+        AppLabel::set("abc", "456");
+        ThreadLabel::set("abc", "123");
         let mut labels = labels!{
             "abc" => "789",
         };

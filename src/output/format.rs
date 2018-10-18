@@ -9,7 +9,7 @@ use std::sync::Arc;
 /// Print commands are steps in the execution of output templates.
 pub enum LineOp {
     /// Print a string.
-    Literal(String),
+    Literal(Vec<u8>),
     /// Lookup and print label value for key, if it exists.
     LabelExists(String, Vec<LabelOp>),
     /// Print metric value as text.
@@ -23,7 +23,7 @@ pub enum LineOp {
 /// Print commands are steps in the execution of output templates.
 pub enum LabelOp {
     /// Print a string.
-    Literal(String),
+    Literal(Vec<u8>),
     /// Print the label key.
     LabelKey,
     /// Print the label value.
@@ -101,30 +101,13 @@ impl LineFormat for SimpleFormat {
         header.push(' ');
         LineTemplate {
             ops: vec![
-                Literal(header),
+                Literal(header.into_bytes()),
                 ValueAsText,
                 NewLine,
             ]
         }
     }
 }
-
-//enum Parsed {
-//    Literal(String),
-//    Name()
-//    Value(Value),
-//    StaticLabel(String),
-//    DynamicLabel(String),
-//}
-//
-//struct TemplateFormat {
-//    tokens: Vec<LineToken>
-//}
-//
-//fn parse(template: &str) -> TemplateFormat {
-//
-//}
-
 
 #[cfg(test)]
 pub mod test {
@@ -141,7 +124,7 @@ pub mod test {
             header.push(' ');
             LineTemplate {
                 ops: vec![
-                    Literal(header),
+                    Literal(header.into()),
                     ValueAsText,
                     Literal(" ".into()),
                     ScaledValueAsText(1000),

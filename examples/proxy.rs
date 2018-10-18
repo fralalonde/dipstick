@@ -4,35 +4,35 @@ extern crate dipstick;
 
 use std::thread::sleep;
 use std::time::Duration;
-use std::io;
 use dipstick::{Proxy, Stream, InputScope, Input, Naming};
 
 
 fn main() {
-    let root = Proxy::default();
-    let sub = root.add_naming("sub");
+    let root_proxy = Proxy::default();
+    let sub = root_proxy.add_naming("sub");
 
-    let count1 = root.counter("counter_a");
+    let count1 = root_proxy.counter("counter_a");
 
     let count2 = sub.counter("counter_b");
 
     loop {
-        root.set_target(Stream::write_to(io::stdout()).input());
+        let stdout = Stream::stdout().input();
+        root_proxy.set_target(stdout.clone());
         count1.count(1);
         count2.count(2);
 
         // route every metric from the root to stdout with prefix "root"
-        root.set_target(Stream::write_to(io::stdout()).add_naming("root").input());
+        root_proxy.set_target(stdout.add_naming("root"));
         count1.count(3);
         count2.count(4);
 
         // route metrics from "sub" to stdout with prefix "mutant"
-        sub.set_target(Stream::write_to(io::stdout()).add_naming("mutant").input());
+        sub.set_target(stdout.add_naming("mutant"));
         count1.count(5);
         count2.count(6);
 
         // clear root metrics route, "sub" still appears
-        root.unset_target();
+        root_proxy.unset_target();
         count1.count(7);
         count2.count(8);
 
@@ -42,7 +42,7 @@ fn main() {
         count2.count(10);
 
         // go back to initial single un-prefixed route
-        root.set_target(Stream::write_to(io::stdout()).input());
+        root_proxy.set_target(stdout.clone());
         count1.count(11);
         count2.count(12);
 

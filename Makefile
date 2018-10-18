@@ -15,7 +15,7 @@ CARGO_BUILD_FLAGS ?=
 
 # 'test' is a friendly alias for 'unit_test'
 test:
-	$(CARGO_CMD) test
+	$(CARGO_CMD) test --features="skeptic"
 
 examples:
 	$(CARGO_CMD) build --examples

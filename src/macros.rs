@@ -164,7 +164,7 @@ mod test {
     use core::proxy::Proxy;
 
     metrics!{TEST: Proxy = "test_prefix" => {
-        M1: Marker = "failed";
+        pub M1: Marker = "failed";
         C1: Counter = "failed";
         G1: Gauge = "failed";
         T1: Timer = "failed";
