@@ -44,7 +44,7 @@ pub use core::clock::{mock_clock_advance, mock_clock_reset};
 pub use core::proxy::Proxy;
 
 mod output;
-pub use output::format::{LineFormat, SimpleFormat, LineToken, LineTemplate, Formatting};
+pub use output::format::{LineFormat, SimpleFormat, LineOp, LabelOp, LineTemplate, Formatting};
 pub use output::stream::{Stream, TextScope};
 pub use output::graphite::{Graphite, GraphiteScope, GraphiteMetric};
 pub use output::statsd::{Statsd, StatsdScope, StatsdMetric};
