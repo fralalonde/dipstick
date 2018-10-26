@@ -11,7 +11,7 @@ minimal impact on applications and a choice of output to downstream systems.
 
 Dipstick is a toolkit to help all sorts of application collect and send out metrics.
 As such, it needs a bit of set up to suit one's needs.
-Skimming through the handbook [handbook](https://github.com/fralalonde/dipstick/tree/master/handbook) 
+Skimming through the [handbook](https://github.com/fralalonde/dipstick/tree/master/handbook)
 should help you get an idea of the possible configurations.
 
 In short, dipstick-enabled apps _can_:

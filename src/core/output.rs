@@ -1,8 +1,8 @@
-use core::{Flush, Value};
-use core::input::Kind;
-use core::name::Name;
+use core::{Flush, MetricValue};
+use core::input::InputKind;
+use core::name::MetricName;
 use core::void::Void;
-use ::{Labels};
+use core::label::Labels;
 
 use std::rc::Rc;
 
@@ -10,26 +10,26 @@ use std::rc::Rc;
 pub trait OutputScope: Flush {
 
     /// Define a raw metric of the specified type.
-    fn new_metric(&self, name: Name, kind: Kind) -> OutputMetric;
+    fn new_metric(&self, name: MetricName, kind: InputKind) -> OutputMetric;
 
 }
 
 /// Output metrics are not thread safe.
 #[derive(Clone)]
 pub struct OutputMetric {
-    inner: Rc<Fn(Value, Labels)>
+    inner: Rc<Fn(MetricValue, Labels)>
 }
 
 impl OutputMetric {
     /// Utility constructor
-    pub fn new<F: Fn(Value, Labels) + 'static>(metric: F) -> OutputMetric {
+    pub fn new<F: Fn(MetricValue, Labels) + 'static>(metric: F) -> OutputMetric {
         OutputMetric { inner: Rc::new(metric) }
     }
 
     /// Some may prefer the `metric.write(value)` form to the `(metric)(value)` form.
     /// This shouldn't matter as metrics should be of type Counter, Marker, etc.
     #[inline]
-    pub fn write(&self, value: Value, labels: Labels) {
+    pub fn write(&self, value: MetricValue, labels: Labels) {
         (self.inner)(value, labels)
     }
 }

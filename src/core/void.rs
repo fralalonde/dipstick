@@ -1,6 +1,6 @@
 use core::output::{Output, OutputScope, OutputMetric};
-use core::name::Name;
-use core::input::{Kind, InputDyn, InputScope};
+use core::name::MetricName;
+use core::input::{InputKind, InputDyn, InputScope};
 use core::Flush;
 
 use std::sync::Arc;
@@ -40,7 +40,7 @@ impl Output for Void {
 }
 
 impl OutputScope for VoidOutput {
-    fn new_metric(&self, _name: Name, _kind: Kind) -> OutputMetric {
+    fn new_metric(&self, _name: MetricName, _kind: InputKind) -> OutputMetric {
         OutputMetric::new(|_value, _labels| {})
     }
 }

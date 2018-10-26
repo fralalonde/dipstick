@@ -1,21 +1,26 @@
 //! Maintain aggregated metrics for deferred reporting,
 
-use core::attributes::{Attributes, WithAttributes, Naming};
-use core::name::{Name};
-use core::input::{Kind, InputScope, InputMetric};
+use core::attributes::{Attributes, WithAttributes, Prefixed};
+use core::name::{MetricName};
+use core::input::{InputKind, InputScope, InputMetric};
 use core::output::{OutputDyn, OutputScope, OutputMetric, Output, output_none};
 use core::clock::TimeHandle;
-use core::{Value, Flush};
-use aggregate::scores::{Scoreboard, ScoreType};
+use core::{MetricValue, Flush};
+use bucket::{ScoreType, stats_summary};
+use bucket::ScoreType::*;
 use core::error;
 
+use std::mem;
+use std::usize;
 use std::collections::BTreeMap;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering::*;
 use std::sync::{Arc, RwLock};
 use std::fmt;
 use std::borrow::Borrow;
 
 /// A function type to transform aggregated scores into publishable statistics.
-pub type StatsFn = Fn(Kind, Name, ScoreType) -> Option<(Kind, Name, Value)> + Send + Sync + 'static;
+pub type StatsFn = Fn(InputKind, MetricName, ScoreType) -> Option<(InputKind, MetricName, MetricValue)> + Send + Sync + 'static;
 
 fn initial_stats() -> &'static StatsFn {
     &stats_summary
@@ -34,21 +39,21 @@ lazy_static! {
 /// Central aggregation structure.
 /// Maintains a list of metrics for enumeration when used as source.
 #[derive(Debug, Clone)]
-pub struct Bucket {
+pub struct AtomicBucket {
     attributes: Attributes,
-    inner: Arc<RwLock<InnerBucket>>,
+    inner: Arc<RwLock<InnerAtomicBucket>>,
 }
 
-struct InnerBucket {
-    metrics: BTreeMap<Name, Arc<Scoreboard>>,
+struct InnerAtomicBucket {
+    metrics: BTreeMap<MetricName, Arc<AtomicScores>>,
     period_start: TimeHandle,
-    stats: Option<Arc<Fn(Kind, Name, ScoreType)
-        -> Option<(Kind, Name, Value)> + Send + Sync + 'static>>,
+    stats: Option<Arc<Fn(InputKind, MetricName, ScoreType)
+        -> Option<(InputKind, MetricName, MetricValue)> + Send + Sync + 'static>>,
     output: Option<Arc<OutputDyn + Send + Sync + 'static>>,
     publish_metadata: bool,
 }
 
-impl fmt::Debug for InnerBucket {
+impl fmt::Debug for InnerAtomicBucket {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "metrics: {:?}", self.metrics)?;
         write!(f, "period_start: {:?}", self.period_start)
@@ -56,10 +61,10 @@ impl fmt::Debug for InnerBucket {
 }
 
 lazy_static! {
-    static ref PERIOD_LENGTH: Name = "_period_length".into();
+    static ref PERIOD_LENGTH: MetricName = "_period_length".into();
 }
 
-impl InnerBucket {
+impl InnerAtomicBucket {
 
     pub fn flush(&mut self) -> error::Result<()> {
         let stats_fn = match self.stats {
@@ -90,13 +95,13 @@ impl InnerBucket {
     /// Take a snapshot of aggregated values and reset them.
     /// Compute stats on captured values using assigned or default stats function.
     /// Write stats to assigned or default output.
-    pub fn flush_to(&mut self, publish_scope: &OutputScope, stats_fn: &StatsFn) -> error::Result<()> {
+    pub fn flush_to(&mut self, target: &OutputScope, stats: &StatsFn) -> error::Result<()> {
 
         let now = TimeHandle::now();
         let duration_seconds = self.period_start.elapsed_us() as f64 / 1_000_000.0;
         self.period_start = now;
 
-        let mut snapshot: Vec<(&Name, Kind, Vec<ScoreType>)> = self.metrics.iter()
+        let mut snapshot: Vec<(&MetricName, InputKind, Vec<ScoreType>)> = self.metrics.iter()
             .flat_map(|(name, scores)| if let Some(values) = scores.reset(duration_seconds) {
                 Some((name, scores.metric_kind(), values))
             } else {
@@ -112,39 +117,41 @@ impl InnerBucket {
         } else {
             // TODO add switch for metadata such as PERIOD_LENGTH
             if self.publish_metadata {
-                snapshot.push((&PERIOD_LENGTH, Kind::Timer, vec![ScoreType::Sum((duration_seconds * 1000.0) as u64)]));
+                snapshot.push((&PERIOD_LENGTH, InputKind::Timer, vec![Sum((duration_seconds * 1000.0) as u64)]));
             }
             for metric in snapshot {
                 for score in metric.2 {
-                    let filtered = (stats_fn)(metric.1, metric.0.clone(), score);
+                    let filtered = stats(metric.1, metric.0.clone(), score);
                     if let Some((kind, name, value)) = filtered {
-                        let metric: OutputMetric = publish_scope.new_metric(name, kind);
+                        let metric: OutputMetric = target.new_metric(name, kind);
+                        // TODO provide some bucket context through labels?
                         metric.write(value, labels![])
                     }
                 }
             }
-            publish_scope.flush()
+            target.flush()
         }
     }
 
 }
 
-impl<S: AsRef<str>> From<S> for Bucket {
-    fn from(name: S) -> Bucket {
-        Bucket::new().add_naming(name.as_ref())
+impl<S: AsRef<str>> From<S> for AtomicBucket {
+    fn from(name: S) -> AtomicBucket {
+        AtomicBucket::new().add_prefix(name.as_ref())
     }
 }
 
-impl Bucket {
-    /// Build a new metric aggregation
-    pub fn new() -> Bucket {
-        Bucket {
+impl AtomicBucket {
+    /// Build a new atomic bucket.
+    pub fn new() -> AtomicBucket {
+        AtomicBucket {
             attributes: Attributes::default(),
-            inner: Arc::new(RwLock::new(InnerBucket {
+            inner: Arc::new(RwLock::new(InnerAtomicBucket {
                 metrics: BTreeMap::new(),
                 period_start: TimeHandle::now(),
                 stats: None,
                 output: None,
+                // TODO add API toggle for metadata publish
                 publish_metadata: false,
             }))
         }
@@ -153,7 +160,7 @@ impl Bucket {
     /// Set the default aggregated metrics statistics generator.
     pub fn set_default_stats<F>(func: F)
         where
-            F: Fn(Kind, Name, ScoreType) -> Option<(Kind, Name, Value)> + Send + Sync + 'static
+            F: Fn(InputKind, MetricName, ScoreType) -> Option<(InputKind, MetricName, MetricValue)> + Send + Sync + 'static
     {
         *DEFAULT_AGGREGATE_STATS.write().unwrap() = Arc::new(func)
     }
@@ -176,7 +183,7 @@ impl Bucket {
     /// Set the default aggregated metrics statistics generator.
     pub fn set_stats<F>(&self, func: F)
         where
-            F: Fn(Kind, Name, ScoreType) -> Option<(Kind, Name, Value)> + Send + Sync + 'static
+            F: Fn(InputKind, MetricName, ScoreType) -> Option<(InputKind, MetricName, MetricValue)> + Send + Sync + 'static
     {
         self.inner.write().expect("Aggregator").stats = Some(Arc::new(func))
     }
@@ -187,7 +194,7 @@ impl Bucket {
     }
 
     /// Install a new receiver for all aggregated metrics, replacing any previous receiver.
-    pub fn set_target(&self, new_config: impl Output + Send + Sync + 'static) {
+    pub fn set_flush_target(&self, new_config: impl Output + Send + Sync + 'static) {
         self.inner.write().expect("Aggregator").output = Some(Arc::new(new_config))
     }
 
@@ -204,21 +211,21 @@ impl Bucket {
 
 }
 
-impl InputScope for Bucket {
-    /// Lookup or create a scoreboard for the requested metric.
-    fn new_metric(&self, name: Name, kind: Kind) -> InputMetric {
-        let scoreb = self.inner
+impl InputScope for AtomicBucket {
+    /// Lookup or create scores for the requested metric.
+    fn new_metric(&self, name: MetricName, kind: InputKind) -> InputMetric {
+        let scores = self.inner
             .write()
             .expect("Aggregator")
             .metrics
-            .entry(self.naming_append(name))
-            .or_insert_with(|| Arc::new(Scoreboard::new(kind)))
+            .entry(self.prefix_append(name))
+            .or_insert_with(|| Arc::new(AtomicScores::new(kind)))
             .clone();
-        InputMetric::new(move |value, _labels| scoreb.update(value))
+        InputMetric::new(move |value, _labels| scores.update(value))
     }
 }
 
-impl Flush for Bucket {
+impl Flush for AtomicBucket {
     /// Collect and reset aggregated data.
     /// Publish statistics
     fn flush(&self) -> error::Result<()> {
@@ -227,64 +234,127 @@ impl Flush for Bucket {
     }
 }
 
-impl WithAttributes for Bucket {
+impl WithAttributes for AtomicBucket {
     fn get_attributes(&self) -> &Attributes { &self.attributes }
     fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
-/// A predefined export strategy reporting all aggregated stats for all metric types.
-/// Resulting stats are named by appending a short suffix to each metric's name.
-#[allow(dead_code)]
-pub fn stats_all(kind: Kind, name: Name, score: ScoreType) -> Option<(Kind, Name, Value)> {
-    match score {
-        ScoreType::Count(hit) => Some((Kind::Counter, name.make_name("count"), hit)),
-        ScoreType::Sum(sum) => Some((kind, name.make_name("sum"), sum)),
-        ScoreType::Mean(mean) => Some((kind, name.make_name("mean"), mean.round() as Value)),
-        ScoreType::Max(max) => Some((Kind::Gauge, name.make_name("max"), max)),
-        ScoreType::Min(min) => Some((Kind::Gauge, name.make_name("min"), min)),
-        ScoreType::Rate(rate) => Some((Kind::Gauge, name.make_name("rate"), rate.round() as Value)),
+/// A metric that holds aggregated values.
+/// Some fields are kept public to ease publishing.
+#[derive(Debug)]
+struct AtomicScores {
+    /// The kind of metric
+    kind: InputKind,
+    /// The actual recorded metric scores
+    scores: [AtomicUsize; 4],
+}
+
+impl AtomicScores {
+    /// Create new scores to track summary values of a metric
+    pub fn new(kind: InputKind) -> Self {
+        AtomicScores {
+            kind,
+            scores: unsafe { mem::transmute(AtomicScores::blank()) },
+        }
+    }
+
+    /// Returns the metric's kind.
+    pub fn metric_kind(&self) -> InputKind {
+        self.kind
+    }
+
+    #[inline]
+    fn blank() -> [usize; 4] {
+        [0, 0, usize::MIN, usize::MAX]
+    }
+
+    /// Update scores with new value
+    pub fn update(&self, value: MetricValue) -> () {
+        // TODO report any concurrent updates / resets for measurement of contention
+        let value = value as usize;
+        self.scores[0].fetch_add(1, AcqRel);
+        match self.kind {
+            InputKind::Marker => {}
+            _ => {
+                // optimization - these fields are unused for Marker stats
+                self.scores[1].fetch_add(value, AcqRel);
+                swap_if(&self.scores[2], value, |new, current| new > current);
+                swap_if(&self.scores[3], value, |new, current| new < current);
+            }
+        }
+    }
+
+    /// Reset scores to zero, return previous values
+    fn snapshot(&self, scores: &mut [usize; 4]) -> bool {
+        // NOTE copy timestamp, count AND sum _before_ testing for data to reduce concurrent discrepancies
+        scores[0] = self.scores[0].swap(0, AcqRel);
+        scores[1] = self.scores[1].swap(0, AcqRel);
+
+        // if hit count is zero, then no values were recorded.
+        if scores[0] == 0 {
+            return false;
+        }
+
+        scores[2] = self.scores[2].swap(usize::MIN, AcqRel);
+        scores[3] = self.scores[3].swap(usize::MAX, AcqRel);
+        true
+    }
+
+    /// Map raw scores (if any) to applicable statistics
+    pub fn reset(&self, duration_seconds: f64) -> Option<Vec<ScoreType>> {
+        let mut scores = AtomicScores::blank();
+        if self.snapshot(&mut scores) {
+
+            let mut snapshot = Vec::new();
+            match self.kind {
+                InputKind::Marker => {
+                    snapshot.push(Count(scores[0] as u64));
+                    snapshot.push(Rate(scores[0] as f64 / duration_seconds))
+                }
+                InputKind::Gauge => {
+                    snapshot.push(Max(scores[2] as u64));
+                    snapshot.push(Min(scores[3] as u64));
+                    snapshot.push(Mean(scores[1] as f64 / scores[0] as f64));
+                }
+                InputKind::Timer => {
+                    snapshot.push(Count(scores[0] as u64));
+                    snapshot.push(Sum(scores[1] as u64));
+
+                    snapshot.push(Max(scores[2] as u64));
+                    snapshot.push(Min(scores[3] as u64));
+                    snapshot.push(Mean(scores[1] as f64 / scores[0] as f64));
+                    // timer rate uses the COUNT of timer calls per second (not SUM)
+                    snapshot.push(Rate(scores[0] as f64 / duration_seconds))
+                }
+                InputKind::Counter => {
+                    snapshot.push(Count(scores[0] as u64));
+                    snapshot.push(Sum(scores[1] as u64));
+
+                    snapshot.push(Max(scores[2] as u64));
+                    snapshot.push(Min(scores[3] as u64));
+                    snapshot.push(Mean(scores[1] as f64 / scores[0] as f64));
+                    // counter rate uses the SUM of values per second (e.g. to get bytes/s)
+                    snapshot.push(Rate(scores[1] as f64 / duration_seconds))
+                }
+            }
+            Some(snapshot)
+        } else {
+            None
+        }
     }
 }
 
-/// A predefined export strategy reporting the average value for every non-marker metric.
-/// Marker metrics export their hit count instead.
-/// Since there is only one stat per metric, there is no risk of collision
-/// and so exported stats copy their metric's name.
-#[allow(dead_code)]
-pub fn stats_average(kind: Kind, name: Name, score: ScoreType) -> Option<(Kind, Name, Value)> {
-    match kind {
-        Kind::Marker => match score {
-            ScoreType::Count(count) => Some((Kind::Counter, name, count)),
-            _ => None,
-        },
-        _ => match score {
-            ScoreType::Mean(avg) => Some((Kind::Gauge, name, avg.round() as Value)),
-            _ => None,
-        },
-    }
-}
-
-/// A predefined single-stat-per-metric export strategy:
-/// - Timers and Counters each export their sums
-/// - Markers each export their hit count
-/// - Gauges each export their average
-/// Since there is only one stat per metric, there is no risk of collision
-/// and so exported stats copy their metric's name.
-#[allow(dead_code)]
-pub fn stats_summary(kind: Kind, name: Name, score: ScoreType) -> Option<(Kind, Name, Value)> {
-    match kind {
-        Kind::Marker => match score {
-            ScoreType::Count(count) => Some((Kind::Counter, name, count)),
-            _ => None,
-        },
-        Kind::Counter | Kind::Timer => match score {
-            ScoreType::Sum(sum) => Some((kind, name, sum)),
-            _ => None,
-        },
-        Kind::Gauge => match score {
-            ScoreType::Mean(mean) => Some((Kind::Gauge, name, mean.round() as Value)),
-            _ => None,
-        },
+/// Spinlock until success or clear loss to concurrent update.
+#[inline]
+fn swap_if(counter: &AtomicUsize, new_value: usize, compare: fn(usize, usize) -> bool) {
+    let mut current = counter.load(Acquire);
+    while compare(new_value, current) {
+        if counter.compare_and_swap(current, new_value, Release) == new_value {
+            // update successful
+            break;
+        }
+        // race detected, retry
+        current = counter.load(Acquire);
     }
 }
 
@@ -295,16 +365,35 @@ mod bench {
     use super::*;
 
     #[bench]
+    fn update_marker(b: &mut test::Bencher) {
+        let metric = AtomicScores::new(InputKind::Marker);
+        b.iter(|| test::black_box(metric.update(1)));
+    }
+
+    #[bench]
+    fn update_count(b: &mut test::Bencher) {
+        let metric = AtomicScores::new(InputKind::Counter);
+        b.iter(|| test::black_box(metric.update(4)));
+    }
+
+    #[bench]
+    fn empty_snapshot(b: &mut test::Bencher) {
+        let metric = AtomicScores::new(InputKind::Counter);
+        let scores = &mut AtomicScores::blank();
+        b.iter(|| test::black_box(metric.snapshot(scores)));
+    }
+
+    #[bench]
     fn aggregate_marker(b: &mut test::Bencher) {
-        let sink = Bucket::new();
-        let metric = sink.new_metric("event_a".into(), Kind::Marker);
+        let sink = AtomicBucket::new();
+        let metric = sink.new_metric("event_a".into(), InputKind::Marker);
         b.iter(|| test::black_box(metric.write(1, labels![])));
     }
 
     #[bench]
     fn aggregate_counter(b: &mut test::Bencher) {
-        let sink = Bucket::new();
-        let metric = sink.new_metric("count_a".into(), Kind::Counter);
+        let sink = AtomicBucket::new();
+        let metric = sink.new_metric("count_a".into(), InputKind::Counter);
         b.iter(|| test::black_box(metric.write(1, labels![])));
     }
 
@@ -313,16 +402,18 @@ mod bench {
 #[cfg(test)]
 mod test {
     use super::*;
+    use bucket::{stats_all, stats_average, stats_summary};
+
     use core::clock::{mock_clock_advance, mock_clock_reset};
     use output::map::StatsMap;
 
     use std::time::Duration;
     use std::collections::BTreeMap;
 
-    fn make_stats(stats_fn: &StatsFn) -> BTreeMap<String, Value> {
+    fn make_stats(stats_fn: &StatsFn) -> BTreeMap<String, MetricValue> {
         mock_clock_reset();
 
-        let metrics = Bucket::new().add_naming("test");
+        let metrics = AtomicBucket::new().add_prefix("test");
 
         let counter = metrics.counter("counter_a");
         let timer = metrics.timer("timer_a");

@@ -1,10 +1,10 @@
 //! Send metrics to a statsd server.
 
-use core::attributes::{Buffered, Attributes, Sampled, Sampling, WithAttributes, Naming};
-use core::name::Name;
+use core::attributes::{Buffered, Attributes, Sampled, Sampling, WithAttributes, Prefixed};
+use core::name::MetricName;
 use core::pcg32;
-use core::{Flush, Value};
-use core::input::Kind;
+use core::{Flush, MetricValue};
+use core::input::InputKind;
 use core::metrics;
 use core::output::{Output, OutputScope, OutputMetric};
 use core::error;
@@ -78,21 +78,21 @@ impl Sampled for StatsdScope {}
 
 impl OutputScope for StatsdScope {
     /// Define a metric of the specified type.
-    fn new_metric(&self, name: Name, kind: Kind) -> OutputMetric {
-        let mut prefix = self.naming_prepend(name).join(".");
+    fn new_metric(&self, name: MetricName, kind: InputKind) -> OutputMetric {
+        let mut prefix = self.prefix_prepend(name).join(".");
         prefix.push(':');
 
         let mut suffix = String::with_capacity(16);
         suffix.push('|');
         suffix.push_str(match kind {
-            Kind::Marker | Kind::Counter => "c",
-            Kind::Gauge => "g",
-            Kind::Timer => "ms",
+            InputKind::Marker | InputKind::Counter => "c",
+            InputKind::Gauge => "g",
+            InputKind::Timer => "ms",
         });
 
         let scale = match kind {
             // timers are in µs, statsd wants ms
-            Kind::Timer => 1000,
+            InputKind::Timer => 1000,
             _ => 1,
         };
 
@@ -127,7 +127,7 @@ impl Flush for StatsdScope {
 }
 
 impl StatsdScope {
-    fn print(&self, metric: &StatsdMetric, value: Value)  {
+    fn print(&self, metric: &StatsdMetric, value: MetricValue)  {
         let scaled_value = value / metric.scale;
         let value_str = scaled_value.to_string();
         let entry_len = metric.prefix.len() + value_str.len() + metric.suffix.len();
@@ -212,16 +212,16 @@ impl Drop for StatsdScope {
 //pub struct StatsdFormat;
 //
 //impl Format for StatsdFormat {
-//    fn template(&self, name: &Name, kind: Kind) -> Template {
+//    fn template(&self, name: &Name, kind: InputKind) -> Template {
 //        let mut before_value = name.join(".");
 //        before_value.push(':');
 //
 //        let mut after_value = String::with_capacity(16);
 //        after_value.push('|');
 //        after_value.push_str(match kind {
-//            Kind::Marker | Kind::Counter => "c",
-//            Kind::Gauge => "g",
-//            Kind::Timer => "ms",
+//            InputKind::Marker | InputKind::Counter => "c",
+//            InputKind::Gauge => "g",
+//            InputKind::Timer => "ms",
 //        });
 //
 //        // specify sampling rate if any
@@ -232,7 +232,7 @@ impl Drop for StatsdScope {
 //        // scale timer values
 //        let value_text = match kind {
 //            // timers are in µs, statsd wants ms
-//            Kind::Timer => ScaledValueAsText(1000),
+//            InputKind::Timer => ScaledValueAsText(1000),
 //            _ => ValueAsText,
 //        };
 //
@@ -258,7 +258,7 @@ mod bench {
     #[bench]
     pub fn immediate_statsd(b: &mut test::Bencher) {
         let sd = Statsd::send_to("localhost:2003").unwrap().input();
-        let timer = sd.new_metric("timer".into(), Kind::Timer);
+        let timer = sd.new_metric("timer".into(), InputKind::Timer);
 
         b.iter(|| test::black_box(timer.write(2000, labels![])));
     }
@@ -267,7 +267,7 @@ mod bench {
     pub fn buffering_statsd(b: &mut test::Bencher) {
         let sd = Statsd::send_to("localhost:2003").unwrap()
             .buffered(Buffering::BufferSize(65465)).input();
-        let timer = sd.new_metric("timer".into(), Kind::Timer);
+        let timer = sd.new_metric("timer".into(), InputKind::Timer);
 
         b.iter(|| test::black_box(timer.write(2000, labels![])));
     }

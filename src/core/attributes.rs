@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::collections::{HashMap};
 
-use core::name::{NameParts, Name};
+use core::name::{NameParts, MetricName};
 
 /// The actual distribution (random, fixed-cycled, etc) depends on selected sampling method.
 #[derive(Debug, Clone, Copy)]
@@ -43,7 +43,7 @@ pub trait WithAttributes: Clone {
     // TODO replace with fields-in-traits if ever stabilized (https://github.com/nikomatsakis/fields-in-traits-rfc)
     fn mut_attributes(&mut self) -> &mut Attributes;
 
-    /// Utility method. Clone a component and mutate its attributes at once.
+    /// Clone the component and mutate its attributes at once.
     fn with_attributes<F: Fn(&mut Attributes)>(&self, edit: F) -> Self {
         let mut cloned = self.clone();
         (edit)(cloned.mut_attributes());
@@ -52,21 +52,21 @@ pub trait WithAttributes: Clone {
 }
 
 /// Name operations support.
-pub trait Naming {
+pub trait Prefixed {
     /// Returns namespace of component.
-    fn get_naming(&self) -> &NameParts;
+    fn get_prefixes(&self) -> &NameParts;
 
-    /// Join namespace and prepend in newly defined metrics.
-    fn add_naming<S: Into<String>>(&self, name: S) -> Self;
+    /// Extend the namespace metrics will be defined in.
+    fn add_prefix<S: Into<String>>(&self, name: S) -> Self;
 
     /// Append any name parts to the name's namespace.
-    fn naming_append<S: Into<Name>>(&self, name: S) -> Name {
-        name.into().append(self.get_naming().clone())
+    fn prefix_append<S: Into<MetricName>>(&self, name: S) -> MetricName {
+        name.into().append(self.get_prefixes().clone())
     }
 
     /// Prepend any name parts to the name's namespace.
-    fn naming_prepend<S: Into<Name>>(&self, name: S) -> Name {
-        name.into().prepend(self.get_naming().clone())
+    fn prefix_prepend<S: Into<MetricName>>(&self, name: S) -> MetricName {
+        name.into().prepend(self.get_prefixes().clone())
     }
 }
 
@@ -80,16 +80,16 @@ pub trait Label {
 
 }
 
-impl<T: WithAttributes> Naming for T {
+impl<T: WithAttributes> Prefixed for T {
 
     /// Returns namespace of component.
-    fn get_naming(&self) -> &NameParts {
+    fn get_prefixes(&self) -> &NameParts {
         &self.get_attributes().naming
     }
 
     /// Adds a name part to any existing naming.
     /// Return a clone of the component with the updated naming.
-    fn add_naming<S: Into<String>>(&self, name: S) -> Self {
+    fn add_prefix<S: Into<String>>(&self, name: S) -> Self {
         let name = name.into();
         self.with_attributes(|new_attr| new_attr.naming.push_back(name.clone()))
     }
