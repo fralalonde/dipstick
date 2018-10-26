@@ -3,7 +3,7 @@
 //! This is also kept in a separate module because it is not to be exposed outside of the crate.
 
 use core::input::{Marker, InputScope, Counter};
-use core::attributes::Naming;
+use core::attributes::Prefixed;
 use core::proxy::Proxy;
 
 metrics!{

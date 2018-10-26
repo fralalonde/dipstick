@@ -28,15 +28,15 @@ impl NameParts {
     }
 
     /// Make a name in this namespace
-    pub fn make_name<S: Into<String>>(&self, leaf: S) -> Name {
+    pub fn make_name<S: Into<String>>(&self, leaf: S) -> MetricName {
         let mut nodes = self.clone();
         nodes.push_back(leaf.into());
-        Name { nodes }
+        MetricName { nodes }
     }
 
     /// Extract a copy of the last name part
     /// Panics if empty
-    pub fn short(&self) -> Name {
+    pub fn short(&self) -> MetricName {
         self.back().expect("Short metric name").clone().into()
     }
 }
@@ -70,11 +70,11 @@ impl DerefMut for NameParts {
 
 /// The name of a metric, including the concatenated possible namespaces in which it was defined.
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
-pub struct Name {
+pub struct MetricName {
     nodes: NameParts,
 }
 
-impl Name {
+impl MetricName {
 
     /// Prepend to the existing namespace.
     pub fn prepend<S: Into<NameParts>>(mut self, namespace: S) -> Self {
@@ -101,20 +101,20 @@ impl Name {
     }
 }
 
-impl<S: Into<String>> From<S> for Name {
+impl<S: Into<String>> From<S> for MetricName {
     fn from(name: S) -> Self {
-        Name { nodes: NameParts::from(name) }
+        MetricName { nodes: NameParts::from(name) }
     }
 }
 
-impl Deref for Name {
+impl Deref for MetricName {
     type Target = NameParts;
     fn deref(&self) -> &Self::Target {
         &self.nodes
     }
 }
 
-impl DerefMut for Name {
+impl DerefMut for MetricName {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.nodes
     }

@@ -1,9 +1,9 @@
 //! Cache metric definitions.
 
 use core::Flush;
-use core::input::{Kind, Input, InputScope, InputMetric, InputDyn};
-use core::attributes::{Attributes, WithAttributes, Naming};
-use core::name::Name;
+use core::input::{InputKind, Input, InputScope, InputMetric, InputDyn};
+use core::attributes::{Attributes, WithAttributes, Prefixed};
+use core::name::MetricName;
 use cache::lru_cache as lru;
 use core::error;
 
@@ -24,7 +24,7 @@ pub trait CachedInput: Input + Send + Sync + 'static + Sized {
 pub struct InputCache {
     attributes: Attributes,
     target: Arc<InputDyn + Send + Sync + 'static>,
-    cache: Arc<RwLock<lru::LRUCache<Name, InputMetric>>>,
+    cache: Arc<RwLock<lru::LRUCache<MetricName, InputMetric>>>,
 }
 
 impl InputCache {
@@ -61,7 +61,7 @@ impl Input for InputCache {
 pub struct InputScopeCache {
     attributes: Attributes,
     target: Arc<InputScope + Send + Sync + 'static>,
-    cache: Arc<RwLock<lru::LRUCache<Name, InputMetric>>>,
+    cache: Arc<RwLock<lru::LRUCache<MetricName, InputMetric>>>,
 }
 
 impl WithAttributes for InputScopeCache {
@@ -70,8 +70,8 @@ impl WithAttributes for InputScopeCache {
 }
 
 impl InputScope for InputScopeCache {
-    fn new_metric(&self, name: Name, kind: Kind) -> InputMetric {
-        let name = self.naming_append(name);
+    fn new_metric(&self, name: MetricName, kind: InputKind) -> InputMetric {
+        let name = self.prefix_append(name);
         let lookup = {
             self.cache.write().expect("Cache Lock").get(&name).cloned()
         };

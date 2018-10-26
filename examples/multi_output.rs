@@ -15,13 +15,13 @@ fn main() {
 
     // will output metrics twice, once with "cool.yeah" prefix and once with "cool.ouch" prefix.
     let same_type_metrics = MultiOutput::output()
-        .add_target(Stream::write_to(io::stderr()).add_naming("out_1"))
-        .add_target(Stream::write_to(io::stderr()).add_naming("out_2"))
-        .add_naming("out_both").input();
+        .add_target(Stream::write_to(io::stderr()).add_prefix("out_1"))
+        .add_target(Stream::write_to(io::stderr()).add_prefix("out_2"))
+        .add_prefix("out_both").input();
 
     loop {
-        different_type_metrics.new_metric("counter_a".into(), Kind::Counter).write(123, labels![]);
-        same_type_metrics.new_metric("timer_a".into(), Kind::Timer).write(6677, labels![]);
+        different_type_metrics.new_metric("counter_a".into(), InputKind::Counter).write(123, labels![]);
+        same_type_metrics.new_metric("timer_a".into(), InputKind::Timer).write(6677, labels![]);
         std::thread::sleep(Duration::from_millis(400));
     }
 }

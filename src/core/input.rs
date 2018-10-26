@@ -1,7 +1,7 @@
 use core::clock::TimeHandle;
-use core::{Value, Flush};
-use core::name::Name;
-use ::{Labels};
+use core::{MetricValue, Flush};
+use core::name::MetricName;
+use core::label::Labels;
 
 use std::sync::Arc;
 use std::fmt;
@@ -36,26 +36,26 @@ impl<T: Input + Send + Sync + 'static> InputDyn for T {
 pub trait InputScope: Flush {
     /// Define a generic metric of the specified type.
     /// It is preferable to use counter() / marker() / timer() / gauge() methods.
-    fn new_metric(&self, name: Name, kind: Kind) -> InputMetric;
+    fn new_metric(&self, name: MetricName, kind: InputKind) -> InputMetric;
 
     /// Define a counter.
     fn counter(&self, name: &str) -> Counter {
-        self.new_metric(name.into(), Kind::Counter).into()
+        self.new_metric(name.into(), InputKind::Counter).into()
     }
 
     /// Define a marker.
     fn marker(&self, name: &str) -> Marker {
-        self.new_metric(name.into(), Kind::Marker).into()
+        self.new_metric(name.into(), InputKind::Marker).into()
     }
 
     /// Define a timer.
     fn timer(&self, name: &str) -> Timer {
-        self.new_metric(name.into(), Kind::Timer).into()
+        self.new_metric(name.into(), InputKind::Timer).into()
     }
 
     /// Define a gauge.
     fn gauge(&self, name: &str) -> Gauge {
-        self.new_metric(name.into(), Kind::Gauge).into()
+        self.new_metric(name.into(), InputKind::Gauge).into()
     }
 
 }
@@ -63,7 +63,7 @@ pub trait InputScope: Flush {
 /// A metric is actually a function that knows to write a metric value to a metric output.
 #[derive(Clone)]
 pub struct InputMetric {
-    inner: Arc<Fn(Value, Labels) + Send + Sync>
+    inner: Arc<Fn(MetricValue, Labels) + Send + Sync>
 }
 
 impl fmt::Debug for InputMetric {
@@ -74,20 +74,20 @@ impl fmt::Debug for InputMetric {
 
 impl InputMetric {
     /// Utility constructor
-    pub fn new<F: Fn(Value, Labels) + Send + Sync + 'static>(metric: F) -> InputMetric {
+    pub fn new<F: Fn(MetricValue, Labels) + Send + Sync + 'static>(metric: F) -> InputMetric {
         InputMetric { inner: Arc::new(metric) }
     }
 
     /// Collect a new value for this metric.
     #[inline]
-    pub fn write(&self, value: Value, labels: Labels) {
+    pub fn write(&self, value: MetricValue, labels: Labels) {
         (self.inner)(value, labels)
     }
 }
 
 /// Used to differentiate between metric kinds in the backend.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-pub enum Kind {
+pub enum InputKind {
     /// Handling one item at a time.
     Marker,
     /// Handling quantities or multiples.
@@ -98,15 +98,15 @@ pub enum Kind {
     Timer,
 }
 
-/// Used by the metrics! macro to obtain the Kind from the stringified type.
-impl<'a> From<&'a str> for Kind {
-    fn from(s: &str) -> Kind {
+/// Used by the metrics! macro to obtain the InputKind from the stringified type.
+impl<'a> From<&'a str> for InputKind {
+    fn from(s: &str) -> InputKind {
         match s {
-            "Marker" => Kind::Marker,
-            "Counter" => Kind::Counter,
-            "Gauge" => Kind::Gauge,
-            "Timer" => Kind::Timer,
-            _ => panic!("No Kind '{}' defined", s)
+            "Marker" => InputKind::Marker,
+            "Counter" => InputKind::Counter,
+            "Gauge" => InputKind::Gauge,
+            "Timer" => InputKind::Timer,
+            _ => panic!("No InputKind '{}' defined", s)
         }
     }
 }

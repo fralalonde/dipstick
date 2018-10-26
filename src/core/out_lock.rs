@@ -1,7 +1,7 @@
-use core::input::{InputScope, InputMetric, Input, Kind};
+use core::input::{InputScope, InputMetric, Input, InputKind};
 use core::output::{Output, OutputScope};
-use core::attributes::{Attributes, WithAttributes, Naming};
-use core::name::Name;
+use core::attributes::{Attributes, WithAttributes, Prefixed};
+use core::name::MetricName;
 use core::Flush;
 use core::error;
 use std::rc::Rc;
@@ -9,7 +9,7 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::ops;
 
-/// Provide thread-safe locking to RawScope implementers.
+/// Synchronous thread-safety for metric output using basic locking.
 #[derive(Clone)]
 pub struct LockingScopeBox {
     attributes: Attributes,
@@ -23,8 +23,8 @@ impl WithAttributes for LockingScopeBox {
 
 impl InputScope for LockingScopeBox {
 
-    fn new_metric(&self, name: Name, kind: Kind) -> InputMetric {
-        let name = self.naming_append(name);
+    fn new_metric(&self, name: MetricName, kind: InputKind) -> InputMetric {
+        let name = self.prefix_append(name);
         let raw_metric = self.inner.lock().expect("RawScope Lock").new_metric(name, kind);
         let mutex = self.inner.clone();
         InputMetric::new(move |value, labels| {

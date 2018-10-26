@@ -27,10 +27,10 @@ mod macros;
 pub use macros::*;
 
 mod core;
-pub use core::{Flush, Value};
-pub use core::attributes::{Naming, Sampling, Sampled, Buffered, Buffering};
-pub use core::name::{Name, NameParts};
-pub use core::input::{Input, InputDyn, InputScope, InputMetric, Counter, Timer, Marker, Gauge, Kind};
+pub use core::{Flush, MetricValue};
+pub use core::attributes::{Prefixed, Sampling, Sampled, Buffered, Buffering};
+pub use core::name::{MetricName, NameParts};
+pub use core::input::{Input, InputDyn, InputScope, InputMetric, Counter, Timer, Marker, Gauge, InputKind};
 pub use core::output::{Output, OutputDyn, OutputScope, OutputMetric};
 pub use core::scheduler::{ScheduleFlush, CancelHandle};
 pub use core::out_lock::{LockingScopeBox};
@@ -51,9 +51,9 @@ pub use output::statsd::{Statsd, StatsdScope, StatsdMetric};
 pub use output::map::{StatsMap};
 pub use output::log::{Log, LogScope};
 
-mod aggregate;
-pub use aggregate::bucket::{Bucket, stats_all, stats_average, stats_summary};
-pub use aggregate::scores::{ScoreType, Scoreboard};
+mod bucket;
+pub use bucket::{ScoreType, stats_all, stats_average, stats_summary};
+pub use bucket::atomic::{AtomicBucket};
 
 mod cache;
 pub use cache::cache_in::CachedInput;

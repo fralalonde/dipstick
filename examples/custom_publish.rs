@@ -8,19 +8,19 @@ use dipstick::*;
 
 fn main() {
     fn custom_statistics(
-        kind: Kind,
-        mut name: Name,
+        kind: InputKind,
+        mut name: MetricName,
         score: ScoreType,
-    ) -> Option<(Kind, Name, Value)> {
+    ) -> Option<(InputKind, MetricName, MetricValue)> {
         match (kind, score) {
             // do not export gauge scores
-            (Kind::Gauge, _) => None,
+            (InputKind::Gauge, _) => None,
 
             // prepend and append to metric name
             (_, ScoreType::Count(count)) => {
                 if let Some(last) = name.pop_back() {
                     Some((
-                        Kind::Counter,
+                        InputKind::Counter,
                         name.append("customized_add_prefix")
                             .append(format!("{}_and_a_suffix", last)),
                         count,
@@ -42,10 +42,10 @@ fn main() {
     }
 
     // send application metrics to aggregator
-    Bucket::set_default_target(Stream::stderr());
-    Bucket::set_default_stats(custom_statistics);
+    AtomicBucket::set_default_target(Stream::stderr());
+    AtomicBucket::set_default_stats(custom_statistics);
 
-    let app_metrics = Bucket::new();
+    let app_metrics = AtomicBucket::new();
 
     // schedule aggregated metrics to be printed every 3 seconds
     app_metrics.flush_every(Duration::from_secs(3));

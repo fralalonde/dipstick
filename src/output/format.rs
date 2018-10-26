@@ -1,6 +1,6 @@
-use core::name::Name;
-use core::input::Kind;
-use core::Value;
+use core::name::MetricName;
+use core::input::InputKind;
+use core::MetricValue;
 use self::LineOp::*;
 
 use std::io;
@@ -15,7 +15,7 @@ pub enum LineOp {
     /// Print metric value as text.
     ValueAsText,
     /// Print metric value, divided by the given scale, as text.
-    ScaledValueAsText(Value),
+    ScaledValueAsText(MetricValue),
     /// Print the newline character.labels.lookup(key)
     NewLine,
 }
@@ -43,7 +43,7 @@ impl From<Vec<LineOp>> for LineTemplate {
 
 impl LineTemplate {
     /// Template execution applies commands in turn, writing to the output.
-    pub fn print<L>(&self, output: &mut io::Write, value: Value, lookup: L) -> Result<(), io::Error>
+    pub fn print<L>(&self, output: &mut io::Write, value: MetricValue, lookup: L) -> Result<(), io::Error>
     where L: Fn(&str) -> Option<Arc<String>>
     {
         for cmd in &self.ops {
@@ -85,7 +85,7 @@ pub trait Formatting {
 pub trait LineFormat: Send + Sync {
 
     /// Prepare a template for output of metric values.
-    fn template(&self, name: &Name, kind: Kind) -> LineTemplate;
+    fn template(&self, name: &MetricName, kind: InputKind) -> LineTemplate;
 }
 
 /// A simple metric output format of "MetricName {Value}"
@@ -96,7 +96,7 @@ pub struct SimpleFormat {
 }
 
 impl LineFormat for SimpleFormat {
-    fn template(&self, name: &Name, _kind: Kind) -> LineTemplate {
+    fn template(&self, name: &MetricName, _kind: InputKind) -> LineTemplate {
         let mut header = name.join(".");
         header.push(' ');
         LineTemplate {
@@ -112,12 +112,12 @@ impl LineFormat for SimpleFormat {
 #[cfg(test)]
 pub mod test {
     use super::*;
-    use ::Labels;
+    use core::label::Labels;
 
     pub struct TestFormat;
 
     impl LineFormat for TestFormat {
-        fn template(&self, name: &Name, kind: Kind) -> LineTemplate {
+        fn template(&self, name: &MetricName, kind: InputKind) -> LineTemplate {
             let mut header: String = format!("{:?}", kind);
             header.push('/');
             header.push_str(&name.join("."));
@@ -143,9 +143,9 @@ pub mod test {
     fn print_label_exists() {
         let labels: Labels = labels!("test_key" => "456");
         let format = TestFormat {};
-        let mut name = Name::from("abc");
+        let mut name = MetricName::from("abc");
         name = name.prepend("xyz");
-        let template = format.template(&name, Kind::Counter);
+        let template = format.template(&name, InputKind::Counter);
         let mut out = vec![];
         template.print(&mut out, 123000, |key| labels.lookup(key)).unwrap();
         assert_eq!("Counter/xyz.abc 123000 123 test_key=456\n", String::from_utf8(out).unwrap());
@@ -154,9 +154,9 @@ pub mod test {
     #[test]
     fn print_label_not_exists() {
         let format = TestFormat {};
-        let mut name = Name::from("abc");
+        let mut name = MetricName::from("abc");
         name = name.prepend("xyz");
-        let template = format.template(&name, Kind::Counter);
+        let template = format.template(&name, InputKind::Counter);
         let mut out = vec![];
         template.print(&mut out, 123000, |_key| None).unwrap();
         assert_eq!("Counter/xyz.abc 123000 123 \n", String::from_utf8(out).unwrap());

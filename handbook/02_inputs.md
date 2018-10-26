@@ -1,4 +1,28 @@
-# input
+# Input
+
+Metrics input are the measurement instruments that are called from application code.
+The inputs are high-level components that are assumed to be callable
+from all contexts, regardless of threading, security, etc.
+
+Each metric input has a name and a kind.
+A metric's name is a short alphanumeric identifier.
+A metric's kind can be one of four kinds:
+- Counter
+- Marker
+- Timer
+- Gauge
+
+The actual flow of measured values varies depending on how the metrics backend has been configured.
+Skip to the output section for more details on backend configuration.
+
+## Counters and Markers
+
+## Timers
+
+## Gauges
+
+
+
 
 ## namespace
 

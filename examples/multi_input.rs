@@ -2,7 +2,7 @@
 
 extern crate dipstick;
 
-use dipstick::{MultiInput, Graphite, Stream, Input, InputScope, Naming};
+use dipstick::{MultiInput, Graphite, Stream, Input, InputScope, Prefixed};
 use std::time::Duration;
 use std::io;
 
@@ -15,9 +15,9 @@ fn main() {
 
     // will output metrics twice, once with "cool.yeah" prefix and once with "cool.ouch" prefix.
     let same_type_metrics = MultiInput::input()
-        .add_target(Stream::write_to(io::stdout()).add_naming("yeah"))
-        .add_target(Stream::write_to(io::stdout()).add_naming("ouch"))
-        .add_naming("cool")
+        .add_target(Stream::write_to(io::stdout()).add_prefix("yeah"))
+        .add_target(Stream::write_to(io::stdout()).add_prefix("ouch"))
+        .add_prefix("cool")
         .input();
 
     loop {

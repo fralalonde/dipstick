@@ -3,9 +3,9 @@
 // TODO parameterize templates
 
 use core::{Flush};
-use core::input::Kind;
-use core::attributes::{Attributes, WithAttributes, Buffered, Naming};
-use core::name::Name;
+use core::input::InputKind;
+use core::attributes::{Attributes, WithAttributes, Buffered, Prefixed};
+use core::name::MetricName;
 use core::output::{Output, OutputMetric, OutputScope};
 use core::error;
 
@@ -118,8 +118,8 @@ impl<W: Write + Send + Sync + 'static> WithAttributes for TextScope<W> {
 impl<W: Write + Send + Sync + 'static> Buffered for TextScope<W> {}
 
 impl<W: Write + Send + Sync + 'static> OutputScope for TextScope<W> {
-    fn new_metric(&self, name: Name, kind: Kind) -> OutputMetric {
-        let name = self.naming_append(name);
+    fn new_metric(&self, name: MetricName, kind: InputKind) -> OutputMetric {
+        let name = self.prefix_append(name);
         let template = self.output.format.template(&name, kind);
 
         let entries = self.entries.clone();
@@ -180,13 +180,13 @@ impl<W: Write + Send + Sync + 'static> Drop for TextScope<W> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use core::input::Kind;
+    use core::input::InputKind;
     use std::io;
 
     #[test]
     fn sink_print() {
         let c = super::Stream::write_to(io::stdout()).output();
-        let m = c.new_metric("test".into(), Kind::Marker);
+        let m = c.new_metric("test".into(), InputKind::Marker);
         m.write(33, labels![]);
     }
 }

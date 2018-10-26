@@ -1,9 +1,9 @@
 //! Dispatch metrics to multiple sinks.
 
 use core::Flush;
-use core::input::{Kind, Input, InputScope, InputMetric, InputDyn};
-use core::attributes::{Attributes, WithAttributes, Naming};
-use core::name::Name;
+use core::input::{InputKind, Input, InputScope, InputMetric, InputDyn};
+use core::attributes::{Attributes, WithAttributes, Prefixed};
+use core::name::MetricName;
 use core::error;
 
 use std::sync::Arc;
@@ -75,8 +75,8 @@ impl MultiInputScope {
 }
 
 impl InputScope for MultiInputScope {
-    fn new_metric(&self, name: Name, kind: Kind) -> InputMetric {
-        let name = &self.naming_append(name);
+    fn new_metric(&self, name: MetricName, kind: InputKind) -> InputMetric {
+        let name = &self.prefix_append(name);
         let metrics: Vec<InputMetric> = self.scopes.iter()
             .map(move |scope| scope.new_metric(name.clone(), kind))
             .collect();

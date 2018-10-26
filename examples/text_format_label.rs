@@ -1,18 +1,19 @@
-//! A sample application asynchronously printing metrics to stdout.
+//! Print metrics to stderr with custom formatter including a label.
 
 extern crate dipstick;
 
 use std::thread::sleep;
 use std::time::Duration;
 use dipstick::{Stream, InputScope, Input, Formatting, AppLabel,
-               Name, Kind, LineTemplate, LineFormat, LineOp, LabelOp};
+               MetricName, InputKind, LineTemplate, LineFormat, LineOp, LabelOp};
 
+/// Generates template like "$METRIC $value $label_value["abc"]\n"
 struct MyFormat;
 
 impl LineFormat for MyFormat {
-    fn template(&self, name: &Name, _kind: Kind) -> LineTemplate {
+    fn template(&self, name: &MetricName, _kind: InputKind) -> LineTemplate {
         vec![
-            LineOp::Literal(format!("{} ", name.join(".")).into()),
+            LineOp::Literal(format!("{} ", name.join(".")).to_uppercase().into()),
             LineOp::ValueAsText,
             LineOp::Literal(" ".into()),
             LineOp::LabelExists("abc".into(),

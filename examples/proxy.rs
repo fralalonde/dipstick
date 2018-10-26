@@ -4,12 +4,12 @@ extern crate dipstick;
 
 use std::thread::sleep;
 use std::time::Duration;
-use dipstick::{Proxy, Stream, InputScope, Input, Naming};
+use dipstick::{Proxy, Stream, InputScope, Input, Prefixed};
 
 
 fn main() {
     let root_proxy = Proxy::default();
-    let sub = root_proxy.add_naming("sub");
+    let sub = root_proxy.add_prefix("sub");
 
     let count1 = root_proxy.counter("counter_a");
 
@@ -22,12 +22,12 @@ fn main() {
         count2.count(2);
 
         // route every metric from the root to stdout with prefix "root"
-        root_proxy.set_target(stdout.add_naming("root"));
+        root_proxy.set_target(stdout.add_prefix("root"));
         count1.count(3);
         count2.count(4);
 
         // route metrics from "sub" to stdout with prefix "mutant"
-        sub.set_target(stdout.add_naming("mutant"));
+        sub.set_target(stdout.add_prefix("mutant"));
         count1.count(5);
         count2.count(6);
 
