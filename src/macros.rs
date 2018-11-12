@@ -130,27 +130,27 @@ macro_rules! metrics {
 
     // SUB BRANCH NODE - public identifier
     (@internal $WITH:expr; $TY:ty; $(#[$attr:meta])* pub $IDENT:ident = $e:expr => { $($BRANCH:tt)*} $($REST:tt)*) => {
-        lazy_static! { $(#[$attr])* pub static ref $IDENT = $WITH.add_naming($e); }
+        lazy_static! { $(#[$attr])* pub static ref $IDENT = $WITH.add_prefix($e); }
         metrics!( @internal $IDENT; $TY; $($BRANCH)*);
         metrics!( @internal $WITH; $TY; $($REST)*);
     };
 
     // SUB BRANCH NODE - private identifier
     (@internal $WITH:expr; $TY:ty; $(#[$attr:meta])* $IDENT:ident = $e:expr => { $($BRANCH:tt)*} $($REST:tt)*) => {
-        lazy_static! { $(#[$attr])* static ref $IDENT = $WITH.add_naming($e); }
+        lazy_static! { $(#[$attr])* static ref $IDENT = $WITH.add_prefix($e); }
         metrics!( @internal $IDENT; $TY; $($BRANCH)*);
         metrics!( @internal $WITH; $TY; $($REST)*);
     };
 
     // SUB BRANCH NODE (not yet)
     (@internal $WITH:expr; $TY:ty; $(#[$attr:meta])* pub $e:expr => { $($BRANCH:tt)*} $($REST:tt)*) => {
-        metrics!( @internal $WITH.add_naming($e); $TY; $($BRANCH)*);
+        metrics!( @internal $WITH.add_prefix($e); $TY; $($BRANCH)*);
         metrics!( @internal $WITH; $TY; $($REST)*);
     };
 
     // SUB BRANCH NODE (not yet)
     (@internal $WITH:expr; $TY:ty; $(#[$attr:meta])* $e:expr => { $($BRANCH:tt)*} $($REST:tt)*) => {
-        metrics!( @internal $WITH.add_naming($e); $TY; $($BRANCH)*);
+        metrics!( @internal $WITH.add_prefix($e); $TY; $($BRANCH)*);
         metrics!( @internal $WITH; $TY; $($REST)*);
     };
 

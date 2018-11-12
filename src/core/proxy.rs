@@ -1,9 +1,9 @@
 //! Decouple metric definition from configuration with trait objects.
 
-use core::attributes::{Attributes, WithAttributes, Naming};
-use core::name::{Name, NameParts};
+use core::attributes::{Attributes, WithAttributes, Prefixed};
+use core::name::{MetricName, NameParts};
 use core::Flush;
-use core::input::{Kind, InputMetric, InputScope};
+use core::input::{InputKind, InputMetric, InputScope};
 use core::void::VOID_INPUT;
 use core::error;
 
@@ -26,7 +26,7 @@ lazy_static! {
 struct ProxyMetric {
     // basic info for this metric, needed to recreate new corresponding trait object if target changes
     name: NameParts,
-    kind: Kind,
+    kind: InputKind,
 
     // the metric trait object to proxy metric values to
     // the second part can be up to namespace.len() + 1 if this metric was individually targeted
@@ -174,13 +174,13 @@ impl Proxy {
     /// Replace target for this proxy and it's children.
     pub fn set_target<T: InputScope + Send + Sync + 'static>(&self, target: T) {
         let mut inner = self.inner.write().expect("Dispatch Lock");
-        inner.set_target(self.get_naming(), Arc::new(target));
+        inner.set_target(self.get_prefixes(), Arc::new(target));
     }
 
     /// Replace target for this proxy and it's children.
     pub fn unset_target(&self) {
         let mut inner = self.inner.write().expect("Dispatch Lock");
-        inner.unset_target(self.get_naming());
+        inner.unset_target(self.get_prefixes());
     }
 
     /// Replace target for this proxy and it's children.
@@ -197,19 +197,19 @@ impl Proxy {
 
 impl<S: AsRef<str>> From<S> for Proxy {
     fn from(name: S) -> Proxy {
-        Proxy::new().add_naming(name.as_ref())
+        Proxy::new().add_prefix(name.as_ref())
     }
 }
 
 impl InputScope for Proxy {
     /// Lookup or create a proxy stub for the requested metric.
-    fn new_metric(&self, name: Name, kind: Kind) -> InputMetric {
-        let name: Name = self.naming_append(name);
+    fn new_metric(&self, name: MetricName, kind: InputKind) -> InputMetric {
+        let name: MetricName = self.prefix_append(name);
         let mut inner = self.inner.write().expect("Dispatch Lock");
         let proxy = inner
             .metrics
             .get(&name)
-            // TODO validate that Kind matches existing
+            // TODO validate that InputKind matches existing
             .and_then(|proxy_ref| Weak::upgrade(proxy_ref))
             .unwrap_or_else(|| {
                 let namespace = &*name;
@@ -235,7 +235,7 @@ impl InputScope for Proxy {
 impl Flush for Proxy {
 
     fn flush(&self) -> error::Result<()> {
-        self.inner.write().expect("Dispatch Lock").flush(self.get_naming())
+        self.inner.write().expect("Dispatch Lock").flush(self.get_prefixes())
     }
 }
 
@@ -249,11 +249,11 @@ mod bench {
 
     use super::*;
     use test;
-    use aggregate::bucket::Bucket;
+    use bucket::atomic::AtomicBucket;
 
     #[bench]
     fn proxy_marker_to_aggregate(b: &mut test::Bencher) {
-        ROOT_PROXY.set_target(Bucket::new());
+        ROOT_PROXY.set_target(AtomicBucket::new());
         let metric = ROOT_PROXY.marker("event_a");
         b.iter(|| test::black_box(metric.mark()));
     }

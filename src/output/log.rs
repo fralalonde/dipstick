@@ -1,7 +1,7 @@
 use core::{Flush};
-use core::input::{Kind, Input, InputScope, InputMetric};
-use core::attributes::{Attributes, WithAttributes, Buffered, Naming};
-use core::name::Name;
+use core::input::{InputKind, Input, InputScope, InputMetric};
+use core::attributes::{Attributes, WithAttributes, Buffered, Prefixed};
+use core::name::MetricName;
 use core::error;
 use cache::cache_in;
 use queue::queue_in;
@@ -75,8 +75,8 @@ impl queue_in::QueuedInput for Log {}
 impl cache_in::CachedInput for Log {}
 
 impl InputScope for LogScope {
-    fn new_metric(&self, name: Name, kind: Kind) -> InputMetric {
-        let name = self.naming_append(name);
+    fn new_metric(&self, name: MetricName, kind: InputKind) -> InputMetric {
+        let name = self.prefix_append(name);
 
             let template = self.output.format.template(&name, kind);
 
@@ -136,7 +136,7 @@ mod test {
     #[test]
     fn test_to_log() {
         let c = super::Log::log_to().input();
-        let m = c.new_metric("test".into(), Kind::Marker);
+        let m = c.new_metric("test".into(), InputKind::Marker);
         m.write(33, labels![]);
     }
 

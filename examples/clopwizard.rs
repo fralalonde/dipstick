@@ -17,25 +17,25 @@ metrics!{
 
 fn main() {
 
-    let one_minute = Bucket::new();
+    let one_minute = AtomicBucket::new();
     one_minute.flush_every(Duration::from_secs(60));
 
-    let five_minutes = Bucket::new();
+    let five_minutes = AtomicBucket::new();
     five_minutes.flush_every(Duration::from_secs(300));
 
-    let fifteen_minutes = Bucket::new();
+    let fifteen_minutes = AtomicBucket::new();
     fifteen_minutes.flush_every(Duration::from_secs(900));
 
     let all_buckets = MultiInputScope::new()
         .add_target(one_minute)
         .add_target(five_minutes)
         .add_target(fifteen_minutes)
-        .add_naming("machine_name");
+        .add_prefix("machine_name");
 
     // send application metrics to aggregator
     Proxy::default().set_target(all_buckets);
-    Bucket::set_default_target(Stream::write_to(io::stdout()));
-    Bucket::set_default_stats(stats_all);
+    AtomicBucket::set_default_target(Stream::write_to(io::stdout()));
+    AtomicBucket::set_default_stats(stats_all);
 
     loop {
         COUNTER.count(17);

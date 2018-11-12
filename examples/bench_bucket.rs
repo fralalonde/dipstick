@@ -11,7 +11,7 @@ use std::env::args;
 use std::str::FromStr;
 
 fn main() {
-    let bucket = Bucket::new();
+    let bucket = AtomicBucket::new();
     let event = bucket.marker("a");
     let args = &mut args();
     args.next();

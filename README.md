@@ -11,7 +11,8 @@ minimal impact on applications and a choice of output to downstream systems.
 
 Dipstick is a toolkit to help all sorts of application collect and send out metrics.
 As such, it needs a bit of set up to suit one's needs.
-Skimming through the handbook [handbook](https://github.com/fralalonde/dipstick/tree/master/handbook) 
+Skimming through the [handbook](https://github.com/fralalonde/dipstick/tree/master/HANDBOOK.md)
+and many [examples](https://github.com/fralalonde/dipstick/tree/master/examples)
 should help you get an idea of the possible configurations.
 
 In short, dipstick-enabled apps _can_:
@@ -31,7 +32,8 @@ For convenience, dipstick builds on stable Rust with minimal, feature-gated depe
 
 ### Non-goals
 
-For performance reasons, dipstick will not
+Dipstick's focus is on metrics collection (input) and forwarding (output).
+Although it will happily track aggregated statistics, for the sake of simplicity and performance Dipstick will not
 - plot graphs
 - send alerts
 - track histograms
@@ -77,4 +79,3 @@ dipstick = "0.7.0"
 ## License
 
 Dipstick is licensed under the terms of the Apache 2.0 and MIT license.
-

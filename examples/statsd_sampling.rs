@@ -1,6 +1,5 @@
 //! A sample application sending ad-hoc counter values both to statsd _and_ to stdout.
 
-//extern crate badlog;
 extern crate dipstick;
 
 use dipstick::*;
@@ -11,7 +10,7 @@ fn main() {
         Statsd::send_to("localhost:8125")
             .expect("Connected")
             .sampled(Sampling::Random(0.2))
-            .add_naming("my_app")
+            .add_prefix("my_app")
             .input();
 
     let counter = metrics.counter("counter_a");

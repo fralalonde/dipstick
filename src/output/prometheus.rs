@@ -5,10 +5,10 @@
 //! - Serve metrics with basic HTTP server
 //! - Print metrics to a buffer provided by an HTTP framework.
 
-use core::{Flush, Value};
-use core::input::{Kind, Input, InputScope, InputMetric};
-use core::attributes::{Attributes, WithAttributes, Buffered, Buffering, Naming};
-use core::name::Name;
+use core::{Flush, MetricValue};
+use core::input::{InputKind, Input, InputScope, InputMetric};
+use core::attributes::{Attributes, WithAttributes, Buffered, Buffering, Prefixed};
+use core::name::MetricName;
 use core::output::{Output, OutputMetric, OutputScope};
 use core::error;
 
@@ -47,8 +47,8 @@ impl PrometheusScope {
 impl OutputScope for PrometheusScope {
 
     /// Define a metric of the specified type.
-    fn new_metric(&self, name: Name, _kind: Kind) -> OutputMetric {
-        let mut _prefix = self.naming_prepend(name).join(".");
+    fn new_metric(&self, name: MetricName, _kind: InputKind) -> OutputMetric {
+        let mut _prefix = self.prefix_prepend(name).join(".");
         OutputMetric::new(|_value, _labels| {})
     }
 }

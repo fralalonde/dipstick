@@ -195,7 +195,7 @@ pub mod test {
         ThreadLabel::set("abc", "123");
         assert_eq!(Arc::new("123".into()), labels!().lookup("abc").unwrap());
         ThreadLabel::unset("abc");
-        assert_eq!(Arc::new("456".into()), labels!().lookup("abc").unwrap());
+        assert_eq!(Arc::new("456".into()), labels!().lookup("abc").expect("AppLabel Value"));
         AppLabel::unset("abc");
         assert_eq!(false, labels!().lookup("abc").is_some());
     }

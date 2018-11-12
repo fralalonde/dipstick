@@ -13,7 +13,7 @@ use std::str::FromStr;
 fn main() {
     let event = Proxy::default().marker("a");
 
-    let bucket = Bucket::new();
+    let bucket = AtomicBucket::new();
 
     Proxy::default().set_target(bucket.clone());
 

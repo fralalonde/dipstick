@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use std::time::Instant;
 
-use core::Value;
+use core::MetricValue;
 
 #[derive(Debug, Copy, Clone)]
 /// A handle to the start time of a counter.
@@ -21,13 +21,13 @@ impl TimeHandle {
     }
 
     /// Get the elapsed time in microseconds since TimeHandle was obtained.
-    pub fn elapsed_us(self) -> Value {
+    pub fn elapsed_us(self) -> MetricValue {
         let duration = now() - self.0;
-        duration.as_secs() * 1_000_000 + duration.subsec_micros() as Value
+        duration.as_secs() * 1_000_000 + duration.subsec_micros() as MetricValue
     }
 
     /// Get the elapsed time in microseconds since TimeHandle was obtained.
-    pub fn elapsed_ms(self) -> Value {
+    pub fn elapsed_ms(self) -> MetricValue {
         self.elapsed_us() / 1000
     }
 }

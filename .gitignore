@@ -2,3 +2,5 @@ target/
 **/*.rs.bk
 Cargo.lock
 src/prometheus_proto.rs
+.idea
+cmake-*

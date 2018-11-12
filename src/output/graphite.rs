@@ -1,9 +1,9 @@
 //! Send metrics to a graphite server.
 
-use core::attributes::{Buffered, Attributes, WithAttributes, Naming};
-use core::name::Name;
-use core::{Flush, Value};
-use core::input::Kind;
+use core::attributes::{Buffered, Attributes, WithAttributes, Prefixed};
+use core::name::MetricName;
+use core::{Flush, MetricValue};
+use core::input::InputKind;
 use core::metrics;
 use core::output::{Output, OutputScope, OutputMetric};
 use core::error;
@@ -71,13 +71,13 @@ pub struct GraphiteScope {
 
 impl OutputScope for GraphiteScope {
     /// Define a metric of the specified type.
-    fn new_metric(&self, name: Name, kind: Kind) -> OutputMetric {
-        let mut prefix = self.naming_prepend(name).join(".");
+    fn new_metric(&self, name: MetricName, kind: InputKind) -> OutputMetric {
+        let mut prefix = self.prefix_prepend(name).join(".");
         prefix.push(' ');
 
         let scale = match kind {
             // timers are in µs, but we give graphite milliseconds
-            Kind::Timer => 1000,
+            InputKind::Timer => 1000,
             _ => 1,
         };
 
@@ -99,7 +99,7 @@ impl Flush for GraphiteScope {
 }
 
 impl GraphiteScope {
-    fn print(&self, metric: &GraphiteMetric, value: Value)  {
+    fn print(&self, metric: &GraphiteMetric, value: MetricValue)  {
         let scaled_value = value / metric.scale;
         let value_str = scaled_value.to_string();
 
@@ -195,7 +195,7 @@ mod bench {
     #[bench]
     pub fn immediate_graphite(b: &mut test::Bencher) {
         let sd = Graphite::send_to("localhost:2003").unwrap().input();
-        let timer = sd.new_metric("timer".into(), Kind::Timer);
+        let timer = sd.new_metric("timer".into(), InputKind::Timer);
 
         b.iter(|| test::black_box(timer.write(2000, labels![])));
     }
@@ -204,7 +204,7 @@ mod bench {
     pub fn buffering_graphite(b: &mut test::Bencher) {
         let sd = Graphite::send_to("localhost:2003").unwrap()
             .buffered(Buffering::BufferSize(65465)).input();
-        let timer = sd.new_metric("timer".into(), Kind::Timer);
+        let timer = sd.new_metric("timer".into(), InputKind::Timer);
 
         b.iter(|| test::black_box(timer.write(2000, labels![])));
     }

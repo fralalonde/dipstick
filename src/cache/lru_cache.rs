@@ -1,6 +1,6 @@
-    //! A fixed-size cache with LRU expiration criteria.
-    //! Stored values will be held onto as long as there is space.
-    //! When space runs out, the oldest unused value will get evicted to make room for a new value.
+//! A fixed-size cache with LRU expiration criteria.
+//! Stored values will be held onto as long as there is space.
+//! When space runs out, the oldest unused value will get evicted to make room for a new value.
 
 use std::hash::Hash;
 use std::collections::HashMap;
