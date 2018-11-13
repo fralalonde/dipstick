@@ -46,7 +46,7 @@ Usable either through the time! macro, the closure form or explicit calls to sta
 While timers internal precision are in nanoseconds, their accuracy depends on platform OS and hardware. 
 Timer's default output format is milliseconds but is scalable up or down.
  
-```rust,skt-run
+```$rust,skt-run
 let app_metrics = metric_scope(to_stdout());
 let timer =  app_metrics.timer("my_timer");
 time!(timer, {/* slow code here */} );
@@ -74,7 +74,7 @@ Aggregated statistics may also append identifiers to the metric's name.
 Names should exclude characters that can interfere with namespaces, separator and output protocols.
 A good convention is to stick with lowercase alphanumeric identifiers of less than 12 characters.
 
-```rust,skt-run
+```$rust,skt-run
 let app_metrics = metric_scope(to_stdout());
 let db_metrics = app_metrics.add_prefix("database");
 let _db_timer = db_metrics.timer("db_timer");
@@ -102,7 +102,7 @@ Notes about labels:
   
 Metric inputs are usually setup statically upon application startup.
 
-```rust,skt-plain
+```$rust,skt-run
 #[macro_use] 
 extern crate dipstick;
 
@@ -125,7 +125,7 @@ The static metric definition macro is just `lazy_static!` wrapper.
 If necessary, metrics can also be defined "dynamically", with a possibly new name for every value. 
 This is more flexible but has a higher runtime cost, which may be alleviated with caching.
 
-```rust,skt-run
+```$rust,skt-run
 let user_name = "john_day";
 let app_metrics = to_log().with_cache(512);
 app_metrics.gauge(format!("gauge_for_user_{}", user_name)).value(44);
@@ -180,7 +180,7 @@ If enabled, buffering is usually a best-effort affair, to safely limit the amoun
 Some outputs such as statsd also have the ability to sample metrics.
 If enabled, sampling is done using pcg32, a fast random algorithm with reasonable entropy.
 
-```rust,skt-fail
+```$rust,skt-fail
 let _app_metrics = to_statsd("server:8125")?.with_sampling_rate(0.01);
 ```
 
@@ -196,6 +196,7 @@ which might happen after the static initialization phase in which metrics are de
 To get around this catch-22, Dipstick provides a Proxy which acts as intermediate output, 
 allowing redirection to the effective output after it has been set up.
 
+
 ### Bucket
 
 Another intermediate output is the Bucket, which can be used to aggregate metric values. 
@@ -204,15 +205,17 @@ Bucket-aggregated values can be used to infer statistics which will be flushed o
 Bucket aggregation is performed locklessly and is very fast.
 Count, Sum, Min, Max and Mean are tracked where they make sense, depending on the metric type.
 
+
 #### Preset bucket statistics
 
 Published statistics can be selected with presets such as `all_stats` (see previous example),
 `summary`, `average`.
 
+
 #### Custom bucket statistics
 
 For more control over published statistics, provide your own strategy:
-```rust,skt-run
+```$rust,skt-run
 metrics(aggregate());
 set_default_aggregate_fn(|_kind, name, score|
     match score {
@@ -222,11 +225,12 @@ set_default_aggregate_fn(|_kind, name, score|
     });
 ```
 
+
 #### Scheduled publication
 
 Aggregate metrics and schedule to be periodical publication in the background:
     
-```rust,skt-run
+```$rust,skt-run
 use std::time::Duration;
 
 let app_metrics = metric_scope(aggregate());
@@ -240,7 +244,7 @@ app_metrics.flush_every(Duration::from_secs(3));
 Like Constructicons, multiple metrics outputs can assemble, creating a unified facade that transparently dispatches 
 input metrics to each constituent output. 
 
-```rust,skt-fail,no_run
+```$rust,skt-fail,no_run
 let _app_metrics = metric_scope((
         to_stdout(), 
         to_statsd("localhost:8125")?.with_namespace(&["my", "app"])
@@ -250,9 +254,11 @@ let _app_metrics = metric_scope((
 ### Queue
 
 Metrics can be recorded asynchronously:
-```rust,skt-run
+
+```$rust,skt-run
 let _app_metrics = metric_scope(to_stdout().queue(64));
 ```
+
 The async queue uses a Rust channel and a standalone thread.
 If the queue ever fills up under heavy load, the behavior reverts to blocking (rather than dropping metrics).
 

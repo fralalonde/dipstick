@@ -1,4 +1,4 @@
-//! A sample application sending ad-hoc metrics to graphite.
+//! A sample application sending ad-hoc metrics to prometheus.
 
 extern crate dipstick;
 
@@ -7,8 +7,8 @@ use std::time::Duration;
 
 fn main() {
     let metrics =
-        Graphite::send_to("localhost:2003")
-            .expect("Connected")
+        Prometheus::send_json_to("localhost:2003")
+            .expect("Prometheus Socket")
             .add_prefix("my_app")
             .input();
 

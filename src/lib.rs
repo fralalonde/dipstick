@@ -16,11 +16,11 @@ extern crate lazy_static;
 extern crate atomic_refcell;
 extern crate num;
 
-#[cfg(feature="protobuf")]
-extern crate protobuf;
-
 // FIXME required only for pcg32 seed (for sampling)
 extern crate time;
+
+//#[cfg(feature="prometheus")]
+extern crate prometheus;
 
 #[macro_use]
 mod macros;
@@ -50,6 +50,9 @@ pub use output::graphite::{Graphite, GraphiteScope, GraphiteMetric};
 pub use output::statsd::{Statsd, StatsdScope, StatsdMetric};
 pub use output::map::{StatsMap};
 pub use output::log::{Log, LogScope};
+
+//#[cfg(feature="prometheus")]
+pub use output::prometheus::{Prometheus, PrometheusScope};
 
 mod bucket;
 pub use bucket::{ScoreType, stats_all, stats_average, stats_summary};
