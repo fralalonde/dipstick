@@ -23,7 +23,7 @@ impl TimeHandle {
     /// Get the elapsed time in microseconds since TimeHandle was obtained.
     pub fn elapsed_us(self) -> MetricValue {
         let duration = now() - self.0;
-        duration.as_secs() * 1_000_000 + duration.subsec_micros() as MetricValue
+        (duration.as_secs() * 1_000_000) as MetricValue + duration.subsec_micros() as MetricValue
     }
 
     /// Get the elapsed time in microseconds since TimeHandle was obtained.

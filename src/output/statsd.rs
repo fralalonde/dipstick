@@ -191,7 +191,7 @@ impl Buffered for StatsdScope {}
 pub struct StatsdMetric {
     prefix: String,
     suffix: String,
-    scale: u64,
+    scale: isize,
 }
 
 /// Any remaining buffered data is flushed on Drop.

@@ -13,7 +13,7 @@ pub mod scheduler;
 pub mod metrics;
 
 /// Base type for recorded metric values.
-pub type MetricValue = u64;
+pub type MetricValue = isize;
 
 /// Both InputScope and OutputScope share the ability to flush the recorded data.
 pub trait Flush {

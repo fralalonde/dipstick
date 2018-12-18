@@ -11,9 +11,9 @@ use bucket::ScoreType::*;
 use core::error;
 
 use std::mem;
-use std::usize;
+use std::isize;
 use std::collections::BTreeMap;
-use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::AtomicIsize;
 use std::sync::atomic::Ordering::*;
 use std::sync::{Arc, RwLock};
 use std::fmt;
@@ -117,7 +117,7 @@ impl InnerAtomicBucket {
         } else {
             // TODO add switch for metadata such as PERIOD_LENGTH
             if self.publish_metadata {
-                snapshot.push((&PERIOD_LENGTH, InputKind::Timer, vec![Sum((duration_seconds * 1000.0) as u64)]));
+                snapshot.push((&PERIOD_LENGTH, InputKind::Timer, vec![Sum((duration_seconds * 1000.0) as isize)]));
             }
             for metric in snapshot {
                 for score in metric.2 {
@@ -246,7 +246,7 @@ struct AtomicScores {
     /// The kind of metric
     kind: InputKind,
     /// The actual recorded metric scores
-    scores: [AtomicUsize; 4],
+    scores: [AtomicIsize; 4],
 }
 
 impl AtomicScores {
@@ -264,14 +264,14 @@ impl AtomicScores {
     }
 
     #[inline]
-    fn blank() -> [usize; 4] {
-        [0, 0, usize::MIN, usize::MAX]
+    fn blank() -> [isize; 4] {
+        [0, 0, isize::MIN, isize::MAX]
     }
 
     /// Update scores with new value
     pub fn update(&self, value: MetricValue) -> () {
         // TODO report any concurrent updates / resets for measurement of contention
-        let value = value as usize;
+        let value = value;
         self.scores[0].fetch_add(1, AcqRel);
         match self.kind {
             InputKind::Marker => {}
@@ -285,7 +285,7 @@ impl AtomicScores {
     }
 
     /// Reset scores to zero, return previous values
-    fn snapshot(&self, scores: &mut [usize; 4]) -> bool {
+    fn snapshot(&self, scores: &mut [isize; 4]) -> bool {
         // NOTE copy timestamp, count AND sum _before_ testing for data to reduce concurrent discrepancies
         scores[0] = self.scores[0].swap(0, AcqRel);
         scores[1] = self.scores[1].swap(0, AcqRel);
@@ -295,8 +295,8 @@ impl AtomicScores {
             return false;
         }
 
-        scores[2] = self.scores[2].swap(usize::MIN, AcqRel);
-        scores[3] = self.scores[3].swap(usize::MAX, AcqRel);
+        scores[2] = self.scores[2].swap(isize::MIN, AcqRel);
+        scores[3] = self.scores[3].swap(isize::MAX, AcqRel);
         true
     }
 
@@ -308,30 +308,30 @@ impl AtomicScores {
             let mut snapshot = Vec::new();
             match self.kind {
                 InputKind::Marker => {
-                    snapshot.push(Count(scores[0] as u64));
+                    snapshot.push(Count(scores[0]));
                     snapshot.push(Rate(scores[0] as f64 / duration_seconds))
                 }
                 InputKind::Gauge => {
-                    snapshot.push(Max(scores[2] as u64));
-                    snapshot.push(Min(scores[3] as u64));
+                    snapshot.push(Max(scores[2]));
+                    snapshot.push(Min(scores[3]));
                     snapshot.push(Mean(scores[1] as f64 / scores[0] as f64));
                 }
                 InputKind::Timer => {
-                    snapshot.push(Count(scores[0] as u64));
-                    snapshot.push(Sum(scores[1] as u64));
+                    snapshot.push(Count(scores[0]));
+                    snapshot.push(Sum(scores[1]));
 
-                    snapshot.push(Max(scores[2] as u64));
-                    snapshot.push(Min(scores[3] as u64));
+                    snapshot.push(Max(scores[2]));
+                    snapshot.push(Min(scores[3]));
                     snapshot.push(Mean(scores[1] as f64 / scores[0] as f64));
                     // timer rate uses the COUNT of timer calls per second (not SUM)
                     snapshot.push(Rate(scores[0] as f64 / duration_seconds))
                 }
                 InputKind::Counter => {
-                    snapshot.push(Count(scores[0] as u64));
-                    snapshot.push(Sum(scores[1] as u64));
+                    snapshot.push(Count(scores[0]));
+                    snapshot.push(Sum(scores[1]));
 
-                    snapshot.push(Max(scores[2] as u64));
-                    snapshot.push(Min(scores[3] as u64));
+                    snapshot.push(Max(scores[2]));
+                    snapshot.push(Min(scores[3]));
                     snapshot.push(Mean(scores[1] as f64 / scores[0] as f64));
                     // counter rate uses the SUM of values per second (e.g. to get bytes/s)
                     snapshot.push(Rate(scores[1] as f64 / duration_seconds))
@@ -346,7 +346,7 @@ impl AtomicScores {
 
 /// Spinlock until success or clear loss to concurrent update.
 #[inline]
-fn swap_if(counter: &AtomicUsize, new_value: usize, compare: fn(usize, usize) -> bool) {
+fn swap_if(counter: &AtomicIsize, new_value: isize, compare: fn(isize, isize) -> bool) {
     let mut current = counter.load(Acquire);
     while compare(new_value, current) {
         if counter.compare_and_swap(current, new_value, Release) == new_value {
@@ -367,7 +367,7 @@ mod bench {
     #[bench]
     fn update_marker(b: &mut test::Bencher) {
         let metric = AtomicScores::new(InputKind::Marker);
-        b.iter(|| test::black_box(metric.update(1)));
+        b.iter(|| test::black_box(metric.update(1.0)));
     }
 
     #[bench]

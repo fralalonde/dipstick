@@ -7,7 +7,8 @@ use std::sync::Arc;
 use std::fmt;
 
 // TODO maybe define an 'AsValue' trait + impl for supported number types, then drop 'num' crate
-pub use num::ToPrimitive;
+pub use num::{ToPrimitive};
+pub use num::integer;
 
 /// A function trait that opens a new metric capture scope.
 pub trait Input: Send + Sync + 'static + InputDyn {
@@ -135,7 +136,7 @@ pub struct Counter {
 impl Counter {
     /// Record a value count.
     pub fn count<V: ToPrimitive>(&self, count: V) {
-        self.inner.write(count.to_u64().unwrap(), labels![])
+        self.inner.write(count.to_isize().unwrap(), labels![])
     }
 }
 
@@ -148,7 +149,7 @@ pub struct Gauge {
 impl Gauge {
     /// Record a value point for this gauge.
     pub fn value<V: ToPrimitive>(&self, value: V) {
-        self.inner.write(value.to_u64().unwrap(), labels![])
+        self.inner.write(value.to_isize().unwrap(), labels![])
     }
 }
 
@@ -167,7 +168,7 @@ impl Timer {
     /// Record a microsecond interval for this timer
     /// Can be used in place of start()/stop() if an external time interval source is used
     pub fn interval_us<V: ToPrimitive>(&self, interval_us: V) -> V {
-        self.inner.write(interval_us.to_u64().unwrap(), labels![]);
+        self.inner.write(interval_us.to_isize().unwrap(), labels![]);
         interval_us
     }
 
@@ -185,7 +186,7 @@ impl Timer {
     /// This call can be performed multiple times using the same handle,
     /// reporting distinct time intervals each time.
     /// Returns the microsecond interval value that was recorded.
-    pub fn stop(&self, start_time: TimeHandle) -> u64 {
+    pub fn stop(&self, start_time: TimeHandle) -> MetricValue {
         let elapsed_us = start_time.elapsed_us();
         self.interval_us(elapsed_us)
     }

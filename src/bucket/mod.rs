@@ -8,13 +8,13 @@ use core::name::{MetricName};
 #[derive(Debug, Clone, Copy)]
 pub enum ScoreType {
     /// Number of times the metric was used.
-    Count(u64),
+    Count(isize),
     /// Sum of metric values reported.
-    Sum(u64),
+    Sum(isize),
     /// Biggest value reported.
-    Max(u64),
+    Max(isize),
     /// Smallest value reported.
-    Min(u64),
+    Min(isize),
     /// Average value (hit count / sum, non-atomic)
     Mean(f64),
     /// Mean rate (hit count / period length in seconds, non-atomic)

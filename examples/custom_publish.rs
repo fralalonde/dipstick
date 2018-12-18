@@ -34,7 +34,7 @@ fn main() {
             (kind, ScoreType::Sum(sum)) => Some((kind, name.append("per_thousand"), sum / 1000)),
 
             // using the unmodified metric name
-            (kind, ScoreType::Mean(avg)) => Some((kind, name, avg.round() as u64)),
+            (kind, ScoreType::Mean(avg)) => Some((kind, name, avg.round() as MetricValue)),
 
             // do not export min and max
             _ => None,

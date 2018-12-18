@@ -16,7 +16,7 @@ fn main() {
     let counter = metrics.counter("counter_a");
 
     loop {
-        for i in 1..11 {
+        for i in 1..11 as usize {
             counter.count(i);
         }
         std::thread::sleep(Duration::from_millis(3000));

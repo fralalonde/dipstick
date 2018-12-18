@@ -172,7 +172,7 @@ const BUFFER_FLUSH_THRESHOLD: usize = 65_536;
 #[derive(Debug, Clone)]
 pub struct GraphiteMetric {
     prefix: String,
-    scale: u64,
+    scale: isize,
 }
 
 /// Any remaining buffered data is flushed on Drop.
