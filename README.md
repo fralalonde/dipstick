@@ -61,7 +61,7 @@ metrics! { METRICS = "my_app" => {
 }
 
 fn main() {
-    METRICS.set_target(Graphite::send_to("graphite.com:2003").unwrap().input());
+    METRICS.set_target(Graphite::send_to("localhost:2003").unwrap().input());
     COUNTER.count(32);
 }
 ```
@@ -75,6 +75,14 @@ in the `[dependencies]` section:
 ```toml
 dipstick = "0.7.0"
 ```
+
+## TODO / Missing / Weak points
+
+- Prometheus support is still primitive. Official prometheus-rust crate is used but Labels/Tags are not passed to it.  
+- No backend for "pull" metrics yet. Should at least provide tiny-http listener capability.  
+- No quick integration feature with common frameworks (Actix, etc.) is provided yet.
+- Thread Local buckets could be nice.
+- "Rolling" aggregators would be nice for pull metrics. Current bucket impl resets after flush.   
 
 ## License
 

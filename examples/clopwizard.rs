@@ -1,5 +1,5 @@
-//! A demonstration of customization of exported aggregated metrics.
-//! Using match on origin metric kind or score type to alter publication output.
+//! A dropwizard-like configuration using three buckets
+//! aggregating one, five and fifteen minutes of data.
 
 #[macro_use]
 extern crate dipstick;

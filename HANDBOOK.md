@@ -1,26 +1,30 @@
 # The dipstick handbook
-This handbook's purpose is to get you started instrumenting your apps with Dipstick
-and give an idea of what's possible.
+This handbook's purpose is to get you started instrumenting your apps and give an idea of what's possible.
+It is not a full-on cookbook (yet) - some reader experimentation may be required!
 
 # Background
-Dipstick was born of the desire to build a metrics library that would allow to select from,
-switch between and combine multiple backends.
-Such a design has multiple benefits:
+Dipstick is a structured metrics library that allows to combine, select from, and switch between multiple metrics backends.
+Because counters, timers and gauges declared in the code are not tied to a specific implementation. 
+
+This has multiple benefits:
 - simplified instrumentation
-- flexible configuration
+- flexible compile-time or runtime configuration
 - easier metrics testing
+
+For example, using a compile-time feature switch, metrics could be collected directly to hash map at test time 
+but be sent over the network and written to a file at runtime, as described by external configuration.
 
 Because of its Rust nature, performance, safety and ergonomy are also prime concerns. 
 
 
-## API Overview
+# API Overview
 Dipstick's API is split between _input_ and _output_ layers.
 The input layer provides named metrics such as counters and timers to be used by the application.
 The output layer controls how metric values will be recorded and emitted by the configured backend(s).
 Input and output layers are decoupled, making code instrumentation independent of output configuration.
-Intermediates can also be added between input and output for features or performance characteristics. 
+Intermediates can also be added between input and output for specific features or performance characteristics.
 
-Although this handbook covers input before output, implementation can certainly be performed the other way around.
+Although this handbook covers input before output, implementation of metrics can certainly be performed the other way around.
 
 For more details, consult the [docs](https://docs.rs/dipstick/).
 

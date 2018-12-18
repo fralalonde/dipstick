@@ -34,7 +34,7 @@ pub use core::input::{Input, InputDyn, InputScope, InputMetric, Counter, Timer, 
 pub use core::output::{Output, OutputDyn, OutputScope, OutputMetric};
 pub use core::scheduler::{ScheduleFlush, CancelHandle};
 pub use core::out_lock::{LockingScopeBox};
-pub use core::error::{Error, Result};
+pub use core::error::{Result};
 pub use core::clock::{TimeHandle};
 pub use core::label::{Labels, AppLabel, ThreadLabel};
 

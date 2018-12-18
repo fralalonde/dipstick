@@ -2,10 +2,9 @@
 extern crate skeptic;
 
 fn main() {
-    // generates handbook tests for `README.md`.
+    // generates documentation tests.
     #[cfg(feature="skeptic")]
     skeptic::generate_doc_tests(&["README.md", "HANDBOOK.md"]);
-
 }
 
 
