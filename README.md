@@ -33,7 +33,7 @@ For convenience, dipstick builds on stable Rust with minimal, feature-gated depe
 ### Non-goals
 
 Dipstick's focus is on metrics collection (input) and forwarding (output).
-Although it will happily track aggregated statistics, for the sake of simplicity and performance Dipstick will not
+Although it will happily aggregate base statistics, for the sake of simplicity and performance Dipstick will not
 - plot graphs
 - send alerts
 - track histograms
@@ -45,7 +45,7 @@ These are all best done by downstream timeseries visualization and monitoring to
 Here's a basic aggregating & auto-publish counter metric:
 
 ```$rust,skt-run
-let bucket = Bucket::new();
+let bucket = AtomicBucket::new();
 bucket.set_target(Stream::stdout());
 bucket.flush_every(Duration::from_secs(3));
 let counter = bucket.counter("counter_a");
@@ -61,13 +61,13 @@ metrics! { METRICS = "my_app" => {
 }
 
 fn main() {
-    METRICS.set_target(Graphite::send_to("graphite.com:2003").unwrap().input());
+    METRICS.set_target(Graphite::send_to("localhost:2003").unwrap().input());
     COUNTER.count(32);
 }
 ```
 
 For sample applications see the [examples](https://github.com/fralalonde/dipstick/tree/master/examples).
-For documentation see the [handbook](https://github.com/fralalonde/dipstick/tree/master/handbook).
+For documentation see the [handbook](https://github.com/fralalonde/dipstick/tree/master/HANDBOOK.md).
 
 To use Dipstick in your project, add the following line to your `Cargo.toml`
 in the `[dependencies]` section:
@@ -75,6 +75,14 @@ in the `[dependencies]` section:
 ```toml
 dipstick = "0.7.0"
 ```
+
+## TODO / Missing / Weak points
+
+- Prometheus support is still primitive. Official prometheus-rust crate is used but Labels/Tags are not passed to it.  
+- No backend for "pull" metrics yet. Should at least provide tiny-http listener capability.  
+- No quick integration feature with common frameworks (Actix, etc.) is provided yet.
+- Thread Local buckets could be nice.
+- "Rolling" aggregators would be nice for pull metrics. Current bucket impl resets after flush.   
 
 ## License
 
