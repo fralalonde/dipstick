@@ -165,22 +165,22 @@ impl AtomicBucket {
         *DEFAULT_AGGREGATE_STATS.write().unwrap() = Arc::new(func)
     }
 
-    /// Remove any global customization of the default aggregation statistics.
+    /// Revert the default aggregated metrics statistics generator to the default `stats_summary`.
     pub fn unset_default_stats() {
         *DEFAULT_AGGREGATE_STATS.write().unwrap() = Arc::new(initial_stats())
     }
 
-    /// Install a new receiver for all aggregateed metrics, replacing any previous receiver.
-    pub fn set_default_target(default_config: impl Output + Send + Sync + 'static) {
+    /// Set the default bucket aggregated metrics flush output.
+    pub fn set_default_flush_to(default_config: impl Output + Send + Sync + 'static) {
         *DEFAULT_AGGREGATE_OUTPUT.write().unwrap() = Arc::new(default_config);
     }
 
-    /// Install a new receiver for all aggregateed metrics, replacing any previous receiver.
-    pub fn unset_default_target() {
+    /// Revert the default bucket aggregated metrics flush output.
+    pub fn unset_default_flush_to() {
         *DEFAULT_AGGREGATE_OUTPUT.write().unwrap() = initial_output()
     }
 
-    /// Set the default aggregated metrics statistics generator.
+    /// Set this bucket's statistics generator.
     pub fn set_stats<F>(&self, func: F)
         where
             F: Fn(InputKind, MetricName, ScoreType) -> Option<(InputKind, MetricName, MetricValue)> + Send + Sync + 'static
@@ -188,23 +188,23 @@ impl AtomicBucket {
         self.inner.write().expect("Aggregator").stats = Some(Arc::new(func))
     }
 
-    /// Set the default aggregated metrics statistics generator.
+    /// Revert this bucket's statistics generator to the default stats.
     pub fn unset_stats<F>(&self) {
         self.inner.write().expect("Aggregator").stats = None
     }
 
-    /// Install a new receiver for all aggregated metrics, replacing any previous receiver.
-    pub fn set_flush_target(&self, new_config: impl Output + Send + Sync + 'static) {
+    /// Set this bucket's aggregated metrics flush output.
+    pub fn set_flush_to(&self, new_config: impl Output + Send + Sync + 'static) {
         self.inner.write().expect("Aggregator").output = Some(Arc::new(new_config))
     }
 
-    /// Install a new receiver for all aggregated metrics, replacing any previous receiver.
-    pub fn unset_target(&self) {
+    /// Revert this bucket's flush target to the default output.
+    pub fn unset_flush_to(&self) {
         self.inner.write().expect("Aggregator").output = None
     }
 
-    /// Flush the aggregator scores using the specified scope and stats.
-    pub fn flush_to(&self, publish_scope: &OutputScope, stats_fn: &StatsFn) -> error::Result<()> {
+    /// Immediately flush the bucket's metrics to the specified scope and stats.
+    pub fn flush_now_to(&self, publish_scope: &OutputScope, stats_fn: &StatsFn) -> error::Result<()> {
         let mut inner = self.inner.write().expect("Aggregator");
         inner.flush_to(publish_scope, stats_fn)
     }
@@ -437,7 +437,7 @@ mod test {
 
         // TODO expose & use flush_to()
         let stats = StatsMap::default();
-        metrics.flush_to(&stats, stats_fn).unwrap();
+        metrics.flush_now_to(&stats, stats_fn).unwrap();
         stats.into()
     }
 

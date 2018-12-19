@@ -11,7 +11,7 @@ fn main() {
     let metrics = AtomicBucket::new().add_prefix("test");
 
     // Bucket::set_default_output(to_stdout());
-    metrics.set_flush_target(Stream::write_to(io::stdout()));
+    metrics.set_flush_to(Stream::write_to(io::stdout()));
 
     metrics.flush_every(Duration::from_secs(3));
 

@@ -1,5 +1,9 @@
 #!make
 
+# Why put a makefile in a Cargo project?
+# To collect the recipes that require several cargo invocations and / or special flags.
+# Maybe I should write a tool for this...
+
 # SCCACHE can be 'local' or 'off' (default)
 # local will cache in ~/.cache/sccache
 SCCACHE ?= off

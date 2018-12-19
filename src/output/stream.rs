@@ -15,6 +15,8 @@ use output::format::{LineFormat, SimpleFormat, Formatting};
 
 use std::sync::{RwLock, Arc};
 use std::io::{Write, self};
+use std::path::Path;
+use std::fs::File;
 use std::rc::Rc;
 use std::cell::RefCell;
 
@@ -47,16 +49,23 @@ impl<W: Write + Send + Sync + 'static>  Stream<W> {
     }
 }
 
+impl Stream<File> {
+    /// Write metric values to a file.
+    pub fn to_file(file: &Path) -> error::Result<Stream<File>> {
+        Ok(Stream::write_to(File::open(file)?))
+    }
+}
+
 impl Stream<io::Stderr> {
     /// Write metric values to stdout.
-    pub fn stderr() -> Stream<io::Stderr> {
+    pub fn to_stderr() -> Stream<io::Stderr> {
         Stream::write_to(io::stderr())
     }
 }
 
 impl Stream<io::Stdout> {
     /// Write metric values to stdout.
-    pub fn stdout() -> Stream<io::Stdout> {
+    pub fn to_stdout() -> Stream<io::Stdout> {
         Stream::write_to(io::stdout())
     }
 }

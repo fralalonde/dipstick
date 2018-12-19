@@ -25,7 +25,7 @@ impl LineFormat for MyFormat {
 }
 
 fn main() {
-    let counter = Stream::stderr().formatting(MyFormat).input().counter("counter_a");
+    let counter = Stream::to_stderr().formatting(MyFormat).input().counter("counter_a");
     AppLabel::set("abc", "xyz");
     loop {
         // report some metric values from our "application" loop

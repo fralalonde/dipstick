@@ -185,7 +185,7 @@ Some outputs such as statsd also have the ability to sample metrics.
 If enabled, sampling is done using pcg32, a fast random algorithm with reasonable entropy.
 
 ```$rust,skt-fail
-let _app_metrics = to_statsd("server:8125")?.with_sampling_rate(0.01);
+let _app_metrics = Statsd::send_to("server:8125")?.with_sampling_rate(0.01);
 ```
 
 
@@ -212,59 +212,37 @@ Count, Sum, Min, Max and Mean are tracked where they make sense, depending on th
 
 #### Preset bucket statistics
 
-Published statistics can be selected with presets such as `all_stats` (see previous example),
-`summary`, `average`.
+Published statistics can be selected with presets such as `all_stats`, `summary`, `average`.
 
 
 #### Custom bucket statistics
 
-For more control over published statistics, provide your own strategy:
-```$rust,skt-run
-metrics(aggregate());
-set_default_aggregate_fn(|_kind, name, score|
-    match score {
-        ScoreType::Count(count) => 
-            Some((Kind::Counter, vec![name, ".per_thousand"], count / 1000)),
-        _ => None
-    });
-```
+For more control over published statistics, you can provide your own strategy. 
+Consult the `custom_publish` [example](https://github.com/fralalonde/dipstick/blob/master/examples/custom_publish.rs) 
+to see how this can be done. 
 
 
 #### Scheduled publication
 
-Aggregate metrics and schedule to be periodical publication in the background:
+Buffered and aggregated (bucket) metrics can be scheduled to be 
+[periodically published](https://github.com/fralalonde/dipstick/blob/master/examples/bucket_summary.rs) as a background task.
+The schedule runs on a dedicated thread and follows a recurrent `Duration`. 
+It can be cancelled at any time using the `CancelHandle` returned by the `flush_every()` method.
     
-```$rust,skt-run
-use std::time::Duration;
-
-let app_metrics = metric_scope(aggregate());
-route_aggregate_metrics(to_stdout());
-app_metrics.flush_every(Duration::from_secs(3));
-```
-
-
 ### Multi
 
-Like Constructicons, multiple metrics outputs can assemble, creating a unified facade that transparently dispatches 
-input metrics to each constituent output. 
+Just like Constructicons, multiple metrics channels can assemble, creating a unified facade 
+that transparently dispatches metrics to every constituent. 
 
-```$rust,skt-fail,no_run
-let _app_metrics = metric_scope((
-        to_stdout(), 
-        to_statsd("localhost:8125")?.with_namespace(&["my", "app"])
-    ));
-```
+This can be done using multiple [inputs](https://github.com/fralalonde/dipstick/blob/master/examples/multi_input.rs) 
+or multiple [outputs](https://github.com/fralalonde/dipstick/blob/master/examples/multi_output.rs) 
 
 ### Queue
 
-Metrics can be recorded asynchronously:
-
-```$rust,skt-run
-let _app_metrics = metric_scope(to_stdout().queue(64));
-```
-
+Metrics can be collected asynchronously using a queue. 
 The async queue uses a Rust channel and a standalone thread.
-If the queue ever fills up under heavy load, the behavior reverts to blocking (rather than dropping metrics).
+If the queue ever fills up under heavy load, it reverts to blocking (rather than dropping metrics).
+I'm sure [an example](https://github.com/fralalonde/dipstick/blob/master/examples/async_queue.rs) would help.
 
 
 ## Facilities

@@ -16,7 +16,7 @@ fn main() {
     let count2 = sub.counter("counter_b");
 
     loop {
-        let stdout = Stream::stdout().input();
+        let stdout = Stream::to_stdout().input();
         root_proxy.set_target(stdout.clone());
         count1.count(1);
         count2.count(2);

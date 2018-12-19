@@ -10,7 +10,7 @@ use std::io;
 fn main() {
 
     let app_metrics = AtomicBucket::new();
-    app_metrics.set_flush_target(Stream::write_to(io::stdout()));
+    app_metrics.set_flush_to(Stream::write_to(io::stdout()));
 
     app_metrics.flush_every(Duration::from_secs(3));
 
