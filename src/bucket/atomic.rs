@@ -367,7 +367,7 @@ mod bench {
     #[bench]
     fn update_marker(b: &mut test::Bencher) {
         let metric = AtomicScores::new(InputKind::Marker);
-        b.iter(|| test::black_box(metric.update(1.0)));
+        b.iter(|| test::black_box(metric.update(1)));
     }
 
     #[bench]
