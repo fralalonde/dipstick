@@ -3,7 +3,7 @@ pub mod name;
 pub mod attributes;
 pub mod input;
 pub mod output;
-pub mod out_lock;
+pub mod locking;
 pub mod clock;
 pub mod void;
 pub mod proxy;
