@@ -4,7 +4,6 @@ extern crate dipstick;
 
 use dipstick::*;
 use std::time::Duration;
-use std::io;
 
 fn main() {
     // will output metrics to graphite and to stdout

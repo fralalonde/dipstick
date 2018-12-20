@@ -9,7 +9,6 @@ use std::fmt;
 // TODO maybe define an 'AsValue' trait + impl for supported number types, then drop 'num' crate
 pub use num::{ToPrimitive};
 pub use num::integer;
-use num::Unsigned;
 
 /// A function trait that opens a new metric capture scope.
 pub trait Input: Send + Sync + 'static + InputDyn {
@@ -60,18 +59,11 @@ pub trait InputScope: Flush {
         self.new_metric(name.into(), InputKind::Gauge).into()
     }
 
-}
-
-/// Blanket impl of input trait for input scope
-impl<T: InputScope + Send + Sync + 'static + Clone> Input for T {
-    type SCOPE = Self;
-
-    /// Open a new scope from this output.
-    fn input(&self) -> Self::SCOPE {
-        self.clone()
+    /// Define a level.
+    fn level(&self, name: &str) -> Level {
+        self.new_metric(name.into(), InputKind::Level).into()
     }
 }
-
 
 /// A metric is actually a function that knows to write a metric value to a metric output.
 #[derive(Clone)]
@@ -121,6 +113,7 @@ impl<'a> From<&'a str> for InputKind {
             "Counter" => InputKind::Counter,
             "Gauge" => InputKind::Gauge,
             "Timer" => InputKind::Timer,
+            "Level" => InputKind::Level,
             _ => panic!("No InputKind '{}' defined", s)
         }
     }
@@ -146,6 +139,8 @@ impl Marker {
 /// - Bytes sent
 /// - Records written
 /// - Apples eaten
+/// For relative (possibly negative) values, the `Level` counter type can be used.
+/// If aggregated, minimum and maximum scores will track the collected values, not their sum.
 #[derive(Debug, Clone)]
 pub struct Counter {
     inner: InputMetric,
@@ -158,10 +153,11 @@ impl Counter {
     }
 }
 
-/// A counter of fluctuating resources.
-/// Accepts both positive and negative counts:
+/// A counter of fluctuating resources accepting positive and negative values.
+/// Can be used as a stateful `Gauge` or a as `Counter` of possibly decreasing amounts.
 /// - Size of messages in a queue
 /// - Strawberries on a conveyor belt
+/// If aggregated, minimum and maximum scores will track the sum of values, not the collected values themselves.
 #[derive(Debug, Clone)]
 pub struct Level {
     inner: InputMetric,
@@ -201,7 +197,7 @@ pub struct Timer {
 impl Timer {
     /// Record a microsecond interval for this timer
     /// Can be used in place of start()/stop() if an external time interval source is used
-    pub fn interval_us(&self, interval_us: usize) -> usize {
+    pub fn interval_us(&self, interval_us: u64) -> u64 {
         self.inner.write(interval_us as isize, labels![]);
         interval_us
     }
@@ -255,5 +251,11 @@ impl From<InputMetric> for Counter {
 impl From<InputMetric> for Marker {
     fn from(metric: InputMetric) -> Marker {
         Marker { inner: metric }
+    }
+}
+
+impl From<InputMetric> for Level {
+    fn from(metric: InputMetric) -> Level {
+        Level { inner: metric }
     }
 }

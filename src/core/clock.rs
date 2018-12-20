@@ -21,14 +21,14 @@ impl TimeHandle {
     }
 
     /// Get the elapsed time in microseconds since TimeHandle was obtained.
-    pub fn elapsed_us(self) -> usize {
+    pub fn elapsed_us(self) -> u64 {
         let duration = now() - self.0;
-        (duration.as_secs() * 1_000_000) + duration.subsec_micros()
+        (duration.as_secs() * 1_000_000) + duration.subsec_micros() as u64
     }
 
     /// Get the elapsed time in microseconds since TimeHandle was obtained.
     pub fn elapsed_ms(self) -> MetricValue {
-        self.elapsed_us() / 1000u32
+        (self.elapsed_us() / 1000) as isize
     }
 }
 

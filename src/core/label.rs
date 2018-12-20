@@ -98,21 +98,21 @@ pub struct AppLabel;
 impl AppLabel {
     /// Retrieve a value from the app scope.
     pub fn get(key: &str) -> Option<Arc<String>> {
-        APP_LABELS.read().expect("Global Labels").get(key)
+        APP_LABELS.read().expect("App Labels Lock").get(key)
     }
 
     /// Set a new value for the app scope.
     /// Replaces any previous value for the key.
     pub fn set<S: Into<String>>(key: S, value: S) {
         let b = { APP_LABELS.read().expect("Global Labels").set(key.into(), Arc::new(value.into())) };
-        *APP_LABELS.write().expect("Global Labels") = b;
+        *APP_LABELS.write().expect("App Labels Lock") = b;
     }
 
     /// Unset a value for the app scope.
     /// Has no effect if key was not set.
     pub fn unset(key: &str) {
         let b = { APP_LABELS.read().expect("Global Labels").unset(key) };
-        *APP_LABELS.write().expect("Global Labels") = b;
+        *APP_LABELS.write().expect("App Labels Lock") = b;
     }
 }
 
@@ -189,44 +189,56 @@ impl Labels {
 pub mod test {
     use super::*;
 
+    use std::sync::Mutex;
+
+    /// Label tests use the globally shared AppLabels which may make them interfere as tests are run concurrently.
+    /// We do not want to mandate usage of `RUST_TEST_THREADS=1` which would penalize the whole test suite.
+    /// Instead we use a local mutex to make sure the label tests run in sequence.
+    lazy_static!{
+        static ref TEST_SEQUENCE: Mutex<()> = Mutex::new(());
+    }
+
     #[test]
     fn context_labels() {
+        let _lock = TEST_SEQUENCE.lock().expect("Test Sequence");
+
         AppLabel::set("abc", "456");
         ThreadLabel::set("abc", "123");
-        assert_eq!(Arc::new("123".into()), labels!().lookup("abc").unwrap());
+
+        assert_eq!(Arc::new("123".into()), labels!().lookup("abc").expect("ThreadLabel Value"));
         ThreadLabel::unset("abc");
+
         assert_eq!(Arc::new("456".into()), labels!().lookup("abc").expect("AppLabel Value"));
         AppLabel::unset("abc");
-        assert_eq!(false, labels!().lookup("abc").is_some());
+
+        assert_eq!(true, labels!().lookup("abc").is_none());
     }
 
     #[test]
     fn labels_macro() {
+        let _lock = TEST_SEQUENCE.lock().expect("Test Sequence");
+
         let labels = labels!{
             "abc" => "789",
             "xyz" => "123"
         };
-        assert_eq!(Arc::new("789".into()), labels.lookup("abc").unwrap());
-        assert_eq!(Arc::new("123".into()), labels.lookup("xyz").unwrap());
+        assert_eq!(Arc::new("789".into()), labels.lookup("abc").expect("Label Value"));
+        assert_eq!(Arc::new("123".into()), labels.lookup("xyz").expect("Label Value"));
     }
 
 
     #[test]
     fn value_labels() {
+        let _lock = TEST_SEQUENCE.lock().expect("Test Sequence");
+
+        let labels = labels!{ "abc" => "789" };
+        assert_eq!(Arc::new("789".into()), labels.lookup("abc").expect("Label Value"));
+
         AppLabel::set("abc", "456");
+        assert_eq!(Arc::new("789".into()), labels.lookup("abc").expect("Label Value"));
+
         ThreadLabel::set("abc", "123");
-        let mut labels = labels!{
-            "abc" => "789",
-        };
-
-        assert_eq!(Arc::new("789".into()), labels.lookup("abc").unwrap());
-        ThreadLabel::unset("abc");
-        assert_eq!(Arc::new("789".into()), labels.lookup("abc").unwrap());
-        AppLabel::unset("abc");
-        assert_eq!(Arc::new("789".into()), labels.lookup("abc").unwrap());
-
-        labels = labels![];
-        assert_eq!(false, labels.lookup("abc").is_some());
+        assert_eq!(Arc::new("789".into()), labels.lookup("abc").expect("Label Value"));
     }
 
 }

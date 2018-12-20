@@ -43,7 +43,7 @@ impl InputScope for LockingOutput {
 
 impl Flush for LockingOutput {
     fn flush(&self) -> error::Result<()> {
-        self.inner.lock()?.flush()
+        self.inner.lock().expect("OutputScope Lock").flush()
     }
 }
 

@@ -83,45 +83,42 @@ pub struct PrometheusScope {
 }
 
 impl OutputScope for PrometheusScope {
-
     /// Define a metric of the specified type.
+    // TODO enable labels
     fn new_metric(&self, name: MetricName, kind: InputKind) -> OutputMetric {
         let name = self.prefix_prepend(name).join(".");
         match kind {
-            InputKind::Counter => {
-                let opts = Opts::new(name, "".to_string());
-                let counter = IntCounter::with_opts(opts).expect("Prometheus Counter");
-                self.registry.register(Box::new(counter.clone())).expect("Registered Prometheus Counter");
-                OutputMetric::new(move |value, _labels|
-                    counter.inc_by(value as i64)
-                )
+            InputKind::Counter | InputKind::Timer => {
+                let counter = self.register_counter(name);
+                OutputMetric::new(move |value, _labels| counter.inc_by(value as i64))
             },
             InputKind::Marker => {
-                let opts = Opts::new(name, "".to_string());
-                let marker = IntCounter::with_opts(opts).expect("Prometheus Counter");
-                self.registry.register(Box::new(marker.clone())).expect("Registered Prometheus Marker");
-                OutputMetric::new(move |_value, _labels|
-                    marker.inc()
-                )
+                let counter = self.register_counter(name);
+                OutputMetric::new(move |_value, _labels| counter.inc())
             },
-            InputKind::Timer => {
-                let opts = Opts::new(name, "".to_string());
-                let timer = IntCounter::with_opts(opts).expect("Prometheus Histogram");
-                self.registry.register(Box::new(timer.clone())).expect("Registered Prometheus Timer");
-                OutputMetric::new(move |value, _labels|
-                    timer.inc_by(value as i64)
-                )
-            },
-            InputKind::Gauge => {
-                let opts = Opts::new(name, "".to_string());
-                let gauge = IntGauge::with_opts(opts).expect("Prometheus Gauge");
-                self.registry.register(Box::new(gauge.clone())).expect("Registered Prometheus Gauge");;
-                OutputMetric::new(move |value, _labels|
-                    gauge.add(value as i64)
-                )
-            },
+            InputKind::Gauge | InputKind::Level => self.new_gauge(name)
         }
     }
+}
+
+impl PrometheusScope {
+
+    fn register_counter(&self, name: String) -> IntCounter {
+        let opts = Opts::new(name, "".into());
+        let counter = IntCounter::with_opts(opts).expect("Prometheus IntCounter");
+        self.registry.register(Box::new(counter.clone())).expect("Prometheus IntCounter");
+        counter
+    }
+
+    fn new_gauge(&self, name: String) -> OutputMetric {
+        let opts = Opts::new(name, "".into());
+        let gauge = IntGauge::with_opts(opts).expect("Prometheus IntGauge");
+        self.registry.register(Box::new(gauge.clone())).expect("Prometheus IntGauge");
+        OutputMetric::new(move |value, _labels|
+            gauge.add(value as i64)
+        )
+    }
+
 }
 
 impl Flush for PrometheusScope {
