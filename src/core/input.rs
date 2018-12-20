@@ -61,6 +61,17 @@ pub trait InputScope: Flush {
 
 }
 
+/// Blanket impl of input trait for input scope
+impl<T: InputScope + Send + Sync + 'static + Clone> Input for T {
+    type SCOPE = Self;
+
+    /// Open a new scope from this output.
+    fn input(&self) -> Self::SCOPE {
+        self.clone()
+    }
+}
+
+
 /// A metric is actually a function that knows to write a metric value to a metric output.
 #[derive(Clone)]
 pub struct InputMetric {

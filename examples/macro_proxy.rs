@@ -1,12 +1,10 @@
 //! A sample application sending ad-hoc counter values both to statsd _and_ to stdout.
 
-#[macro_use]
 extern crate dipstick;
 
 use dipstick::*;
 
 use std::time::Duration;
-use std::io;
 
 // undeclared root (un-prefixed) metrics
 metrics! {
@@ -37,7 +35,7 @@ metrics!(LIB_METRICS => {
 });
 
 fn main() {
-    dipstick::Proxy::set_default_target(dipstick::Stream::write_to(io::stdout()).input());
+    dipstick::Proxy::set_default_target(Stream::to_stdout());
 
     loop {
         ROOT_COUNTER.count(123);

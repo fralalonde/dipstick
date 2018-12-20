@@ -1,12 +1,10 @@
 //! A sample application asynchronously printing metrics to stdout.
 
-#[macro_use]
 extern crate dipstick;
 
 use std::thread::sleep;
 use std::time::Duration;
-use dipstick::{Stream, Counter, InputScope, QueuedOutput, Input};
-use std::io;
+use dipstick::{Stream, InputScope, QueuedOutput, Input};
 use std::thread;
 
 fn main() {
