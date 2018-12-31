@@ -19,8 +19,7 @@ extern crate num;
 // FIXME required only for pcg32 seed (for sampling)
 extern crate time;
 
-//#[cfg(feature="prometheus")]
-extern crate prometheus;
+//extern crate tiny_http;
 
 #[macro_use]
 mod macros;

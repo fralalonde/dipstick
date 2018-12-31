@@ -27,7 +27,7 @@ num = { version = "0.2", default-features = false }
 # FIXME required only for random seed for sampling
 time = "0.1"
 
-prometheus = { version = "0.4" }
+minreq = { version = "1.0.0" }
 
 # optional dep for standalone http pull metrics
 tiny_http = { version = "0.6", optional = true }

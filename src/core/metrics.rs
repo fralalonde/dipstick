@@ -14,6 +14,12 @@ metrics!{
             pub SEND_FAILED: Marker = "send_failed";
         }
 
+        "prometheus" => {
+            pub PROMETHEUS_SEND_ERR: Marker = "send_failed";
+            pub PROMETHEUS_OVERFLOW: Marker = "buf_overflow";
+            pub PROMETHEUS_SENT_BYTES: Counter = "sent_bytes";
+        }
+
         "graphite" => {
             pub GRAPHITE_SEND_ERR: Marker = "send_failed";
             pub GRAPHITE_OVERFLOW: Marker = "buf_overflow";

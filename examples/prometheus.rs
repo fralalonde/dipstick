@@ -7,7 +7,7 @@ use std::time::Duration;
 
 fn main() {
     let metrics =
-        Prometheus::send_json_to("localhost:2003")
+        Prometheus::push_to("http:// prometheus:9091/metrics/job/prometheus_example")
             .expect("Prometheus Socket")
             .add_prefix("my_app")
             .input();

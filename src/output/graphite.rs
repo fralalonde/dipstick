@@ -139,9 +139,9 @@ impl GraphiteScope {
         let mut sock = self.socket.write().expect("Lock Graphite Socket");
         match sock.write_all(buf.as_bytes()) {
             Ok(()) => {
-                buf.clear();
                 metrics::GRAPHITE_SENT_BYTES.count(buf.len());
                 trace!("Sent {} bytes to graphite", buf.len());
+                buf.clear();
                 Ok(())
             }
             Err(e) => {

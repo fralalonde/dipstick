@@ -63,3 +63,27 @@ impl<T: InputScope + Send + Sync + Clone + 'static> ScheduleFlush for T {
         })
     }
 }
+
+//use std::net::{SocketAddr, ToSocketAddrs};
+//
+//use tiny_http::{Server, StatusCode, self};
+//
+//pub fn http_serve<A: ToSocketAddrs, F: Fn()>(addresses: A) -> CancelHandle {
+//    let handle = CancelHandle::new();
+//    let inner_handle = handle.clone();
+//    let server = tiny_http::Server::http("0.0.0.0:0")?;
+//
+//    thread::spawn(move || loop {
+//        match server.recv_timeout(Duration::from_secs(1)) {
+//            Ok(Some(req)) => {
+//                let response = tiny_http::Response::new_empty(StatusCode::from(200));
+//                if let Err(err) = req.respond(response) {
+//                    warn!("Metrics response error: {}", err)
+//                }
+//            }
+//            Ok(None) => if inner_handle.is_cancelled() { break; }
+//            Err(err) => warn!("Metrics request error: {}", err)
+//        };
+//    });
+//    handle
+//}

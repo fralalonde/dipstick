@@ -52,6 +52,12 @@ impl LabelScope {
             Some(pairs) => pairs.get(key).cloned()
         }
     }
+
+    fn collect(&self, map: &mut HashMap<String, LabelValue>) {
+        if let Some(pairs) = &self.pairs {
+            map.extend(pairs.as_ref().clone().into_iter())
+        }
+    }
 }
 
 lazy_static!(
@@ -89,6 +95,12 @@ impl ThreadLabel {
             *map.borrow_mut() = new;
         });
     }
+
+    fn collect(map: &mut HashMap<String, LabelValue>) {
+        THREAD_LABELS.with(|mop| {
+            mop.borrow().collect(map)
+        });
+    }
 }
 
 /// Handle metric labels for the whole application (globals).
@@ -113,6 +125,10 @@ impl AppLabel {
     pub fn unset(key: &str) {
         let b = { APP_LABELS.read().expect("Global Labels").unset(key) };
         *APP_LABELS.write().expect("App Labels Lock") = b;
+    }
+
+    fn collect(map: &mut HashMap<String, LabelValue>) {
+        APP_LABELS.read().expect("Global Labels").collect(map)
     }
 }
 
@@ -181,6 +197,39 @@ impl Labels {
                 None
             }
         }
+    }
+
+    /// Export current state of labels to a map.
+    /// Note: An iterator would still need to allocate to check for uniqueness of keys.
+    ///
+    pub fn into_map(mut self) -> HashMap<String, LabelValue> {
+        let mut map = HashMap::new();
+        match self.scopes.len() {
+            // no value labels, no saved context labels
+            // just lookup implicit context
+            0 => {
+                AppLabel::collect(&mut map);
+                ThreadLabel::collect(&mut map);
+            }
+
+            // some value labels, no saved context labels
+            // lookup value label, then lookup implicit context
+            1 => {
+                AppLabel::collect(&mut map);
+                ThreadLabel::collect(&mut map);
+                self.scopes[0].collect(&mut map);
+            },
+
+            // value + saved context labels
+            // lookup explicit context in turn
+            _ => {
+                self.scopes.reverse();
+                for src in self.scopes {
+                    src.collect(&mut map)
+                }
+            }
+        }
+        map
     }
 }
 

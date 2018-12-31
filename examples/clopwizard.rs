@@ -33,7 +33,7 @@ fn main() {
 
     // send application metrics to aggregator
     Proxy::default().set_target(all_buckets);
-    AtomicBucket::set_default_flush_to(Stream::to_stdout());
+    AtomicBucket::set_default_drain(Stream::to_stdout());
     AtomicBucket::set_default_stats(stats_all);
 
     loop {

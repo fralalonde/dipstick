@@ -26,6 +26,7 @@ fn main() {
         });
     }
     sleep(Duration::from_secs(5));
-    bucket.flush_now_to(&Stream::write_to(io::stdout()).output(), &stats_all).unwrap();
+    bucket.set_stats(stats_all);
+    bucket.flush_to(&Stream::write_to(io::stdout()).output()).unwrap();
 
 }

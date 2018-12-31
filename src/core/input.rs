@@ -140,7 +140,7 @@ impl Marker {
 /// - Records written
 /// - Apples eaten
 /// For relative (possibly negative) values, the `Level` counter type can be used.
-/// If aggregated, minimum and maximum scores will track the collected values, not their sum.
+/// If ag0gregated, minimum and maximum scores will track the collected values, not their sum.
 #[derive(Debug, Clone)]
 pub struct Counter {
     inner: InputMetric,

@@ -10,7 +10,7 @@ fn main() {
     let bucket = AtomicBucket::new().add_prefix("test");
 
     // Bucket::set_default_output(to_stdout());
-    bucket.set_flush_to(Graphite::send_to("localhost:2003").expect("Socket")
+    bucket.set_drain(Graphite::send_to("localhost:2003").expect("Socket")
         .add_prefix("machine1").add_prefix("application"));
 
     bucket.flush_every(Duration::from_secs(3));

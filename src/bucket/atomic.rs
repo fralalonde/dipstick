@@ -26,14 +26,14 @@ fn initial_stats() -> &'static StatsFn {
     &stats_summary
 }
 
-fn initial_output() -> Arc<OutputDyn + Send + Sync> {
+fn initial_drain() -> Arc<OutputDyn + Send + Sync> {
     Arc::new(output_none())
 }
 
 lazy_static! {
     static ref DEFAULT_AGGREGATE_STATS: RwLock<Arc<StatsFn>> = RwLock::new(Arc::new(initial_stats()));
 
-    static ref DEFAULT_AGGREGATE_OUTPUT: RwLock<Arc<OutputDyn + Send + Sync>> = RwLock::new(initial_output());
+    static ref DEFAULT_AGGREGATE_OUTPUT: RwLock<Arc<OutputDyn + Send + Sync>> = RwLock::new(initial_drain());
 }
 
 /// Central aggregation structure.
@@ -49,7 +49,7 @@ struct InnerAtomicBucket {
     period_start: TimeHandle,
     stats: Option<Arc<Fn(InputKind, MetricName, ScoreType)
         -> Option<(InputKind, MetricName, MetricValue)> + Send + Sync + 'static>>,
-    output: Option<Arc<OutputDyn + Send + Sync + 'static>>,
+    drain: Option<Arc<OutputDyn + Send + Sync + 'static>>,
     publish_metadata: bool,
 }
 
@@ -67,17 +67,12 @@ lazy_static! {
 impl InnerAtomicBucket {
 
     pub fn flush(&mut self) -> error::Result<()> {
-        let stats_fn = match self.stats {
-            Some(ref stats_fn) => stats_fn.clone(),
-            None => DEFAULT_AGGREGATE_STATS.read().unwrap().clone(),
-        };
-
-        let pub_scope = match self.output {
+        let pub_scope = match self.drain {
             Some(ref out) => out.output_dyn(),
             None => DEFAULT_AGGREGATE_OUTPUT.read().unwrap().output_dyn(),
         };
 
-        self.flush_to(pub_scope.borrow(), stats_fn.as_ref())?;
+        self.flush_to(pub_scope.borrow())?;
 
         // all metrics published!
         // purge: if bucket is the last owner of the metric, remove it
@@ -95,7 +90,7 @@ impl InnerAtomicBucket {
     /// Take a snapshot of aggregated values and reset them.
     /// Compute stats on captured values using assigned or default stats function.
     /// Write stats to assigned or default output.
-    pub fn flush_to(&mut self, target: &OutputScope, stats: &StatsFn) -> error::Result<()> {
+    pub fn flush_to(&mut self, target: &OutputScope) -> error::Result<()> {
 
         let now = TimeHandle::now();
         let duration_seconds = self.period_start.elapsed_us() as f64 / 1_000_000.0;
@@ -119,9 +114,15 @@ impl InnerAtomicBucket {
             if self.publish_metadata {
                 snapshot.push((&PERIOD_LENGTH, InputKind::Timer, vec![Sum((duration_seconds * 1000.0) as isize)]));
             }
+
+            let stats_fn = match self.stats {
+                Some(ref stats_fn) => stats_fn.clone(),
+                None => DEFAULT_AGGREGATE_STATS.read()?.clone(),
+            };
+
             for metric in snapshot {
                 for score in metric.2 {
-                    let filtered = stats(metric.1, metric.0.clone(), score);
+                    let filtered = stats_fn(metric.1, metric.0.clone(), score);
                     if let Some((kind, name, value)) = filtered {
                         let metric: OutputMetric = target.new_metric(name, kind);
                         // TODO provide some bucket context through labels?
@@ -150,7 +151,7 @@ impl AtomicBucket {
                 metrics: BTreeMap::new(),
                 period_start: TimeHandle::now(),
                 stats: None,
-                output: None,
+                drain: None,
                 // TODO add API toggle for metadata publish
                 publish_metadata: false,
             }))
@@ -171,13 +172,13 @@ impl AtomicBucket {
     }
 
     /// Set the default bucket aggregated metrics flush output.
-    pub fn set_default_flush_to(default_config: impl Output + Send + Sync + 'static) {
+    pub fn set_default_drain(default_config: impl Output + Send + Sync + 'static) {
         *DEFAULT_AGGREGATE_OUTPUT.write().unwrap() = Arc::new(default_config);
     }
 
     /// Revert the default bucket aggregated metrics flush output.
-    pub fn unset_default_flush_to() {
-        *DEFAULT_AGGREGATE_OUTPUT.write().unwrap() = initial_output()
+    pub fn unset_default_drain() {
+        *DEFAULT_AGGREGATE_OUTPUT.write().unwrap() = initial_drain()
     }
 
     /// Set this bucket's statistics generator.
@@ -194,19 +195,19 @@ impl AtomicBucket {
     }
 
     /// Set this bucket's aggregated metrics flush output.
-    pub fn set_flush_to(&self, new_config: impl Output + Send + Sync + 'static) {
-        self.inner.write().expect("Aggregator").output = Some(Arc::new(new_config))
+    pub fn set_drain(&self, new_drain: impl Output + Send + Sync + 'static) {
+        self.inner.write().expect("Aggregator").drain = Some(Arc::new(new_drain))
     }
 
     /// Revert this bucket's flush target to the default output.
-    pub fn unset_flush_to(&self) {
-        self.inner.write().expect("Aggregator").output = None
+    pub fn unset_drain(&self) {
+        self.inner.write().expect("Aggregator").drain = None
     }
 
     /// Immediately flush the bucket's metrics to the specified scope and stats.
-    pub fn flush_now_to(&self, publish_scope: &OutputScope, stats_fn: &StatsFn) -> error::Result<()> {
+    pub fn flush_to(&self, publish_scope: &OutputScope) -> error::Result<()> {
         let mut inner = self.inner.write().expect("Aggregator");
-        inner.flush_to(publish_scope, stats_fn)
+        inner.flush_to(publish_scope)
     }
 
 }
@@ -286,7 +287,6 @@ impl AtomicScores {
                 // fetch_add only returns the previous sum, so min & max trail behind by one operation
                 // instead, pickup the slack by comparing again with the final sum upon `snapshot`
                 // this is to avoid making an extra load() on every value
-                // and should be correct, as no max or min values should be skipped over
                 let prev_sum = self.scores[SUM].fetch_add(value, Relaxed);
                 swap_if(&self.scores[MAX], prev_sum, |new, current| new > current);
                 swap_if(&self.scores[MIN], prev_sum, |new, current| new < current);
@@ -449,10 +449,11 @@ mod test {
     use std::time::Duration;
     use std::collections::BTreeMap;
 
-    fn make_stats(stats_fn: &StatsFn) -> BTreeMap<String, MetricValue> {
+    fn make_stats(stats_fn: &'static StatsFn) -> BTreeMap<String, MetricValue> {
         mock_clock_reset();
 
         let metrics = AtomicBucket::new().add_prefix("test");
+        metrics.set_stats(stats_fn);
 
         let counter = metrics.counter("counter_a");
         let counter_b = metrics.counter("counter_b");
@@ -468,7 +469,7 @@ mod test {
         counter.count(10);
         counter.count(20);
 
-        counter_b.count(-6);
+        counter_b.count(9);
         counter_b.count(18);
         counter_b.count(3);
 
@@ -484,9 +485,9 @@ mod test {
 
         mock_clock_advance(Duration::from_secs(3));
 
-        let stats = StatsMap::default();
-        metrics.flush_now_to(&stats, stats_fn).unwrap();
-        stats.into()
+        let map = StatsMap::default();
+        metrics.flush_to(&map).unwrap();
+        map.into()
     }
 
     #[test]
@@ -501,11 +502,11 @@ mod test {
         assert_eq!(map["test.counter_a.rate"], 10);
 
         assert_eq!(map["test.counter_b.count"], 3);
-        assert_eq!(map["test.counter_b.sum"], 15);
-        assert_eq!(map["test.counter_b.mean"], 5);
-        assert_eq!(map["test.counter_b.min"], -6);
+        assert_eq!(map["test.counter_b.sum"], 30);
+        assert_eq!(map["test.counter_b.mean"], 10);
+        assert_eq!(map["test.counter_b.min"], 3);
         assert_eq!(map["test.counter_b.max"], 18);
-        assert_eq!(map["test.counter_b.rate"], 5);
+        assert_eq!(map["test.counter_b.rate"], 10);
 
         assert_eq!(map["test.timer_a.count"], 2);
         assert_eq!(map["test.timer_a.sum"], 30_000_000);
@@ -531,7 +532,7 @@ mod test {
         let map = make_stats(&stats_summary);
 
         assert_eq!(map["test.counter_a"], 30);
-        assert_eq!(map["test.counter_b"], 15);
+        assert_eq!(map["test.counter_b"], 30);
         assert_eq!(map["test.level_a"], 23596);
         assert_eq!(map["test.timer_a"], 30_000_000);
         assert_eq!(map["test.gauge_a"], 15);
@@ -543,7 +544,7 @@ mod test {
         let map = make_stats(&stats_average);
 
         assert_eq!(map["test.counter_a"], 15);
-        assert_eq!(map["test.counter_b"], 5);
+        assert_eq!(map["test.counter_b"], 10);
         assert_eq!(map["test.level_a"], 23596);
         assert_eq!(map["test.timer_a"], 15_000_000);
         assert_eq!(map["test.gauge_a"], 15);
