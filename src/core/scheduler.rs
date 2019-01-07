@@ -29,6 +29,10 @@ impl CancelHandle {
 
 /// Schedule a task to run periodically.
 /// Starts a new thread for every task.
+///
+/// # Panics
+///
+/// Panics if the OS fails to create a thread.
 fn set_schedule<F>(every: Duration, operation: F) -> CancelHandle
 where
     F: Fn() -> () + Send + 'static,
@@ -36,13 +40,16 @@ where
     let handle = CancelHandle::new();
     let inner_handle = handle.clone();
 
-    thread::spawn(move || loop {
-        thread::sleep(every);
-        if inner_handle.is_cancelled() {
-            break;
-        }
-        operation();
-    });
+    thread::Builder::new()
+        .name("dipstick-scheduler".to_string())
+        .spawn(move || loop {
+            thread::sleep(every);
+            if inner_handle.is_cancelled() {
+                break;
+            }
+            operation();
+        })
+        .unwrap(); // TODO: Panic, change API to return Result?
     handle
 }
 
