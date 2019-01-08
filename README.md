@@ -46,10 +46,10 @@ Here's a basic aggregating & auto-publish counter metric:
 
 ```$rust,skt-run
 let bucket = AtomicBucket::new();
-bucket.set_target(Stream::stdout());
-bucket.flush_every(Duration::from_secs(3));
+bucket.set_drain(Stream::to_stdout());
+bucket.flush_every(std::time::Duration::from_secs(3));
 let counter = bucket.counter("counter_a");
-counter.count(8)
+counter.count(8);
 ```
 
 Persistent apps wanting to declare static metrics will prefer using the `metrics!` macro:

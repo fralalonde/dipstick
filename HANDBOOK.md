@@ -51,7 +51,7 @@ While timers internal precision are in nanoseconds, their accuracy depends on pl
 Timer's default output format is milliseconds but is scalable up or down.
  
 ```$rust,skt-run
-let app_metrics = metric_scope(to_stdout());
+let app_metrics = Stream::to_stdout().input();
 let timer =  app_metrics.timer("my_timer");
 time!(timer, {/* slow code here */} );
 timer.time(|| {/* slow code here */} );
@@ -79,7 +79,7 @@ Names should exclude characters that can interfere with namespaces, separator an
 A good convention is to stick with lowercase alphanumeric identifiers of less than 12 characters.
 
 ```$rust,skt-run
-let app_metrics = metric_scope(to_stdout());
+let app_metrics = Stream::to_stdout().input();
 let db_metrics = app_metrics.add_prefix("database");
 let _db_timer = db_metrics.timer("db_timer");
 let _db_counter = db_metrics.counter("db_counter");
@@ -107,17 +107,12 @@ Notes about labels:
 Metric inputs are usually setup statically upon application startup.
 
 ```$rust,skt-run
-#[macro_use] 
-extern crate dipstick;
-
-use dipstick::*;
-
 metrics!("my_app" => {
     COUNTER_A: Counter = "counter_a";
 });
 
 fn main() {
-    route_aggregate_metrics(to_stdout());
+    Proxy::set_default_target(Stream::to_stdout().input());
     COUNTER_A.count(11);
 }
 ```
@@ -126,15 +121,16 @@ The static metric definition macro is just `lazy_static!` wrapper.
 
 ## Dynamic metrics
 
-If necessary, metrics can also be defined "dynamically", with a possibly new name for every value. 
-This is more flexible but has a higher runtime cost, which may be alleviated with caching.
+If necessary, metrics can also be defined "dynamically". 
+This is more flexible but has a higher runtime cost, which may be alleviated with the optional caching mechanism.
 
 ```$rust,skt-run
 let user_name = "john_day";
-let app_metrics = to_log().with_cache(512);
-app_metrics.gauge(format!("gauge_for_user_{}", user_name)).value(44);
+let app_metrics = Log::to_log().cached(512).input();
+app_metrics.gauge(&format!("gauge_for_user_{}", user_name)).value(44);
 ```
     
+Alternatively, you may use `Labels` to output context-dependent metrics. 
 
 ## Metrics Output
 A metrics library's second job is to help a program emit metric values that can be used in further systems.
@@ -184,8 +180,8 @@ If enabled, buffering is usually a best-effort affair, to safely limit the amoun
 Some outputs such as statsd also have the ability to sample metrics.
 If enabled, sampling is done using pcg32, a fast random algorithm with reasonable entropy.
 
-```$rust,skt-fail
-let _app_metrics = Statsd::send_to("server:8125")?.with_sampling_rate(0.01);
+```$rust,skt-run,no_run
+let _app_metrics = Statsd::send_to("server:8125")?.sampled(Sampling::Random(0.01)).input();
 ```
 
 

@@ -6,29 +6,11 @@ Use `cargo test --features="skeptic"` to run the examples in the README using th
 #[macro_use] 
 extern crate dipstick;
 use dipstick::*;
-use std::time::Duration;
-
-fn main() {{
-    {}
-}}
-```
-
-```rust,skt-fail
-extern crate dipstick;
-use dipstick::*;
-use std::result::Result;
-use std::time::Duration;
-
-fn main() {{
-    run().ok();
-}}
-
-fn run() -> Result<(), Error> {{
+fn main() -> std::result::Result<(), Box<std::error::Error>> {{
     {}
     Ok(())
 }}
 ```
-
 
 ```rust,skt-plain
 {}

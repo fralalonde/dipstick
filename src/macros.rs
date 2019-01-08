@@ -91,9 +91,16 @@ macro_rules! metrics {
         metrics!{ $($REST)* }
     };
 
-    // BRANCH NODE - untyped expr
-    ($e:expr => { $($BRANCH:tt)+ } $($REST:tt)*) => {
+    // Identified Proxy Root
+    ($e:ident => { $($BRANCH:tt)+ } $($REST:tt)*) => {
         metrics!{ @internal $e; Proxy; $($BRANCH)* }
+        metrics!{ $($REST)* }
+    };
+
+    // Anonymous Proxy Namespace
+    ($e:expr => { $($BRANCH:tt)+ } $($REST:tt)*) => {
+        lazy_static! { static ref PROXY_METRICS: Proxy = $e.into(); }
+        metrics!{ @internal PROXY_METRICS; Proxy; $($BRANCH)* }
         metrics!{ $($REST)* }
     };
 
@@ -169,6 +176,15 @@ mod test {
         G1: Gauge = "failed";
         T1: Timer = "failed";
     }}
+
+    metrics!("my_app" => {
+        COUNTER_A: Counter = "counter_a";
+    });
+
+    #[test]
+    fn gurp() {
+        COUNTER_A.count(11);
+    }
 
     #[test]
     fn call_new_macro_defined_metrics() {

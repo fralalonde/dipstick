@@ -59,6 +59,10 @@ pub trait InputScope: Flush {
         self.new_metric(name.into(), InputKind::Gauge).into()
     }
 
+    /// Define a level.
+    fn level(&self, name: &str) -> Level {
+        self.new_metric(name.into(), InputKind::Level).into()
+    }
 }
 
 /// A metric is actually a function that knows to write a metric value to a metric output.
@@ -91,9 +95,11 @@ impl InputMetric {
 pub enum InputKind {
     /// Handling one item at a time.
     Marker,
-    /// Handling quantities or multiples.
+    /// Handling cumulative observed quantities.
     Counter,
-    /// Reporting instant measurement of a resource at a point in time.
+    /// Handling quantity fluctuations.
+    Level,
+    /// Reporting instant measurement of a resource at a point in time (non-cumulative).
     Gauge,
     /// Measuring a time interval, internal to the app or provided by an external source.
     Timer,
@@ -107,6 +113,7 @@ impl<'a> From<&'a str> for InputKind {
             "Counter" => InputKind::Counter,
             "Gauge" => InputKind::Gauge,
             "Timer" => InputKind::Timer,
+            "Level" => InputKind::Level,
             _ => panic!("No InputKind '{}' defined", s)
         }
     }
@@ -127,7 +134,13 @@ impl Marker {
     }
 }
 
-/// A counter that sends values to the metrics backend
+/// A counter of absolute observed values (non-negative amounts).
+/// Used to count to count things that can not be undone:
+/// - Bytes sent
+/// - Records written
+/// - Apples eaten
+/// For relative (possibly negative) values, the `Level` counter type can be used.
+/// If ag0gregated, minimum and maximum scores will track the collected values, not their sum.
 #[derive(Debug, Clone)]
 pub struct Counter {
     inner: InputMetric,
@@ -135,7 +148,24 @@ pub struct Counter {
 
 impl Counter {
     /// Record a value count.
-    pub fn count<V: ToPrimitive>(&self, count: V) {
+    pub fn count(&self, count: usize) {
+        self.inner.write(count as isize, labels![])
+    }
+}
+
+/// A counter of fluctuating resources accepting positive and negative values.
+/// Can be used as a stateful `Gauge` or a as `Counter` of possibly decreasing amounts.
+/// - Size of messages in a queue
+/// - Strawberries on a conveyor belt
+/// If aggregated, minimum and maximum scores will track the sum of values, not the collected values themselves.
+#[derive(Debug, Clone)]
+pub struct Level {
+    inner: InputMetric,
+}
+
+impl Level {
+    /// Record a positive or negative value count
+    pub fn adjust<V: ToPrimitive>(&self, count: V) {
         self.inner.write(count.to_isize().unwrap(), labels![])
     }
 }
@@ -167,8 +197,8 @@ pub struct Timer {
 impl Timer {
     /// Record a microsecond interval for this timer
     /// Can be used in place of start()/stop() if an external time interval source is used
-    pub fn interval_us<V: ToPrimitive>(&self, interval_us: V) -> V {
-        self.inner.write(interval_us.to_isize().unwrap(), labels![]);
+    pub fn interval_us(&self, interval_us: u64) -> u64 {
+        self.inner.write(interval_us as isize, labels![]);
         interval_us
     }
 
@@ -188,7 +218,7 @@ impl Timer {
     /// Returns the microsecond interval value that was recorded.
     pub fn stop(&self, start_time: TimeHandle) -> MetricValue {
         let elapsed_us = start_time.elapsed_us();
-        self.interval_us(elapsed_us)
+        self.interval_us(elapsed_us) as isize
     }
 
     /// Record the time taken to execute the provided closure
@@ -221,5 +251,11 @@ impl From<InputMetric> for Counter {
 impl From<InputMetric> for Marker {
     fn from(metric: InputMetric) -> Marker {
         Marker { inner: metric }
+    }
+}
+
+impl From<InputMetric> for Level {
+    fn from(metric: InputMetric) -> Level {
+        Level { inner: metric }
     }
 }

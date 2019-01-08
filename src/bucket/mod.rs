@@ -11,9 +11,9 @@ pub enum ScoreType {
     Count(isize),
     /// Sum of metric values reported.
     Sum(isize),
-    /// Biggest value reported.
+    /// Biggest value observed.
     Max(isize),
-    /// Smallest value reported.
+    /// Smallest value observed.
     Min(isize),
     /// Average value (hit count / sum, non-atomic)
     Mean(f64),
@@ -76,7 +76,7 @@ pub fn stats_summary(kind: InputKind, name: MetricName, score: ScoreType)
             ScoreType::Sum(sum) => Some((kind, name, sum)),
             _ => None,
         },
-        InputKind::Gauge => match score {
+        InputKind::Gauge | InputKind::Level => match score {
             ScoreType::Mean(mean) => Some((InputKind::Gauge, name, mean.round() as MetricValue)),
             _ => None,
         },
