@@ -25,24 +25,31 @@ pub trait QueuedInput: Input + Send + Sync + 'static + Sized {
     }
 }
 
+/// # Panics
+///
+/// Panics if the OS fails to create a thread.
 fn new_async_channel(length: usize) -> Arc<mpsc::SyncSender<InputQueueCmd>> {
     let (sender, receiver) = mpsc::sync_channel::<InputQueueCmd>(length);
-    thread::spawn(move || {
-        let mut done = false;
-        while !done {
-            match receiver.recv() {
-                Ok(InputQueueCmd::Write(metric, value, labels)) => metric.write(value, labels),
-                Ok(InputQueueCmd::Flush(scope)) => if let Err(e) = scope.flush() {
-                    debug!("Could not asynchronously flush metrics: {}", e);
-                },
-                Err(e) => {
-                    debug!("Async metrics receive loop terminated: {}", e);
-                    // cannot break from within match, use safety pin instead
-                    done = true
+
+    thread::Builder::new()
+        .name("dipstick-queue-in".to_string())
+        .spawn(move || {
+            let mut done = false;
+            while !done {
+                match receiver.recv() {
+                    Ok(InputQueueCmd::Write(metric, value, labels)) => metric.write(value, labels),
+                    Ok(InputQueueCmd::Flush(scope)) => if let Err(e) = scope.flush() {
+                        debug!("Could not asynchronously flush metrics: {}", e);
+                    },
+                    Err(e) => {
+                        debug!("Async metrics receive loop terminated: {}", e);
+                        // cannot break from within match, use safety pin instead
+                        done = true
+                    }
                 }
             }
-        }
-    });
+        })
+        .unwrap(); // TODO: Panic, change API to return Result?
     Arc::new(sender)
 }
 
