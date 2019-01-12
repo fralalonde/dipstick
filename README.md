@@ -18,7 +18,6 @@ should help you get an idea of the possible configurations.
 In short, dipstick-enabled apps _can_:
 
   - Send metrics to console, log, statsd, graphite or prometheus (one or many)
-  - Serve metrics over HTTP
   - Locally aggregate the count, sum, mean, min, max and rate of metric values
   - Publish aggregated metrics, on schedule or programmatically
   - Customize output statistics and formatting
@@ -29,6 +28,7 @@ In short, dipstick-enabled apps _can_:
   - Switch between metric backends at runtime
 
 For convenience, dipstick builds on stable Rust with minimal, feature-gated dependencies.
+Performance, safety and ergonomy are also prime concerns.
 
 ### Non-goals
 
@@ -78,7 +78,7 @@ dipstick = "0.7.0"
 
 ## TODO / Missing / Weak points
 
-- Prometheus support is still primitive. Official prometheus-rust crate is used but Labels/Tags are not passed to it.  
+- Prometheus support is still primitive (read untested). Only the push gateway approach is supported for now. 
 - No backend for "pull" metrics yet. Should at least provide tiny-http listener capability.  
 - No quick integration feature with common frameworks (Actix, etc.) is provided yet.
 - Thread Local buckets could be nice.

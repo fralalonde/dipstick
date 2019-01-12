@@ -4,17 +4,20 @@ It is not a full-on cookbook (yet) - some reader experimentation may be required
 
 # Background
 Dipstick is a structured metrics library that allows to combine, select from, and switch between multiple metrics backends.
-Because counters, timers and gauges declared in the code are not tied to a specific implementation. 
+Counters, timers and gauges declared in the code are not tied to a specific implementation. This has multiple benefits.
 
-This has multiple benefits:
-- simplified instrumentation
-- flexible compile-time or runtime configuration
-- easier metrics testing
+## Simplified instrumentation
+For example, a single Counter instrument can be used to send metrics to the log and to a network aggregator. 
+This prevents duplication of instrumentation which in turn prevents errors. 
 
+## Flexible configuration
+Let's say we had an application defining a "fixed" metrics stack on initialization. 
+We could upgrade to a configuration file defined metrics stack without altering the instruments in every module.
+Or we could make the configuration hot-reloadable, suddenly using different output formats.        
+
+## Easier metrics testing
 For example, using a compile-time feature switch, metrics could be collected directly to hash map at test time 
 but be sent over the network and written to a file at runtime, as described by external configuration.
-
-Because of its Rust nature, performance, safety and ergonomy are also prime concerns. 
 
 
 # API Overview
