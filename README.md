@@ -73,7 +73,7 @@ To use Dipstick in your project, add the following line to your `Cargo.toml`
 in the `[dependencies]` section:
 
 ```toml
-dipstick = "0.7.0"
+dipstick = "0.7.1"
 ```
 
 ## TODO / Missing / Weak points
