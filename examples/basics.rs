@@ -14,6 +14,7 @@ fn main() {
 
     // metrics can be predefined by type and name
     let counter = app_metrics.counter("counter_a");
+    let level = app_metrics.level("level_a");
     let timer = app_metrics.timer("timer_b");
 
     // metrics can also be declared and used ad-hoc (use output.cache() if this happens often)
@@ -26,11 +27,17 @@ fn main() {
 
     // each kind of metric has a different method name to prevent errors
     counter.count(11);
+    level.adjust(-4);
+    level.adjust(5);
+
     gauge.value(22);
+    gauge.value(-24);
+
     event.mark();
-    timer.interval_us(35573);
 
     // time can be measured multiple equivalent ways:
+    // in microseconds (used internally)
+    timer.interval_us(35573);
 
     // using the time! macro
     time!(timer, sleep(Duration::from_millis(5)));
@@ -38,7 +45,7 @@ fn main() {
     // using a closure
     timer.time(|| sleep(Duration::from_millis(5)));
 
-    // using a start time handle
+    // using a "time handle"
     let start_time = timer.start();
     Duration::from_millis(5);
     timer.stop(start_time);

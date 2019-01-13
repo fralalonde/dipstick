@@ -1,3 +1,5 @@
+//! A TCP Socket wrapper that reconnects automatically.
+
 use std::net::TcpStream;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::io;

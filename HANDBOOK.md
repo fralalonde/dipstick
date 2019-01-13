@@ -6,16 +6,16 @@ It is not a full-on cookbook (yet) - some reader experimentation may be required
 Dipstick is a structured metrics library that allows to combine, select from, and switch between multiple metrics backends.
 Counters, timers and gauges declared in the code are not tied to a specific implementation. This has multiple benefits.
 
-## Simplified instrumentation
+- Simplified instrumentation: 
 For example, a single Counter instrument can be used to send metrics to the log and to a network aggregator. 
 This prevents duplication of instrumentation which in turn prevents errors. 
 
-## Flexible configuration
+- Flexible configuration:
 Let's say we had an application defining a "fixed" metrics stack on initialization. 
 We could upgrade to a configuration file defined metrics stack without altering the instruments in every module.
 Or we could make the configuration hot-reloadable, suddenly using different output formats.        
 
-## Easier metrics testing
+- Easier metrics testing:
 For example, using a compile-time feature switch, metrics could be collected directly to hash map at test time 
 but be sent over the network and written to a file at runtime, as described by external configuration.
 
@@ -40,7 +40,7 @@ an application's functional code having to pick what statistics should be tracke
 This helps to enforce contracts with downstream metrics systems and keeps code free of configuration elements.
   
 #### Counter
-Count number of elements processed, e.g. number of bytes received.
+Count number of elements processed, e.g. number of bytes received. Only accepts positive amounts.
 
 #### Marker 
 A monotonic counter. e.g. to record the processing of individual events.
@@ -65,11 +65,14 @@ timer.stop(start);
 
 timer.interval_us(123_456);
 ```
+
+### Level
+Relative quantity counter. Accepts positive and negative cumulative values.
+If aggregated, observed minimum and maximum track the sum of values rather than individual values as for `Counter`. 
  
 ### Gauge
-An instant observation of a resource's value.
-Observation of gauges neither automatic or tied to the output of metrics, 
-it must be scheduled independently or called explicitly through the code.
+An instant observation of a resource's value (positive or negative, but non-cumulative).
+The observation of Gauges is not automatic and must be performed programmatically as with other metric types.
 
 ### Names
 Each metric must be given a name upon creation.
@@ -160,7 +163,7 @@ Send metrics to a remote host over UDP using the statsd format.
 Send metrics to a remote host over TCP using the graphite format. 
 
 #### TODO Prometheus
-Send metrics to a remote host over TCP using the Prometheus JSON or ProtoBuf format.
+Send metrics to a Prometheus "PushGateway" using the Prometheus 2.0 text format.
 
 ### Attributes
 Attributes change the outputs behavior.
@@ -191,7 +194,6 @@ let _app_metrics = Statsd::send_to("server:8125")?.sampled(Sampling::Random(0.01
 ## Intermediates
 
 ### Proxy
-
 Because the input's actual _implementation_ depends on the output configuration,
 it is necessary to create an output channel before defining any metrics.
 This is often not possible because metrics configuration could be dynamic (e.g. loaded from a file),
@@ -201,49 +203,40 @@ allowing redirection to the effective output after it has been set up.
 
 
 ### Bucket
-
 Another intermediate output is the Bucket, which can be used to aggregate metric values. 
 Bucket-aggregated values can be used to infer statistics which will be flushed out to
 
 Bucket aggregation is performed locklessly and is very fast.
 Count, Sum, Min, Max and Mean are tracked where they make sense, depending on the metric type.
 
-
 #### Preset bucket statistics
-
 Published statistics can be selected with presets such as `all_stats`, `summary`, `average`.
 
-
 #### Custom bucket statistics
-
 For more control over published statistics, you can provide your own strategy. 
 Consult the `custom_publish` [example](https://github.com/fralalonde/dipstick/blob/master/examples/custom_publish.rs) 
 to see how this can be done. 
 
 
 #### Scheduled publication
-
 Buffered and aggregated (bucket) metrics can be scheduled to be 
 [periodically published](https://github.com/fralalonde/dipstick/blob/master/examples/bucket_summary.rs) as a background task.
 The schedule runs on a dedicated thread and follows a recurrent `Duration`. 
 It can be cancelled at any time using the `CancelHandle` returned by the `flush_every()` method.
     
 ### Multi
-
 Just like Constructicons, multiple metrics channels can assemble, creating a unified facade 
 that transparently dispatches metrics to every constituent. 
 
 This can be done using multiple [inputs](https://github.com/fralalonde/dipstick/blob/master/examples/multi_input.rs) 
 or multiple [outputs](https://github.com/fralalonde/dipstick/blob/master/examples/multi_output.rs) 
 
-### Queue
+### Asynchronous Queue
 
-Metrics can be collected asynchronously using a queue. 
+Metrics can be collected asynchronously using a queue.
 The async queue uses a Rust channel and a standalone thread.
 If the queue ever fills up under heavy load, it reverts to blocking (rather than dropping metrics).
 I'm sure [an example](https://github.com/fralalonde/dipstick/blob/master/examples/async_queue.rs) would help.
 
-
-## Facilities
-
-
+This is a tradeoff, lowering app latency by taking any metrics I/O off the thread but increasing overall metrics reporting latency.
+Using async metrics should not be required if using only aggregated metrics such as an `AtomicBucket`. 

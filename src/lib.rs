@@ -29,7 +29,7 @@ mod core;
 pub use core::{Flush, MetricValue};
 pub use core::attributes::{Prefixed, Sampling, Sampled, Buffered, Buffering};
 pub use core::name::{MetricName, NameParts};
-pub use core::input::{Input, InputDyn, InputScope, InputMetric, Counter, Timer, Marker, Gauge, InputKind};
+pub use core::input::{Input, InputDyn, InputScope, InputMetric, Counter, Timer, Marker, Gauge, Level, InputKind};
 pub use core::output::{Output, OutputDyn, OutputScope, OutputMetric};
 pub use core::scheduler::{ScheduleFlush, CancelHandle};
 pub use core::locking::LockingOutput;

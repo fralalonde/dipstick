@@ -39,27 +39,27 @@ pub trait InputScope: Flush {
     /// It is preferable to use counter() / marker() / timer() / gauge() methods.
     fn new_metric(&self, name: MetricName, kind: InputKind) -> InputMetric;
 
-    /// Define a counter.
+    /// Define a Counter.
     fn counter(&self, name: &str) -> Counter {
         self.new_metric(name.into(), InputKind::Counter).into()
     }
 
-    /// Define a marker.
+    /// Define a Marker.
     fn marker(&self, name: &str) -> Marker {
         self.new_metric(name.into(), InputKind::Marker).into()
     }
 
-    /// Define a timer.
+    /// Define a Timer.
     fn timer(&self, name: &str) -> Timer {
         self.new_metric(name.into(), InputKind::Timer).into()
     }
 
-    /// Define a gauge.
+    /// Define a Gauge.
     fn gauge(&self, name: &str) -> Gauge {
         self.new_metric(name.into(), InputKind::Gauge).into()
     }
 
-    /// Define a level.
+    /// Define a Level.
     fn level(&self, name: &str) -> Level {
         self.new_metric(name.into(), InputKind::Level).into()
     }
