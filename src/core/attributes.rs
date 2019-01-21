@@ -56,8 +56,12 @@ pub trait Prefixed {
     /// Returns namespace of component.
     fn get_prefixes(&self) -> &NameParts;
 
-    /// Extend the namespace metrics will be defined in.
+    /// Extend the namespace new metrics will be defined in.
+    #[deprecated(since="0.7.2", note="Use named()")]
     fn add_prefix<S: Into<String>>(&self, name: S) -> Self;
+
+    /// Extend the namespace new metrics will be defined in.
+    fn named<S: Into<String>>(&self, name: S) -> Self;
 
     /// Append any name parts to the name's namespace.
     fn prefix_append<S: Into<MetricName>>(&self, name: S) -> MetricName {
@@ -89,10 +93,17 @@ impl<T: WithAttributes> Prefixed for T {
 
     /// Adds a name part to any existing naming.
     /// Return a clone of the component with the updated naming.
-    fn add_prefix<S: Into<String>>(&self, name: S) -> Self {
+    fn named<S: Into<String>>(&self, name: S) -> Self {
         let name = name.into();
         self.with_attributes(|new_attr| new_attr.naming.push_back(name.clone()))
     }
+
+    /// Adds a name part to any existing naming.
+    /// Return a clone of the component with the updated naming.
+    fn add_prefix<S: Into<String>>(&self, name: S) -> Self {
+        self.named(name)
+    }
+
 }
 
 /// Apply statistical sampling to collected metrics data.

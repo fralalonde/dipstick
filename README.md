@@ -61,7 +61,7 @@ metrics! { METRICS = "my_app" => {
 }
 
 fn main() {
-    METRICS.set_target(Graphite::send_to("localhost:2003").unwrap().input());
+    METRICS.target(Graphite::send_to("localhost:2003").unwrap().metrics());
     COUNTER.count(32);
 }
 ```

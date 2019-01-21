@@ -23,7 +23,7 @@ pub struct Log {
 impl Input for Log {
     type SCOPE = LogScope;
 
-    fn input(&self) -> Self::SCOPE {
+    fn metrics(&self) -> Self::SCOPE {
         LogScope {
             attributes: self.attributes.clone(),
             entries: Arc::new(RwLock::new(Vec::new())),
@@ -165,7 +165,7 @@ mod test {
 
     #[test]
     fn test_to_log() {
-        let c = super::Log::to_log().input();
+        let c = super::Log::to_log().metrics();
         let m = c.new_metric("test".into(), InputKind::Marker);
         m.write(33, labels![]);
     }

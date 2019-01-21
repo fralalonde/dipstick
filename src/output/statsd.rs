@@ -52,7 +52,7 @@ impl cache_out::CachedOutput for Statsd {}
 impl Output for Statsd {
     type SCOPE = StatsdScope;
 
-    fn output(&self) -> Self::SCOPE {
+    fn new_scope(&self) -> Self::SCOPE {
         StatsdScope {
             attributes: self.attributes.clone(),
             buffer: Rc::new(RefCell::new(String::with_capacity(MAX_UDP_PAYLOAD))),
@@ -257,7 +257,7 @@ mod bench {
 
     #[bench]
     pub fn immediate_statsd(b: &mut test::Bencher) {
-        let sd = Statsd::send_to("localhost:2003").unwrap().input();
+        let sd = Statsd::send_to("localhost:2003").unwrap().metrics();
         let timer = sd.new_metric("timer".into(), InputKind::Timer);
 
         b.iter(|| test::black_box(timer.write(2000, labels![])));
@@ -266,7 +266,7 @@ mod bench {
     #[bench]
     pub fn buffering_statsd(b: &mut test::Bencher) {
         let sd = Statsd::send_to("localhost:2003").unwrap()
-            .buffered(Buffering::BufferSize(65465)).input();
+            .buffered(Buffering::BufferSize(65465)).metrics();
         let timer = sd.new_metric("timer".into(), InputKind::Timer);
 
         b.iter(|| test::black_box(timer.write(2000, labels![])));

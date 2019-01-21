@@ -87,7 +87,7 @@ impl Input for OutputQueue {
     type SCOPE = OutputQueueScope;
 
     /// Wrap new scopes with an asynchronous metric write & flush dispatcher.
-    fn input(&self) -> Self::SCOPE {
+    fn metrics(&self) -> Self::SCOPE {
         let target_scope = UnsafeScope::new(self.target.output_dyn());
         OutputQueueScope {
             attributes: self.attributes.clone(),

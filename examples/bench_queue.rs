@@ -5,7 +5,6 @@ extern crate dipstick;
 use std::thread::sleep;
 use std::time::Duration;
 use dipstick::*;
-use std::io;
 use std::thread;
 use std::env::args;
 use std::str::FromStr;
@@ -27,6 +26,6 @@ fn main() {
         });
     }
     sleep(Duration::from_secs(5));
-    bucket.flush_to(&Stream::write_to(io::stdout()).output()).unwrap();
+    bucket.flush_to(&Stream::to_stdout().new_scope()).unwrap();
 
 }

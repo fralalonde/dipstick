@@ -35,7 +35,7 @@ metrics!(LIB_METRICS => {
 });
 
 fn main() {
-    dipstick::Proxy::set_default_target(Stream::to_stdout().input());
+    dipstick::Proxy::default_target(Stream::to_stdout().metrics());
 
     loop {
         ROOT_COUNTER.count(123);

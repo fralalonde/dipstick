@@ -54,7 +54,7 @@ While timers internal precision are in nanoseconds, their accuracy depends on pl
 Timer's default output format is milliseconds but is scalable up or down.
  
 ```$rust,skt-run
-let app_metrics = Stream::to_stdout().input();
+let app_metrics = Stream::to_stdout().metrics();
 let timer =  app_metrics.timer("my_timer");
 time!(timer, {/* slow code here */} );
 timer.time(|| {/* slow code here */} );
@@ -85,8 +85,8 @@ Names should exclude characters that can interfere with namespaces, separator an
 A good convention is to stick with lowercase alphanumeric identifiers of less than 12 characters.
 
 ```$rust,skt-run
-let app_metrics = Stream::to_stdout().input();
-let db_metrics = app_metrics.add_prefix("database");
+let app_metrics = Stream::to_stdout().metrics();
+let db_metrics = app_metrics.named("database");
 let _db_timer = db_metrics.timer("db_timer");
 let _db_counter = db_metrics.counter("db_counter");
 ```
@@ -118,7 +118,7 @@ metrics!("my_app" => {
 });
 
 fn main() {
-    Proxy::set_default_target(Stream::to_stdout().input());
+    Proxy::set_default_target(Stream::to_stdout().metrics());
     COUNTER_A.count(11);
 }
 ```
@@ -132,7 +132,7 @@ This is more flexible but has a higher runtime cost, which may be alleviated wit
 
 ```$rust,skt-run
 let user_name = "john_day";
-let app_metrics = Log::to_log().cached(512).input();
+let app_metrics = Log::to_log().cached(512).metrics();
 app_metrics.gauge(&format!("gauge_for_user_{}", user_name)).value(44);
 ```
     
@@ -187,7 +187,7 @@ Some outputs such as statsd also have the ability to sample metrics.
 If enabled, sampling is done using pcg32, a fast random algorithm with reasonable entropy.
 
 ```$rust,skt-run,no_run
-let _app_metrics = Statsd::send_to("server:8125")?.sampled(Sampling::Random(0.01)).input();
+let _app_metrics = Statsd::send_to("server:8125")?.sampled(Sampling::Random(0.01)).metrics();
 ```
 
 

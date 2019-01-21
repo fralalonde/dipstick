@@ -18,7 +18,7 @@ pub struct MultiInput {
 impl Input for MultiInput {
     type SCOPE = MultiInputScope;
 
-    fn input(&self) -> Self::SCOPE {
+    fn metrics(&self) -> Self::SCOPE {
         let scopes = self.outputs.iter().map(|out| out.input_dyn()).collect();
         MultiInputScope {
             attributes: self.attributes.clone(),
@@ -28,17 +28,28 @@ impl Input for MultiInput {
 }
 
 impl MultiInput {
+    /// Create a new multi-input dispatcher.
+    #[deprecated(since="0.7.2", note="Use new()")]
+    pub fn input() -> Self {
+        Self::new()
+    }
 
-    /// Create a new multi-output.
-    pub fn input() -> MultiInput {
+    /// Create a new multi-input dispatcher.
+    pub fn new() -> Self {
         MultiInput {
             attributes: Attributes::default(),
             outputs: vec![],
         }
     }
 
-    /// Returns a clone of the dispatch with the new output added to the list.
+    /// Returns a clone of the dispatch with the new target added to the list.
+    #[deprecated(since="0.7.2", note="Use target()")]
     pub fn add_target<OUT: Input + Send + Sync + 'static>(&self, out: OUT) -> Self {
+        self.target(out)
+    }
+
+    /// Returns a clone of the dispatch with the new target added to the list.
+    pub fn target<OUT: Input + Send + Sync + 'static>(&self, out: OUT) -> Self {
         let mut cloned = self.clone();
         cloned.outputs.push(Arc::new(out));
         cloned
@@ -66,8 +77,16 @@ impl MultiInputScope {
         }
     }
 
-    /// Returns a clone of the dispatch with the new output added to the list.
+    /// Add a target to the dispatch list.
+    /// Returns a clone of the original object.
+    #[deprecated(since="0.7.2", note="Use target()")]
     pub fn add_target<IN: InputScope + Send + Sync + 'static>(&self, scope: IN) -> Self {
+        self.target(scope)
+    }
+
+    /// Add a target to the dispatch list.
+    /// Returns a clone of the original object.
+    pub fn target<IN: InputScope + Send + Sync + 'static>(&self, scope: IN) -> Self {
         let mut cloned = self.clone();
         cloned.scopes.push(Arc::new(scope));
         cloned

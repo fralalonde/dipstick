@@ -11,7 +11,7 @@ use std::thread::sleep;
 
 fn main() {
     let bucket = AtomicBucket::new();
-    AtomicBucket::set_default_drain(Stream::write_to(io::stdout()));
+    AtomicBucket::default_drain(Stream::write_to(io::stdout()));
 
     let persistent_marker = bucket.marker("persistent");
 

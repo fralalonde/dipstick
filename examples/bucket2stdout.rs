@@ -8,10 +8,10 @@ use std::io;
 use dipstick::*;
 
 fn main() {
-    let metrics = AtomicBucket::new().add_prefix("test");
+    let metrics = AtomicBucket::new().named("test");
 
     // Bucket::set_default_output(to_stdout());
-    metrics.set_drain(Stream::write_to(io::stdout()));
+    metrics.drain(Stream::write_to(io::stdout()));
 
     metrics.flush_every(Duration::from_secs(3));
 

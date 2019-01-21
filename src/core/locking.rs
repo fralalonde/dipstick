@@ -30,11 +30,11 @@ impl InputScope for LockingOutput {
     fn new_metric(&self, name: MetricName, kind: InputKind) -> InputMetric {
         let name = self.prefix_append(name);
         // lock when creating metrics
-        let raw_metric = self.inner.lock().expect("OutputScope Lock").new_metric(name, kind);
+        let raw_metric = self.inner.lock().expect("LockingOutput").new_metric(name, kind);
         let mutex = self.inner.clone();
         InputMetric::new(move |value, labels| {
             // lock when collecting values
-            let _guard = mutex.lock().expect("OutputScope Lock");
+            let _guard = mutex.lock().expect("LockingOutput");
             raw_metric.write(value, labels)
         } )
     }
@@ -43,14 +43,14 @@ impl InputScope for LockingOutput {
 
 impl Flush for LockingOutput {
     fn flush(&self) -> error::Result<()> {
-        self.inner.lock().expect("OutputScope Lock").flush()
+        self.inner.lock().expect("LockingOutput").flush()
     }
 }
 
 impl<T: Output + Send + Sync + 'static> Input for T {
     type SCOPE = LockingOutput;
 
-    fn input(&self) -> Self::SCOPE {
+    fn metrics(&self) -> Self::SCOPE {
         LockingOutput {
             attributes: Attributes::default(),
             inner: Arc::new(Mutex::new(LockedOutputScope(self.output_dyn())))

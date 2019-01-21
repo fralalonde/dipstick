@@ -138,7 +138,7 @@ impl InnerAtomicBucket {
 
 impl<S: AsRef<str>> From<S> for AtomicBucket {
     fn from(name: S) -> AtomicBucket {
-        AtomicBucket::new().add_prefix(name.as_ref())
+        AtomicBucket::new().named(name.as_ref())
     }
 }
 
@@ -159,7 +159,7 @@ impl AtomicBucket {
     }
 
     /// Set the default aggregated metrics statistics generator.
-    pub fn set_default_stats<F>(func: F)
+    pub fn default_stats<F>(func: F)
         where
             F: Fn(InputKind, MetricName, ScoreType) -> Option<(InputKind, MetricName, MetricValue)> + Send + Sync + 'static
     {
@@ -172,7 +172,7 @@ impl AtomicBucket {
     }
 
     /// Set the default bucket aggregated metrics flush output.
-    pub fn set_default_drain(default_config: impl Output + Send + Sync + 'static) {
+    pub fn default_drain(default_config: impl Output + Send + Sync + 'static) {
         *DEFAULT_AGGREGATE_OUTPUT.write().unwrap() = Arc::new(default_config);
     }
 
@@ -182,7 +182,16 @@ impl AtomicBucket {
     }
 
     /// Set this bucket's statistics generator.
+    #[deprecated(since="0.7.2", note="Use stats()")]
     pub fn set_stats<F>(&self, func: F)
+        where
+            F: Fn(InputKind, MetricName, ScoreType) -> Option<(InputKind, MetricName, MetricValue)> + Send + Sync + 'static
+    {
+        self.stats(func)
+    }
+
+    /// Set this bucket's statistics generator.
+    pub fn stats<F>(&self, func: F)
         where
             F: Fn(InputKind, MetricName, ScoreType) -> Option<(InputKind, MetricName, MetricValue)> + Send + Sync + 'static
     {
@@ -195,7 +204,13 @@ impl AtomicBucket {
     }
 
     /// Set this bucket's aggregated metrics flush output.
+    #[deprecated(since="0.7.2", note="Use drain()")]
     pub fn set_drain(&self, new_drain: impl Output + Send + Sync + 'static) {
+        self.drain(new_drain)
+    }
+
+    /// Set this bucket's aggregated metrics flush output.
+    pub fn drain(&self, new_drain: impl Output + Send + Sync + 'static) {
         self.inner.write().expect("Aggregator").drain = Some(Arc::new(new_drain))
     }
 
@@ -452,8 +467,8 @@ mod test {
     fn make_stats(stats_fn: &'static StatsFn) -> BTreeMap<String, MetricValue> {
         mock_clock_reset();
 
-        let metrics = AtomicBucket::new().add_prefix("test");
-        metrics.set_stats(stats_fn);
+        let metrics = AtomicBucket::new().named("test");
+        metrics.stats(stats_fn);
 
         let counter = metrics.counter("counter_a");
         let counter_b = metrics.counter("counter_b");

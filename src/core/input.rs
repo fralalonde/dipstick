@@ -15,8 +15,14 @@ pub trait Input: Send + Sync + 'static + InputDyn {
     /// The type of Scope returned byt this input.
     type SCOPE: InputScope + Send + Sync + 'static;
 
-    /// Open a new scope from this output.
-    fn input(&self) -> Self::SCOPE;
+    /// Open a new scope from this input.
+    fn metrics(&self) -> Self::SCOPE;
+
+    /// Open a new scope from this input.
+    #[deprecated(since="0.7.2", note="Use metrics()")]
+    fn input(&self) -> Self::SCOPE {
+        self.metrics()
+    }
 }
 
 /// A function trait that opens a new metric capture scope.
@@ -28,7 +34,7 @@ pub trait InputDyn: Send + Sync + 'static {
 /// Blanket impl of dyn input trait
 impl<T: Input + Send + Sync + 'static> InputDyn for T {
     fn input_dyn(&self) -> Arc<InputScope + Send + Sync + 'static> {
-        Arc::new(self.input())
+        Arc::new(self.metrics())
     }
 }
 

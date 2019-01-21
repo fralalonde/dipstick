@@ -10,7 +10,7 @@ use dipstick::*;
 
 fn main() {
     // for this demo, print metric values to the console
-    let app_metrics = Stream::write_to(io::stdout()).input();
+    let app_metrics = Stream::write_to(io::stdout()).metrics();
 
     // metrics can be predefined by type and name
     let counter = app_metrics.counter("counter_a");
@@ -21,7 +21,7 @@ fn main() {
     app_metrics.counter("just_once").count(4);
 
     // metric names can be prepended with a common prefix
-    let prefixed_metrics = app_metrics.add_prefix("subsystem");
+    let prefixed_metrics = app_metrics.named("subsystem");
     let event = prefixed_metrics.marker("event_c");
     let gauge = prefixed_metrics.gauge("gauge_d");
 

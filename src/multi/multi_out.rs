@@ -20,7 +20,7 @@ pub struct MultiOutput {
 impl Output for MultiOutput {
     type SCOPE = MultiOutputScope;
 
-    fn output(&self) -> Self::SCOPE {
+    fn new_scope(&self) -> Self::SCOPE {
         let scopes = self.outputs.iter().map(|out| out.output_dyn()).collect();
         MultiOutputScope {
             attributes: self.attributes.clone(),
@@ -30,16 +30,30 @@ impl Output for MultiOutput {
 }
 
 impl MultiOutput {
-    /// Create a new multi-output.
-    pub fn output() -> MultiOutput {
+    /// Create a new multi-output dispatcher.
+    #[deprecated(since="0.7.2", note="Use new()")]
+    pub fn output() -> Self {
+        Self::new()
+    }
+
+    /// Create a new multi-output dispatcher.
+    pub fn new() -> Self {
         MultiOutput {
             attributes: Attributes::default(),
             outputs: vec![],
         }
     }
 
-    /// Returns a clone of the dispatch with the new output added to the list.
+    /// Add a target to the dispatch list.
+    /// Returns a clone of the original object.
+    #[deprecated(since="0.7.2", note="Use target()")]
     pub fn add_target<OUT: Output + Send + Sync + 'static>(&self, out: OUT) -> Self {
+        self.target(out)
+    }
+
+    /// Add a target to the dispatch list.
+    /// Returns a clone of the original object.
+    pub fn target<OUT: Output + Send + Sync + 'static>(&self, out: OUT) -> Self {
         let mut cloned = self.clone();
         cloned.outputs.push(Arc::new(out));
         cloned
@@ -68,7 +82,13 @@ impl MultiOutputScope {
     }
 
     /// Returns a clone of the dispatch with the new output added to the list.
+    #[deprecated(since="0.7.2", note="Use target()")]
     pub fn add_target<IN: OutputScope + 'static>(&self, scope: IN) -> Self {
+        self.target(scope)
+    }
+
+    /// Returns a clone of the dispatch with the new output added to the list.
+    pub fn target<IN: OutputScope + 'static>(&self, scope: IN) -> Self {
         let mut cloned = self.clone();
         cloned.scopes.push(Rc::new(scope));
         cloned

@@ -10,8 +10,8 @@ fn main() {
         Statsd::send_to("localhost:8125")
             .expect("Connected")
 //            .with_sampling(Sampling::Random(0.2))
-            .add_prefix("my_app")
-            .input();
+            .named("my_app")
+            .metrics();
 
     let counter = metrics.counter("counter_a");
 

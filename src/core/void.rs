@@ -34,7 +34,8 @@ impl Void {
 
 impl Output for Void {
     type SCOPE = VoidOutput;
-    fn output(&self) -> VoidOutput {
+
+    fn new_scope(&self) -> Self::SCOPE {
         VoidOutput {}
     }
 }

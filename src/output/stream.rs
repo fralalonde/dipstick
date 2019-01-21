@@ -92,7 +92,7 @@ impl<W: Write + Send + Sync + 'static> Buffered for Stream<W> {}
 impl<W: Write + Send + Sync + 'static> Output for Stream<W> {
     type SCOPE = TextScope<W>;
 
-    fn output(&self) -> Self::SCOPE {
+    fn new_scope(&self) -> Self::SCOPE {
         TextScope {
             attributes: self.attributes.clone(),
             entries: Rc::new(RefCell::new(Vec::new())),
@@ -194,7 +194,7 @@ mod test {
 
     #[test]
     fn sink_print() {
-        let c = super::Stream::write_to(io::stdout()).output();
+        let c = super::Stream::write_to(io::stdout()).new_scope();
         let m = c.new_metric("test".into(), InputKind::Marker);
         m.write(33, labels![]);
     }

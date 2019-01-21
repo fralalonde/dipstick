@@ -8,7 +8,7 @@ use dipstick::{Stream, InputScope, QueuedOutput, Input};
 use std::thread;
 
 fn main() {
-    let async_metrics = Stream::to_stdout().queued(100).input();
+    let async_metrics = Stream::to_stdout().queued(100).metrics();
     let counter = async_metrics.counter("counter_a");
     for _ in 0..4 {
         let counter = counter.clone();
