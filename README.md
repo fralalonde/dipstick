@@ -44,7 +44,7 @@ These are all best done by downstream timeseries visualization and monitoring to
 
 Here's a basic aggregating & auto-publish counter metric:
 
-```$rust,skt-run
+```rust
 let bucket = AtomicBucket::new();
 bucket.set_drain(Stream::to_stdout());
 bucket.flush_every(std::time::Duration::from_secs(3));
@@ -54,7 +54,7 @@ counter.count(8);
 
 Persistent apps wanting to declare static metrics will prefer using the `metrics!` macro:
 
-```$rust,skt-run
+```rust
 metrics! { METRICS = "my_app" => {
         pub COUNTER: Counter = "my_counter";
     }
