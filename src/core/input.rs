@@ -189,7 +189,7 @@ impl Gauge {
 }
 
 /// Callback function for gauge observer.
-pub type GaugeCallback = Arc<Fn() -> isize + Send + Sync>;
+pub type GaugeCallback = Arc<Fn() -> MetricValue + Send + Sync>;
 
 /// Gauge and it's observer callback.
 #[derive(Clone)]
