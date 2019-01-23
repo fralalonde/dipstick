@@ -11,7 +11,7 @@ documentation = "https://docs.rs/dipstick"
 homepage = "https://github.com/fralalonde/dipstick"
 repository = "https://github.com/fralalonde/dipstick"
 readme = "README.md"
-keywords = ["metrics", "statsd", "graphite", "timer", "monitoring"]
+keywords = ["metrics", "statsd", "graphite", "timer", "prometheus"]
 license = "MIT/Apache-2.0"
 
 [badges]
