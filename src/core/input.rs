@@ -135,12 +135,12 @@ impl Marker {
 }
 
 /// A counter of absolute observed values (non-negative amounts).
-/// Used to count to count things that can not be undone:
+/// Used to count things that cannot be undone:
 /// - Bytes sent
 /// - Records written
 /// - Apples eaten
 /// For relative (possibly negative) values, the `Level` counter type can be used.
-/// If ag0gregated, minimum and maximum scores will track the collected values, not their sum.
+/// If aggregated, minimum and maximum scores will track the collected values, not their sum.
 #[derive(Debug, Clone)]
 pub struct Counter {
     inner: InputMetric,
@@ -154,7 +154,7 @@ impl Counter {
 }
 
 /// A counter of fluctuating resources accepting positive and negative values.
-/// Can be used as a stateful `Gauge` or a as `Counter` of possibly decreasing amounts.
+/// Can be used as a stateful `Gauge` or as a `Counter` of possibly decreasing amounts.
 /// - Size of messages in a queue
 /// - Strawberries on a conveyor belt
 /// If aggregated, minimum and maximum scores will track the sum of values, not the collected values themselves.

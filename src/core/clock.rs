@@ -26,7 +26,7 @@ impl TimeHandle {
         (duration.as_secs() * 1_000_000) + duration.subsec_micros() as u64
     }
 
-    /// Get the elapsed time in microseconds since TimeHandle was obtained.
+    /// Get the elapsed time in milliseconds since TimeHandle was obtained.
     pub fn elapsed_ms(self) -> MetricValue {
         (self.elapsed_us() / 1000) as isize
     }
