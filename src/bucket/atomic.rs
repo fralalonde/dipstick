@@ -2,7 +2,7 @@
 
 use core::attributes::{Attributes, WithAttributes, Prefixed};
 use core::name::{MetricName};
-use core::input::{InputKind, InputScope, InputMetric};
+use core::input::{GaugeCallback, GaugeObserver, InputKind, InputScope, InputMetric};
 use core::output::{OutputDyn, OutputScope, OutputMetric, Output, output_none};
 use core::clock::TimeHandle;
 use core::{MetricValue, Flush};
@@ -51,6 +51,7 @@ struct InnerAtomicBucket {
         -> Option<(InputKind, MetricName, MetricValue)> + Send + Sync + 'static>>,
     drain: Option<Arc<OutputDyn + Send + Sync + 'static>>,
     publish_metadata: bool,
+    gauge_observers: Vec<GaugeObserver>,
 }
 
 impl fmt::Debug for InnerAtomicBucket {
@@ -67,6 +68,12 @@ lazy_static! {
 impl InnerAtomicBucket {
 
     pub fn flush(&mut self) -> error::Result<()> {
+        for observer in self.gauge_observers.iter() {
+            let callback = observer.callback.as_ref();
+            let value = callback();
+            observer.gauge.value(value);
+        }
+
         let pub_scope = match self.drain {
             Some(ref out) => out.output_dyn(),
             None => DEFAULT_AGGREGATE_OUTPUT.read().unwrap().output_dyn(),
@@ -154,6 +161,7 @@ impl AtomicBucket {
                 drain: None,
                 // TODO add API toggle for metadata publish
                 publish_metadata: false,
+                gauge_observers: Vec::new(),
             }))
         }
     }
@@ -223,6 +231,17 @@ impl InputScope for AtomicBucket {
             .or_insert_with(|| Arc::new(AtomicScores::new(kind)))
             .clone();
         InputMetric::new(move |value, _labels| scores.update(value))
+    }
+
+    /// Observe a gauge value using a callback function.
+    fn observe(&self, name: &str, callback: GaugeCallback) {
+        let gauge = self.gauge(name);
+
+        self.inner
+            .write()
+            .expect("Aggregator")
+            .gauge_observers
+            .push(GaugeObserver { gauge, callback })
     }
 }
 

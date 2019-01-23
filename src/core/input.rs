@@ -63,6 +63,11 @@ pub trait InputScope: Flush {
     fn level(&self, name: &str) -> Level {
         self.new_metric(name.into(), InputKind::Level).into()
     }
+
+    /// Observe a gauge value using a callback function.
+    fn observe(&self, _name: &str, _callback: GaugeCallback) {
+        // TODO: Not yet finished, remove default impl.
+    }
 }
 
 /// A metric is actually a function that knows to write a metric value to a metric output.
@@ -181,6 +186,16 @@ impl Gauge {
     pub fn value<V: ToPrimitive>(&self, value: V) {
         self.inner.write(value.to_isize().unwrap(), labels![])
     }
+}
+
+/// Callback function for gauge observer.
+pub type GaugeCallback = Arc<Fn() -> isize + Send + Sync>;
+
+/// Gauge and it's observer callback.
+#[derive(Clone)]
+pub(crate) struct GaugeObserver {
+    pub(crate) gauge: Gauge,
+    pub(crate) callback: GaugeCallback
 }
 
 /// A timer that sends values to the metrics backend
