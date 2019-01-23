@@ -33,7 +33,7 @@ impl CancelHandle {
 /// # Panics
 ///
 /// Panics if the OS fails to create a thread.
-fn set_schedule<F>(every: Duration, operation: F) -> CancelHandle
+fn set_schedule<F>(thread_name: &str, every: Duration, operation: F) -> CancelHandle
 where
     F: Fn() -> () + Send + 'static,
 {
@@ -41,7 +41,7 @@ where
     let inner_handle = handle.clone();
 
     thread::Builder::new()
-        .name("dipstick-scheduler".to_string())
+        .name(thread_name.to_string())
         .spawn(move || loop {
             thread::sleep(every);
             if inner_handle.is_cancelled() {
@@ -63,7 +63,7 @@ impl<T: InputScope + Send + Sync + Clone + 'static> ScheduleFlush for T {
     /// Start a thread dedicated to flushing this scope at regular intervals.
     fn flush_every(&self, period: Duration) -> CancelHandle {
         let scope = self.clone();
-        set_schedule(period, move || {
+        set_schedule("dipstick-flush", period, move || {
             if let Err(err) = scope.flush() {
                 error!("Could not flush metrics: {}", err);
             }

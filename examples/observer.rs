@@ -23,32 +23,34 @@ use std::io::{self, BufRead, BufReader};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use dipstick::{AtomicBucket, InputScope, Prefixed, ScheduleFlush, Stream};
+use dipstick::{AtomicBucket, InputScope, MetricValue, Prefixed, ScheduleFlush, Stream};
 
 fn main() {
     let start_time = Instant::now();
 
     let metrics = AtomicBucket::new()
         .add_prefix("process");
+    // metrics.set_stats(dipstick::stats_all);
     metrics.set_drain(Stream::to_stderr());
-    metrics.flush_every(Duration::from_secs(1));
+    let flush_handle = metrics.flush_every(Duration::from_secs(1));
 
     metrics.observe("uptime", Arc::new(move || dur2ms(start_time.elapsed())));
     metrics.observe("threads", Arc::new(threads));
 
     println!("Press Enter key to exit");
     io::stdin().read_line(&mut String::new()).expect("Example, ignored");
+    flush_handle.cancel();
 }
 
 /// Helper to convert duration to milliseconds.
-fn dur2ms(duration: Duration) -> isize {
+fn dur2ms(duration: Duration) -> MetricValue {
     // Workaround for error[E0658]: use of unstable library feature 'duration_as_u128' (see issue #50202)
     // duration.as_millis()
-    (duration.as_secs() * 1000 + u64::from(duration.subsec_millis())) as isize
+    (duration.as_secs() * 1000 + u64::from(duration.subsec_millis())) as MetricValue
 }
 
 /// Query number of running threads in this process using Linux's /proc filesystem.
-fn threads() -> isize {
+fn threads() -> MetricValue {
     // Example, this code is not production ready at all
     const SEARCH: &str = "Threads:\t";
     let file = File::open("/proc/self/status").unwrap();
@@ -59,7 +61,7 @@ fn threads() -> isize {
         .filter(|line| line.starts_with(SEARCH))
         .map(|line| {
             let value = &line[SEARCH.len()..];
-            value.parse::<isize>().unwrap()
+            value.parse::<MetricValue>().unwrap()
         })
         .next()
         .unwrap()
