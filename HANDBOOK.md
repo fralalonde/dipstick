@@ -53,17 +53,21 @@ Usable either through the time! macro, the closure form or explicit calls to sta
 While timers internal precision are in nanoseconds, their accuracy depends on platform OS and hardware. 
 Timer's default output format is milliseconds but is scalable up or down.
  
-```$rust,skt-run
-let app_metrics = Stream::to_stdout().metrics();
-let timer =  app_metrics.timer("my_timer");
-time!(timer, {/* slow code here */} );
-timer.time(|| {/* slow code here */} );
-
-let start = timer.start();
-/* slow code here */
-timer.stop(start);
-
-timer.interval_us(123_456);
+```rust
+extern crate dipstick;
+use dipstick::*;
+fn main() {
+    let app_metrics = Stream::to_stdout().metrics();
+    let timer =  app_metrics.timer("my_timer");
+    time!(timer, {/* slow code here */} );
+    timer.time(|| {/* slow code here */} );
+    
+    let start = timer.start();
+    /* slow code here */
+    timer.stop(start);
+    
+    timer.interval_us(123_456);
+}
 ```
 
 ### Level
@@ -84,11 +88,15 @@ Aggregated statistics may also append identifiers to the metric's name.
 Names should exclude characters that can interfere with namespaces, separator and output protocols.
 A good convention is to stick with lowercase alphanumeric identifiers of less than 12 characters.
 
-```$rust,skt-run
-let app_metrics = Stream::to_stdout().metrics();
-let db_metrics = app_metrics.named("database");
-let _db_timer = db_metrics.timer("db_timer");
-let _db_counter = db_metrics.counter("db_counter");
+```rust
+extern crate dipstick;
+use dipstick::*;
+fn main() {   
+    let app_metrics = Stream::to_stdout().metrics();
+    let db_metrics = app_metrics.named("database");
+    let _db_timer = db_metrics.timer("db_timer");
+    let _db_counter = db_metrics.counter("db_counter");
+}
 ```
 
 
@@ -112,13 +120,17 @@ Notes about labels:
   
 Metric inputs are usually setup statically upon application startup.
 
-```$rust,skt-run
+```rust
+#[macro_use]
+extern crate dipstick;
+use dipstick::*;
+
 metrics!("my_app" => {
     COUNTER_A: Counter = "counter_a";
 });
 
 fn main() {
-    Proxy::set_default_target(Stream::to_stdout().metrics());
+    Proxy::default_target(Stream::to_stdout().metrics());
     COUNTER_A.count(11);
 }
 ```
@@ -130,10 +142,15 @@ The static metric definition macro is just `lazy_static!` wrapper.
 If necessary, metrics can also be defined "dynamically". 
 This is more flexible but has a higher runtime cost, which may be alleviated with the optional caching mechanism.
 
-```$rust,skt-run
-let user_name = "john_day";
-let app_metrics = Log::to_log().cached(512).metrics();
-app_metrics.gauge(&format!("gauge_for_user_{}", user_name)).value(44);
+<<<<<<< HEAD
+```rust
+extern crate dipstick;
+use dipstick::*;
+fn main() {
+    let user_name = "john_day";
+    let app_metrics = Log::to_log().cached(512).metrics();
+    app_metrics.gauge(&format!("gauge_for_user_{}", user_name)).value(44);
+}
 ```
     
 Alternatively, you may use `Labels` to output context-dependent metrics. 
@@ -186,10 +203,15 @@ If enabled, buffering is usually a best-effort affair, to safely limit the amoun
 Some outputs such as statsd also have the ability to sample metrics.
 If enabled, sampling is done using pcg32, a fast random algorithm with reasonable entropy.
 
-```$rust,skt-run,no_run
-let _app_metrics = Statsd::send_to("server:8125")?.sampled(Sampling::Random(0.01)).metrics();
+```rust
+extern crate dipstick;
+use dipstick::*;
+fn main() {
+    let _app_metrics = Statsd::send_to("localhost:8125").expect("connected")
+        .sampled(Sampling::Random(0.01))
+        .metrics();
+}
 ```
-
 
 ## Intermediates
 

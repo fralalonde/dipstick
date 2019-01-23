@@ -117,7 +117,7 @@ impl InnerAtomicBucket {
 
             let stats_fn = match self.stats {
                 Some(ref stats_fn) => stats_fn.clone(),
-                None => DEFAULT_AGGREGATE_STATS.read()?.clone(),
+                None => DEFAULT_AGGREGATE_STATS.read().expect("Aggregator").clone(),
             };
 
             for metric in snapshot {

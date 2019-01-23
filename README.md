@@ -44,24 +44,33 @@ These are all best done by downstream timeseries visualization and monitoring to
 
 Here's a basic aggregating & auto-publish counter metric:
 
-```$rust,skt-run
-let bucket = AtomicBucket::new();
-bucket.set_drain(Stream::to_stdout());
-bucket.flush_every(std::time::Duration::from_secs(3));
-let counter = bucket.counter("counter_a");
-counter.count(8);
+```rust
+extern crate dipstick;
+use dipstick::*;
+
+fn main() {
+    let bucket = AtomicBucket::new();
+    bucket.drain(Stream::to_stdout());
+    bucket.flush_every(std::time::Duration::from_secs(3));
+    let counter = bucket.counter("counter_a");
+    counter.count(8);
+}
 ```
 
 Persistent apps wanting to declare static metrics will prefer using the `metrics!` macro:
 
-```$rust,skt-run
+```rust
+#[macro_use]
+extern crate dipstick;
+use dipstick::*;
+
 metrics! { METRICS = "my_app" => {
         pub COUNTER: Counter = "my_counter";
     }
 }
 
 fn main() {
-    METRICS.target(Graphite::send_to("localhost:2003").unwrap().metrics());
+    METRICS.set_target(Graphite::send_to("localhost:2003").expect("connected").metrics());
     COUNTER.count(32);
 }
 ```
