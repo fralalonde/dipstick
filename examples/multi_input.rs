@@ -12,11 +12,11 @@ fn main() {
         .target(Stream::to_stdout())
         .metrics();
 
-    // will output metrics twice, once with "cool.yeah" prefix and once with "cool.ouch" prefix.
+    // will output metrics twice, once with "both.yeah" prefix and once with "both.ouch" prefix.
     let same_type_metrics = MultiInput::new()
         .target(Stream::to_stderr().named("yeah"))
         .target(Stream::to_stderr().named("ouch"))
-        .named("cool")
+        .named("both")
         .metrics();
 
     loop {

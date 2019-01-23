@@ -10,12 +10,14 @@ use core::error;
 use std::sync::{Arc, RwLock};
 
 /// Wrap an input with a metric definition cache.
-/// This can provide performance benefits for metrics that are dynamically defined at runtime.
-/// Caching is useless if all metrics are statically declared.
+/// This can provide performance benefits for metrics that are dynamically defined at runtime on each access.
+/// Caching is useless if all metrics are statically declared
+/// or instantiated programmatically in advance and referenced by a long living variable.
 pub trait CachedInput: Input + Send + Sync + 'static + Sized {
     /// Wrap an input with a metric definition cache.
-    /// This can provide performance benefits for metrics that are dynamically defined at runtime.
-    /// Caching is useless if all metrics are statically declared.
+    /// This can provide performance benefits for metrics that are dynamically defined at runtime on each access.
+    /// Caching is useless if all metrics are statically declared
+    /// or instantiated programmatically in advance and referenced by a long living variable.
     fn cached(self, max_size: usize) -> InputCache {
         InputCache::wrap(self, max_size)
     }

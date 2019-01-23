@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 lazy_static! {
     /// The reference instance identifying an uninitialized metric config.
-    pub static ref VOID_INPUT: Arc<InputDyn + Send + Sync> = Arc::new(Void::metrics());
+    pub static ref VOID_INPUT: Arc<InputDyn + Send + Sync> = Arc::new(Void::new());
 
     /// The reference instance identifying an uninitialized metric scope.
     pub static ref NO_METRIC_SCOPE: Arc<InputScope + Send + Sync> = VOID_INPUT.input_dyn();
@@ -17,9 +17,6 @@ lazy_static! {
 #[derive(Clone)]
 pub struct Void {}
 
-/// Discard metrics output.
-#[derive(Clone)]
-pub struct VoidInput {}
 
 /// Discard metrics output.
 #[derive(Clone)]
@@ -27,7 +24,13 @@ pub struct VoidOutput {}
 
 impl Void {
     /// Void metrics builder.
+    #[deprecated(since="0.7.2", note="Use new()")]
     pub fn metrics() -> Self {
+        Self::new()
+    }
+
+    /// Void metrics builder.
+    pub fn new() -> Self {
         Void {}
     }
 }

@@ -12,12 +12,14 @@ use std::sync::{Arc, RwLock};
 use std::rc::Rc;
 
 /// Wrap an output with a metric definition cache.
-/// This can provide performance benefits for metrics that are dynamically defined at runtime.
-/// Caching is useless if all metrics are statically declared.
+/// This can provide performance benefits for metrics that are dynamically defined at runtime on each access.
+/// Caching is useless if all metrics are statically declared
+/// or instantiated programmatically in advance and referenced by a long living variable.
 pub trait CachedOutput: Output + Send + Sync + 'static + Sized {
     /// Wrap an output with a metric definition cache.
-    /// This can provide performance benefits for metrics that are dynamically defined at runtime.
-    /// Caching is useless if all metrics are statically declared.
+    /// This can provide performance benefits for metrics that are dynamically defined at runtime on each access.
+    /// Caching is useless if all metrics are statically declared
+    /// or instantiated programmatically in advance and referenced by a long living variable.
     fn cached(self, max_size: usize) -> OutputCache {
         OutputCache::wrap(self, max_size)
     }
