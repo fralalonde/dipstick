@@ -64,7 +64,8 @@ pub trait InputScope: Flush {
         self.new_metric(name.into(), InputKind::Level).into()
     }
 
-    /// Observe a gauge value using a callback function.
+    /// Observe a gauge value using a callback function. If multiple callbacks are registered under
+    /// the same conflicting key, only the last one will survive.
     fn observe(&self, _name: &str, _callback: GaugeCallback) {
         // TODO: Not yet finished, remove default impl.
     }
