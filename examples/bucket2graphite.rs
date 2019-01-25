@@ -7,11 +7,13 @@ use std::time::Duration;
 use dipstick::*;
 
 fn main() {
+    // adding a name to the bucket
     let bucket = AtomicBucket::new().named("test");
 
-    // Bucket::set_default_output(to_stdout());
+    // adding two names to Graphite output
+    // metrics will be prefixed with "machine1.application.test"
     bucket.drain(Graphite::send_to("localhost:2003").expect("Socket")
-        .named("machine1").named("application"));
+        .named("machine1").add_name("application"));
 
     bucket.flush_every(Duration::from_secs(3));
 

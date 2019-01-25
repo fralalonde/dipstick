@@ -4,14 +4,13 @@ extern crate dipstick;
 
 use dipstick::*;
 
-use std::io;
 use std::time::Duration;
 use std::thread::sleep;
 
 
 fn main() {
     let bucket = AtomicBucket::new();
-    AtomicBucket::default_drain(Stream::write_to(io::stdout()));
+    AtomicBucket::default_drain(Stream::to_stdout());
 
     let persistent_marker = bucket.marker("persistent");
 

@@ -43,13 +43,7 @@ impl MultiInput {
     }
 
     /// Returns a clone of the dispatch with the new target added to the list.
-    #[deprecated(since="0.7.2", note="Use target()")]
     pub fn add_target<OUT: Input + Send + Sync + 'static>(&self, out: OUT) -> Self {
-        self.target(out)
-    }
-
-    /// Returns a clone of the dispatch with the new target added to the list.
-    pub fn target<OUT: Input + Send + Sync + 'static>(&self, out: OUT) -> Self {
         let mut cloned = self.clone();
         cloned.outputs.push(Arc::new(out));
         cloned
@@ -79,18 +73,12 @@ impl MultiInputScope {
 
     /// Add a target to the dispatch list.
     /// Returns a clone of the original object.
-    #[deprecated(since="0.7.2", note="Use target()")]
     pub fn add_target<IN: InputScope + Send + Sync + 'static>(&self, scope: IN) -> Self {
-        self.target(scope)
-    }
-
-    /// Add a target to the dispatch list.
-    /// Returns a clone of the original object.
-    pub fn target<IN: InputScope + Send + Sync + 'static>(&self, scope: IN) -> Self {
         let mut cloned = self.clone();
         cloned.scopes.push(Arc::new(scope));
         cloned
     }
+
 }
 
 impl InputScope for MultiInputScope {

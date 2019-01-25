@@ -26,9 +26,9 @@ fn main() {
     fifteen_minutes.flush_every(Duration::from_secs(900));
 
     let all_buckets = MultiInputScope::new()
-        .target(one_minute)
-        .target(five_minutes)
-        .target(fifteen_minutes)
+        .add_target(one_minute)
+        .add_target(five_minutes)
+        .add_target(fifteen_minutes)
         .named("machine_name");
 
     // send application metrics to aggregator
