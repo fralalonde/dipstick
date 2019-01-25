@@ -252,7 +252,7 @@ impl InputScope for AtomicBucket {
         InputMetric::new(move |value, _labels| scores.update(value))
     }
 
-    fn observe_helper(&self, name: &str, callback: GaugeCallback) {
+    fn new_observer(&self, name: &str, callback: GaugeCallback) {
         let gauge = self.gauge(name);
 
         write_lock!(self.inner)

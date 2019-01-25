@@ -73,12 +73,12 @@ pub trait InputScope: Flush {
     /// Observe a gauge value using a callback function. If multiple callbacks are registered under
     /// the same conflicting key, only the last one will survive.
     fn observe<F: Fn() -> MetricValue + Send + Sync + 'static>(&self, name: &str, callback: F) where Self: Sized {
-        self.observe_helper(name, Arc::new(callback));
+        self.new_observer(name, Arc::new(callback));
     }
 
     /// Helper method to make use of `observe()` more pleasant. The Arc wrapper is not necessary
     /// in the client code now. Consider this as an internal method.
-    fn observe_helper(&self, _name: &str, _callback: GaugeCallback) {
+    fn new_observer(&self, _name: &str, _callback: GaugeCallback) {
         // TODO: Not yet finished, remove default impl.
     }
 
