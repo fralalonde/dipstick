@@ -232,7 +232,7 @@ impl InputScope for AtomicBucket {
         InputMetric::new(move |value, _labels| scores.update(value))
     }
 
-    fn observe(&self, name: &str, callback: GaugeCallback) {
+    fn observe_helper(&self, name: &str, callback: GaugeCallback) {
         let gauge = self.gauge(name);
 
         self.inner
