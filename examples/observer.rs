@@ -20,7 +20,6 @@ extern crate dipstick;
 
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use dipstick::{AtomicBucket, InputScope, MetricValue, Prefixed, ScheduleFlush, Stream};
@@ -34,8 +33,8 @@ fn main() {
     metrics.set_drain(Stream::to_stderr());
     let flush_handle = metrics.flush_every(Duration::from_secs(1));
 
-    metrics.observe("uptime", Arc::new(move || dur2ms(start_time.elapsed())));
-    metrics.observe("threads", Arc::new(threads));
+    metrics.observe("uptime", move || dur2ms(start_time.elapsed()));
+    metrics.observe("threads", threads);
 
     println!("Press Enter key to exit");
     io::stdin().read_line(&mut String::new()).expect("Example, ignored");
