@@ -129,7 +129,7 @@ impl PrometheusScope {
             warn!("Prometheus Buffer Size Exceeded: {}", BUFFER_FLUSH_THRESHOLD);
             let _ = self.flush_inner(buffer);
         } else {
-            if self.get_buffering().is_none() {
+            if !self.is_buffered() {
                 if let Err(e) = self.flush_inner(buffer) {
                     debug!("Could not send to Prometheus {}", e)
                 }

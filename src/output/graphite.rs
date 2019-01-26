@@ -126,7 +126,7 @@ impl GraphiteScope {
             }
         };
 
-        if self.get_buffering().is_none() {
+        if self.is_buffered() {
             if let Err(e) = self.flush_inner(buffer) {
                 debug!("Could not send to graphite {}", e)
             }

@@ -98,7 +98,7 @@ impl OutputScope for StatsdScope {
 
         let cloned = self.clone();
 
-        if let Some(Sampling::Random(float_rate)) = self.get_sampling() {
+        if let Sampling::Random(float_rate) = self.get_sampling() {
             suffix.push_str(&format!{"|@{}\n", float_rate});
             let int_sampling_rate = pcg32::to_int_rate(float_rate);
             let metric = StatsdMetric { prefix, suffix, scale };
@@ -154,7 +154,7 @@ impl StatsdScope {
             buffer.push_str(&metric.suffix);
         }
 
-        if self.get_buffering().is_none() {
+        if !self.is_buffered() {
             if let Err(e) = self.flush_inner(buffer) {
                 debug!("Could not send to statsd {}", e)
             }

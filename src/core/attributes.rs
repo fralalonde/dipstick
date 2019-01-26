@@ -1,11 +1,16 @@
 use std::sync::Arc;
 use std::collections::{HashMap};
+use std::default::Default;
 
 use core::name::{NameParts, MetricName};
 
 /// The actual distribution (random, fixed-cycled, etc) depends on selected sampling method.
 #[derive(Debug, Clone, Copy)]
 pub enum Sampling {
+    /// Record every collected value.
+    /// Effectively disable sampling.
+    Full,
+
     /// Floating point sampling rate
     /// - 1.0+ records everything
     /// - 0.5 records one of two values
@@ -13,11 +18,20 @@ pub enum Sampling {
     Random(f64)
 }
 
+impl Default for Sampling {
+    fn default() -> Sampling {
+        Sampling::Full
+    }
+}
+
 /// A metrics buffering strategy.
 /// All strategies other than `Unbuffered` are applied as a best-effort, meaning that the buffer
 /// may be flushed at any moment before reaching the limit, for any or no reason in particular.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum Buffering {
+    /// Do not buffer output.
+    Unbuffered,
+
     /// A buffer of maximum specified size is used.
     BufferSize(usize),
 
@@ -25,13 +39,19 @@ pub enum Buffering {
     Unlimited,
 }
 
+impl Default for Buffering {
+    fn default() -> Buffering {
+        Buffering::Unbuffered
+    }
+}
+
 /// Attributes common to metric components.
 /// Not all attributes used by all components.
 #[derive(Debug, Clone, Default)]
 pub struct Attributes {
     naming: NameParts,
-    sampling: Option<Sampling>,
-    buffering: Option<Buffering>,
+    sampling: Sampling,
+    buffering: Buffering,
 }
 
 /// This trait should not be exposed outside the crate.
@@ -125,11 +145,11 @@ impl<T: WithAttributes> Prefixed for T {
 pub trait Sampled: WithAttributes {
     /// Perform random sampling of values according to the specified rate.
     fn sampled(&self, sampling: Sampling) -> Self {
-        self.with_attributes(|new_attr| new_attr.sampling = Some(sampling))
+        self.with_attributes(|new_attr| new_attr.sampling = sampling)
     }
 
     /// Get the sampling strategy for this component, if any.
-    fn get_sampling(&self) -> Option<Sampling> {
+    fn get_sampling(&self) -> Sampling {
         self.get_attributes().sampling
     }
 }
@@ -140,11 +160,17 @@ pub trait Sampled: WithAttributes {
 pub trait Buffered: WithAttributes {
     /// Return a clone with the specified buffering set.
     fn buffered(&self, buffering: Buffering) -> Self {
-        self.with_attributes(|new_attr| new_attr.buffering = Some(buffering))
+        self.with_attributes(|new_attr| new_attr.buffering = buffering)
     }
 
-    /// Return the buffering.
-    fn get_buffering(&self) -> Option<Buffering> {
+    /// Return the current buffering strategy.
+    fn get_buffering(&self) -> Buffering {
         self.get_attributes().buffering
+    }
+
+    /// Returns false if the current buffering strategy is `Buffering::Unbuffered`.
+    /// Returns true otherwise.
+    fn is_buffered(&self) -> bool {
+        !(self.get_attributes().buffering == Buffering::Unbuffered)
     }
 }

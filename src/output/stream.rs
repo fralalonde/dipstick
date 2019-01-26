@@ -133,7 +133,7 @@ impl<W: Write + Send + Sync + 'static> OutputScope for TextScope<W> {
 
         let entries = self.entries.clone();
 
-        if let Some(_buffering) = self.get_buffering() {
+        if self.is_buffered() {
             OutputMetric::new(move |value, labels| {
                 let mut buffer = Vec::with_capacity(32);
                 match template.print(&mut buffer, value, |key| labels.lookup(key)) {

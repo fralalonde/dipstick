@@ -101,7 +101,7 @@ impl InputScope for LogScope {
         let template = self.log.format.template(&name, kind);
         let entries = self.entries.clone();
 
-        if let Some(_buffering) = self.get_buffering() {
+        if self.is_buffered() {
             // buffered
             InputMetric::new(move |value, labels| {
                 let mut buffer = Vec::with_capacity(32);

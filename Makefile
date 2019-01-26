@@ -25,7 +25,7 @@ examples:
 	$(CARGO_CMD) build --examples
 
 bench:
-	$(CARGO_CMD) +nightly bench --features "bench"
+	$(CARGO_CMD) +nightly bench --features="bench"
 
 lint:
 	$(CARGO_CMD) clippy
