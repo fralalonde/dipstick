@@ -44,9 +44,9 @@ impl Drop for ProxyMetric {
     }
 }
 
-/// A dynamic proxy point for app and lib metrics.
+/// A dynamic proxy for app and lib metrics.
 /// Decouples metrics definition from backend configuration.
-/// Allows defining metrics before a concrete type has been selected.
+/// Allows defining metrics before a concrete type is configured.
 /// Allows replacing metrics backend on the fly at runtime.
 #[derive(Clone, Debug)]
 pub struct Proxy {
@@ -171,24 +171,36 @@ impl Proxy {
         }
     }
 
-    /// Replace target for this proxy and it's children.
+    /// Replace target for this proxy and its children.
+    #[deprecated(since="0.7.2", note="Use target()")]
     pub fn set_target<T: InputScope + Send + Sync + 'static>(&self, target: T) {
+        self.target(target)
+    }
+
+    /// Replace target for this proxy and its children.
+    pub fn target<T: InputScope + Send + Sync + 'static>(&self, target: T) {
         let mut inner = self.inner.write().expect("Dispatch Lock");
         inner.set_target(self.get_prefixes(), Arc::new(target));
     }
 
-    /// Replace target for this proxy and it's children.
+    /// Replace target for this proxy and its children.
     pub fn unset_target(&self) {
         let mut inner = self.inner.write().expect("Dispatch Lock");
         inner.unset_target(self.get_prefixes());
     }
 
-    /// Replace target for this proxy and it's children.
+    /// Install a new default target for all proxies.
+    #[deprecated(since="0.7.2", note="Use default_target()")]
     pub fn set_default_target<T: InputScope + Send + Sync + 'static>(target: T) {
-        ROOT_PROXY.set_target(target)
+        Self::default_target(target)
     }
 
-    /// Replace target for this proxy and it's children.
+    /// Install a new default target for all proxies.
+    pub fn default_target<T: InputScope + Send + Sync + 'static>(target: T) {
+        ROOT_PROXY.target(target)
+    }
+
+    /// Revert to initial state any installed default target for all proxies.
     pub fn unset_default_target(&self) {
         ROOT_PROXY.unset_target()
     }
@@ -197,7 +209,7 @@ impl Proxy {
 
 impl<S: AsRef<str>> From<S> for Proxy {
     fn from(name: S) -> Proxy {
-        Proxy::new().add_prefix(name.as_ref())
+        Proxy::new().named(name.as_ref())
     }
 }
 
@@ -253,7 +265,7 @@ mod bench {
 
     #[bench]
     fn proxy_marker_to_aggregate(b: &mut test::Bencher) {
-        ROOT_PROXY.set_target(AtomicBucket::new());
+        ROOT_PROXY.target(AtomicBucket::new());
         let metric = ROOT_PROXY.marker("event_a");
         b.iter(|| test::black_box(metric.mark()));
     }

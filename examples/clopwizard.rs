@@ -29,12 +29,12 @@ fn main() {
         .add_target(one_minute)
         .add_target(five_minutes)
         .add_target(fifteen_minutes)
-        .add_prefix("machine_name");
+        .named("machine_name");
 
     // send application metrics to aggregator
-    Proxy::default().set_target(all_buckets);
-    AtomicBucket::set_default_drain(Stream::to_stdout());
-    AtomicBucket::set_default_stats(stats_all);
+    Proxy::default().target(all_buckets);
+    AtomicBucket::default_drain(Stream::to_stdout());
+    AtomicBucket::default_stats(stats_all);
 
     loop {
         COUNTER.count(17);

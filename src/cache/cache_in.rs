@@ -1,4 +1,4 @@
-//! Cache metric definitions.
+//! Metric input scope caching.
 
 use core::Flush;
 use core::input::{InputKind, Input, InputScope, InputMetric, InputDyn};
@@ -9,11 +9,15 @@ use core::error;
 
 use std::sync::{Arc, RwLock};
 
-/// Wrap an output with a metric definition cache.
-/// This is useless if all metrics are statically declared but can provide performance
-/// benefits if some metrics are dynamically defined at runtime.
+/// Wrap an input with a metric definition cache.
+/// This can provide performance benefits for metrics that are dynamically defined at runtime on each access.
+/// Caching is useless if all metrics are statically declared
+/// or instantiated programmatically in advance and referenced by a long living variable.
 pub trait CachedInput: Input + Send + Sync + 'static + Sized {
-    /// Wrap this output with an asynchronous dispatch queue of specified length.
+    /// Wrap an input with a metric definition cache.
+    /// This can provide performance benefits for metrics that are dynamically defined at runtime on each access.
+    /// Caching is useless if all metrics are statically declared
+    /// or instantiated programmatically in advance and referenced by a long living variable.
     fn cached(self, max_size: usize) -> InputCache {
         InputCache::wrap(self, max_size)
     }
@@ -29,7 +33,7 @@ pub struct InputCache {
 
 impl InputCache {
     /// Wrap scopes with an asynchronous metric write & flush dispatcher.
-    pub fn wrap<OUT: Input + Send + Sync + 'static>(target: OUT, max_size: usize) -> InputCache {
+    fn wrap<OUT: Input + Send + Sync + 'static>(target: OUT, max_size: usize) -> InputCache {
         InputCache {
             attributes: Attributes::default(),
             target: Arc::new(target),
@@ -46,7 +50,7 @@ impl WithAttributes for InputCache {
 impl Input for InputCache {
     type SCOPE = InputScopeCache;
 
-    fn input(&self) -> Self::SCOPE {
+    fn metrics(&self) -> Self::SCOPE {
         let target = self.target.input_dyn();
         InputScopeCache {
             attributes: self.attributes.clone(),

@@ -40,8 +40,14 @@ pub trait Output: Send + Sync + 'static + OutputDyn {
     /// The type of Scope returned byt this output.
     type SCOPE: OutputScope;
 
-    /// Open a new scope from this output.
-    fn output(&self) -> Self::SCOPE;
+    /// Open a new scope for this output.
+    fn new_scope(&self) -> Self::SCOPE;
+
+    /// Open a new scope for this output.
+    #[deprecated(since="0.7.2", note="Use new_scope()")]
+    fn output(&self) -> Self::SCOPE {
+        self.new_scope()
+    }
 }
 
 /// A function trait that opens a new metric capture scope.
@@ -53,7 +59,7 @@ pub trait OutputDyn {
 /// Blanket impl of dyn output trait
 impl<T: Output + Send + Sync + 'static> OutputDyn for T {
     fn output_dyn(&self) -> Rc<OutputScope + 'static> {
-        Rc::new(self.output())
+        Rc::new(self.new_scope())
     }
 }
 

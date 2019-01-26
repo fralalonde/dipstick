@@ -50,7 +50,7 @@ use dipstick::*;
 
 fn main() {
     let bucket = AtomicBucket::new();
-    bucket.set_drain(Stream::to_stdout());
+    bucket.drain(Stream::to_stdout());
     bucket.flush_every(std::time::Duration::from_secs(3));
     let counter = bucket.counter("counter_a");
     counter.count(8);
@@ -70,7 +70,7 @@ metrics! { METRICS = "my_app" => {
 }
 
 fn main() {
-    METRICS.set_target(Graphite::send_to("localhost:2003").expect("connected").input());
+    METRICS.set_target(Graphite::send_to("localhost:2003").expect("connected").metrics());
     COUNTER.count(32);
 }
 ```

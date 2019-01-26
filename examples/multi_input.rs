@@ -7,17 +7,17 @@ use std::time::Duration;
 
 fn main() {
     // will output metrics to graphite and to stdout
-    let different_type_metrics = MultiInput::input()
+    let different_type_metrics = MultiInput::new()
         .add_target(Graphite::send_to("localhost:2003").expect("Connecting"))
         .add_target(Stream::to_stdout())
-        .input();
+        .metrics();
 
-    // will output metrics twice, once with "cool.yeah" prefix and once with "cool.ouch" prefix.
-    let same_type_metrics = MultiInput::input()
-        .add_target(Stream::to_stderr().add_prefix("yeah"))
-        .add_target(Stream::to_stderr().add_prefix("ouch"))
-        .add_prefix("cool")
-        .input();
+    // will output metrics twice, once with "both.yeah" prefix and once with "both.ouch" prefix.
+    let same_type_metrics = MultiInput::new()
+        .add_target(Stream::to_stderr().named("yeah"))
+        .add_target(Stream::to_stderr().named("ouch"))
+        .named("both")
+        .metrics();
 
     loop {
         different_type_metrics.counter("counter_a").count(123);

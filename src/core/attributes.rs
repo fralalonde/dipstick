@@ -56,8 +56,19 @@ pub trait Prefixed {
     /// Returns namespace of component.
     fn get_prefixes(&self) -> &NameParts;
 
-    /// Extend the namespace metrics will be defined in.
+    /// Append a name to the existing names.
+    /// Return a clone of the component with the updated names.
+    #[deprecated(since="0.7.2", note="Use add_name()")]
     fn add_prefix<S: Into<String>>(&self, name: S) -> Self;
+
+    /// Append a name to the existing names.
+    /// Return a clone of the component with the updated names.
+    fn add_name<S: Into<String>>(&self, name: S) -> Self;
+
+    /// Replace any existing names with a single name.
+    /// Return a clone of the component with the new name.
+    /// If multiple names are required, `add_name` may also be used.
+    fn named<S: Into<String>>(&self, name: S) -> Self;
 
     /// Append any name parts to the name's namespace.
     fn prefix_append<S: Into<MetricName>>(&self, name: S) -> MetricName {
@@ -87,12 +98,27 @@ impl<T: WithAttributes> Prefixed for T {
         &self.get_attributes().naming
     }
 
-    /// Adds a name part to any existing naming.
-    /// Return a clone of the component with the updated naming.
-    fn add_prefix<S: Into<String>>(&self, name: S) -> Self {
+    /// Replace any existing names with a single name.
+    /// Return a clone of the component with the new name.
+    /// If multiple names are required, `add_name` may also be used.
+    fn named<S: Into<String>>(&self, name: S) -> Self {
+        let parts = NameParts::from(name);
+        self.with_attributes(|new_attr| new_attr.naming = parts.clone())
+    }
+
+    /// Append a name to the existing names.
+    /// Return a clone of the component with the updated names.
+    fn add_name<S: Into<String>>(&self, name: S) -> Self {
         let name = name.into();
         self.with_attributes(|new_attr| new_attr.naming.push_back(name.clone()))
     }
+
+    /// Append a name to the existing names.
+    /// Return a clone of the component with the updated names.
+    fn add_prefix<S: Into<String>>(&self, name: S) -> Self {
+        self.add_name(name)
+    }
+
 }
 
 /// Apply statistical sampling to collected metrics data.

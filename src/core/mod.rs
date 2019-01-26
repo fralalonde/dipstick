@@ -30,7 +30,7 @@ pub mod test {
 
     #[test]
     fn test_to_void() {
-        let c = void::Void::metrics().input();
+        let c = void::Void::new().metrics();
         let m = c.new_metric("test".into(), input::InputKind::Marker);
         m.write(33, labels![]);
     }

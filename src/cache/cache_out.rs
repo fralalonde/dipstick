@@ -1,4 +1,4 @@
-//! Cache metric definitions.
+//! Metric output scope caching.
 
 use core::Flush;
 use core::attributes::{Attributes, WithAttributes, Prefixed};
@@ -12,10 +12,14 @@ use std::sync::{Arc, RwLock};
 use std::rc::Rc;
 
 /// Wrap an output with a metric definition cache.
-/// This is useless if all metrics are statically declared but can provide performance
-/// benefits if some metrics are dynamically defined at runtime.
+/// This can provide performance benefits for metrics that are dynamically defined at runtime on each access.
+/// Caching is useless if all metrics are statically declared
+/// or instantiated programmatically in advance and referenced by a long living variable.
 pub trait CachedOutput: Output + Send + Sync + 'static + Sized {
-    /// Wrap this output with an asynchronous dispatch queue of specified length.
+    /// Wrap an output with a metric definition cache.
+    /// This can provide performance benefits for metrics that are dynamically defined at runtime on each access.
+    /// Caching is useless if all metrics are statically declared
+    /// or instantiated programmatically in advance and referenced by a long living variable.
     fn cached(self, max_size: usize) -> OutputCache {
         OutputCache::wrap(self, max_size)
     }
@@ -31,7 +35,7 @@ pub struct OutputCache {
 
 impl OutputCache {
     /// Wrap scopes with an asynchronous metric write & flush dispatcher.
-    pub fn wrap<OUT: Output + Send + Sync + 'static>(target: OUT, max_size: usize) -> OutputCache {
+    fn wrap<OUT: Output + Send + Sync + 'static>(target: OUT, max_size: usize) -> OutputCache {
         OutputCache {
             attributes: Attributes::default(),
             target: Arc::new(target),
@@ -48,7 +52,7 @@ impl WithAttributes for OutputCache {
 impl Output for OutputCache {
     type SCOPE = OutputScopeCache;
 
-    fn output(&self) -> Self::SCOPE {
+    fn new_scope(&self) -> Self::SCOPE {
         let target = self.target.output_dyn();
         OutputScopeCache {
             attributes: self.attributes.clone(),

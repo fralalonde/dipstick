@@ -57,7 +57,7 @@ Timer's default output format is milliseconds but is scalable up or down.
 extern crate dipstick;
 use dipstick::*;
 fn main() {
-    let app_metrics = Stream::to_stdout().input();
+    let app_metrics = Stream::to_stdout().metrics();
     let timer =  app_metrics.timer("my_timer");
     time!(timer, {/* slow code here */} );
     timer.time(|| {/* slow code here */} );
@@ -92,8 +92,8 @@ A good convention is to stick with lowercase alphanumeric identifiers of less th
 extern crate dipstick;
 use dipstick::*;
 fn main() {   
-    let app_metrics = Stream::to_stdout().input();
-    let db_metrics = app_metrics.add_prefix("database");
+    let app_metrics = Stream::to_stdout().metrics();
+    let db_metrics = app_metrics.named("database");
     let _db_timer = db_metrics.timer("db_timer");
     let _db_counter = db_metrics.counter("db_counter");
 }
@@ -130,7 +130,7 @@ metrics!("my_app" => {
 });
 
 fn main() {
-    Proxy::set_default_target(Stream::to_stdout().input());
+    Proxy::default_target(Stream::to_stdout().metrics());
     COUNTER_A.count(11);
 }
 ```
@@ -142,12 +142,13 @@ The static metric definition macro is just `lazy_static!` wrapper.
 If necessary, metrics can also be defined "dynamically". 
 This is more flexible but has a higher runtime cost, which may be alleviated with the optional caching mechanism.
 
+<<<<<<< HEAD
 ```rust
 extern crate dipstick;
 use dipstick::*;
 fn main() {
     let user_name = "john_day";
-    let app_metrics = Log::to_log().cached(512).input();
+    let app_metrics = Log::to_log().cached(512).metrics();
     app_metrics.gauge(&format!("gauge_for_user_{}", user_name)).value(44);
 }
 ```
@@ -208,7 +209,7 @@ use dipstick::*;
 fn main() {
     let _app_metrics = Statsd::send_to("localhost:8125").expect("connected")
         .sampled(Sampling::Random(0.01))
-        .input();
+        .metrics();
 }
 ```
 

@@ -83,7 +83,7 @@ impl Input for InputQueue {
     type SCOPE = InputQueueScope;
 
     /// Wrap new scopes with an asynchronous metric write & flush dispatcher.
-    fn input(&self) -> Self::SCOPE {
+    fn metrics(&self) -> Self::SCOPE {
         let target_scope = self.target.input_dyn();
         InputQueueScope {
             attributes: self.attributes.clone(),

@@ -32,7 +32,7 @@ pub struct Graphite {
 impl Output for Graphite {
     type SCOPE = GraphiteScope;
 
-    fn output(&self) -> Self::SCOPE {
+    fn new_scope(&self) -> Self::SCOPE {
         GraphiteScope {
             attributes: self.attributes.clone(),
             buffer: Rc::new(RefCell::new(String::new())),
@@ -194,7 +194,7 @@ mod bench {
 
     #[bench]
     pub fn immediate_graphite(b: &mut test::Bencher) {
-        let sd = Graphite::send_to("localhost:2003").unwrap().input();
+        let sd = Graphite::send_to("localhost:2003").unwrap().metrics();
         let timer = sd.new_metric("timer".into(), InputKind::Timer);
 
         b.iter(|| test::black_box(timer.write(2000, labels![])));
@@ -203,7 +203,7 @@ mod bench {
     #[bench]
     pub fn buffering_graphite(b: &mut test::Bencher) {
         let sd = Graphite::send_to("localhost:2003").unwrap()
-            .buffered(Buffering::BufferSize(65465)).input();
+            .buffered(Buffering::BufferSize(65465)).metrics();
         let timer = sd.new_metric("timer".into(), InputKind::Timer);
 
         b.iter(|| test::black_box(timer.write(2000, labels![])));
