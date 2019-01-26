@@ -60,7 +60,6 @@ fn main() {
 Persistent apps wanting to declare static metrics will prefer using the `metrics!` macro:
 
 ```rust
-#[macro_use]
 extern crate dipstick;
 use dipstick::*;
 
@@ -70,7 +69,7 @@ metrics! { METRICS = "my_app" => {
 }
 
 fn main() {
-    METRICS.set_target(Graphite::send_to("localhost:2003").expect("connected").metrics());
+    METRICS.target(Graphite::send_to("localhost:2003").expect("connected").metrics());
     COUNTER.count(32);
 }
 ```

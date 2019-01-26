@@ -1,7 +1,6 @@
 //! A dropwizard-like configuration using three buckets
 //! aggregating one, five and fifteen minutes of data.
 
-#[macro_use]
 extern crate dipstick;
 
 use std::time::Duration;

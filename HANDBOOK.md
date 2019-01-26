@@ -121,7 +121,6 @@ Notes about labels:
 Metric inputs are usually setup statically upon application startup.
 
 ```rust
-#[macro_use]
 extern crate dipstick;
 use dipstick::*;
 
