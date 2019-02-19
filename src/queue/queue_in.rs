@@ -12,8 +12,12 @@ use core::error;
 use core::label::Labels;
 
 use std::sync::Arc;
+#[cfg(not(feature="crossbeam-channel"))]
 use std::sync::mpsc;
 use std::thread;
+
+#[cfg(feature="crossbeam-channel")]
+use crossbeam_channel as crossbeam;
 
 /// Wrap this output behind an asynchronous metrics dispatch queue.
 /// This is not strictly required for multi threading since the provided scopes
@@ -28,8 +32,38 @@ pub trait QueuedInput: Input + Send + Sync + 'static + Sized {
 /// # Panics
 ///
 /// Panics if the OS fails to create a thread.
+#[cfg(not(feature="crossbeam-channel"))]
 fn new_async_channel(length: usize) -> Arc<mpsc::SyncSender<InputQueueCmd>> {
     let (sender, receiver) = mpsc::sync_channel::<InputQueueCmd>(length);
+
+    thread::Builder::new()
+        .name("dipstick-queue-in".to_string())
+        .spawn(move || {
+            let mut done = false;
+            while !done {
+                match receiver.recv() {
+                    Ok(InputQueueCmd::Write(metric, value, labels)) => metric.write(value, labels),
+                    Ok(InputQueueCmd::Flush(scope)) => if let Err(e) = scope.flush() {
+                        debug!("Could not asynchronously flush metrics: {}", e);
+                    },
+                    Err(e) => {
+                        debug!("Async metrics receive loop terminated: {}", e);
+                        // cannot break from within match, use safety pin instead
+                        done = true
+                    }
+                }
+            }
+        })
+        .unwrap(); // TODO: Panic, change API to return Result?
+    Arc::new(sender)
+}
+
+/// # Panics
+///
+/// Panics if the OS fails to create a thread.
+#[cfg(feature="crossbeam-channel")]
+fn new_async_channel(length: usize) -> Arc<crossbeam::Sender<InputQueueCmd>> {
+    let (sender, receiver) = crossbeam::bounded::<InputQueueCmd>(length);
 
     thread::Builder::new()
         .name("dipstick-queue-in".to_string())
@@ -58,7 +92,10 @@ fn new_async_channel(length: usize) -> Arc<mpsc::SyncSender<InputQueueCmd>> {
 pub struct InputQueue {
     attributes: Attributes,
     target: Arc<InputDyn + Send + Sync + 'static>,
+    #[cfg(not(feature="crossbeam-channel"))]
     sender: Arc<mpsc::SyncSender<InputQueueCmd>>,
+    #[cfg(feature="crossbeam-channel")]
+    sender: Arc<crossbeam::Sender<InputQueueCmd>>,
 }
 
 impl InputQueue {
@@ -107,7 +144,10 @@ pub enum InputQueueCmd {
 #[derive(Clone)]
 pub struct InputQueueScope {
     attributes: Attributes,
+    #[cfg(not(feature="crossbeam-channel"))]
     sender: Arc<mpsc::SyncSender<InputQueueCmd>>,
+    #[cfg(feature="crossbeam-channel")]
+    sender: Arc<crossbeam::Sender<InputQueueCmd>>,
     target: Arc<InputScope + Send + Sync + 'static>,
 }
 

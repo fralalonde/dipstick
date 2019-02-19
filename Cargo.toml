@@ -23,6 +23,8 @@ lazy_static = "1"
 atomic_refcell = "0.1"
 skeptic = { version = "0.13", optional = true }
 num = { version = "0.2", default-features = false }
+crossbeam-channel = { version = "0.3", optional = true }
+parking_lot = { version = "0.7", optional = true }
 
 # FIXME required only for random seed for sampling
 time = "0.1"
@@ -36,11 +38,11 @@ tiny_http = { version = "0.6", optional = true }
 skeptic = { version = "0.13", optional = true }
 
 [features]
-default = [ "self_metrics" ]
+#default = [ "self_metrics", "crossbeam-channel" ]
+default = [ "self_metrics", "crossbeam-channel", "parking_lot" ]
 bench = []
 self_metrics = []
 tokio = []
-#prometheus = []
 
 [package.metadata.release]
 #sign-commit = true
