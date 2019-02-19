@@ -8,7 +8,14 @@ use core::input::InputKind;
 use cache::lru_cache as lru;
 use core::error;
 
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc};
+
+#[cfg(not(feature="parking_lot"))]
+use std::sync::{RwLock};
+
+#[cfg(feature="parking_lot")]
+use parking_lot::{RwLock};
+
 use std::rc::Rc;
 
 /// Wrap an output with a metric definition cache.
@@ -79,13 +86,12 @@ impl OutputScope for OutputScopeCache {
     fn new_metric(&self, name: MetricName, kind: InputKind) -> OutputMetric {
         let name = self.prefix_append(name);
         let lookup = {
-            self.cache.write().expect("Cache Lock").get(&name).cloned()
+            write_lock!(self.cache).get(&name).cloned()
         };
         lookup.unwrap_or_else(|| {
-            let new_metric: OutputMetric = self.target.new_metric(name.clone(), kind);
+            let new_metric = self.target.new_metric(name.clone(), kind);
             // FIXME (perf) having to take another write lock for a cache miss
-            let mut cache_miss = self.cache.write().expect("Cache Lock");
-            cache_miss.insert(name, new_metric.clone());
+            write_lock!(self.cache).insert(name, new_metric.clone());
             new_metric
         })
     }

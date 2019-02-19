@@ -15,7 +15,14 @@ use std::isize;
 use std::collections::BTreeMap;
 use std::sync::atomic::AtomicIsize;
 use std::sync::atomic::Ordering::*;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc};
+
+#[cfg(not(feature="parking_lot"))]
+use std::sync::{RwLock};
+
+#[cfg(feature="parking_lot")]
+use parking_lot::{RwLock};
+
 use std::fmt;
 use std::borrow::Borrow;
 
@@ -69,7 +76,7 @@ impl InnerAtomicBucket {
     pub fn flush(&mut self) -> error::Result<()> {
         let pub_scope = match self.drain {
             Some(ref out) => out.output_dyn(),
-            None => DEFAULT_AGGREGATE_OUTPUT.read().unwrap().output_dyn(),
+            None => read_lock!(DEFAULT_AGGREGATE_OUTPUT).output_dyn(),
         };
 
         self.flush_to(pub_scope.borrow())?;
@@ -117,7 +124,7 @@ impl InnerAtomicBucket {
 
             let stats_fn = match self.stats {
                 Some(ref stats_fn) => stats_fn.clone(),
-                None => DEFAULT_AGGREGATE_STATS.read().expect("Aggregator").clone(),
+                None => read_lock!(DEFAULT_AGGREGATE_STATS).clone(),
             };
 
             for metric in snapshot {
@@ -163,22 +170,22 @@ impl AtomicBucket {
         where
             F: Fn(InputKind, MetricName, ScoreType) -> Option<(InputKind, MetricName, MetricValue)> + Send + Sync + 'static
     {
-        *DEFAULT_AGGREGATE_STATS.write().unwrap() = Arc::new(func)
+        *write_lock!(DEFAULT_AGGREGATE_STATS) = Arc::new(func)
     }
 
     /// Revert the default aggregated metrics statistics generator to the default `stats_summary`.
     pub fn unset_default_stats() {
-        *DEFAULT_AGGREGATE_STATS.write().unwrap() = Arc::new(initial_stats())
+        *write_lock!(DEFAULT_AGGREGATE_STATS) = Arc::new(initial_stats())
     }
 
     /// Set the default bucket aggregated metrics flush output.
     pub fn default_drain(default_config: impl Output + Send + Sync + 'static) {
-        *DEFAULT_AGGREGATE_OUTPUT.write().unwrap() = Arc::new(default_config);
+        *write_lock!(DEFAULT_AGGREGATE_OUTPUT) = Arc::new(default_config);
     }
 
     /// Revert the default bucket aggregated metrics flush output.
     pub fn unset_default_drain() {
-        *DEFAULT_AGGREGATE_OUTPUT.write().unwrap() = initial_drain()
+        *write_lock!(DEFAULT_AGGREGATE_OUTPUT) = initial_drain()
     }
 
     /// Set this bucket's statistics generator.
@@ -195,12 +202,12 @@ impl AtomicBucket {
         where
             F: Fn(InputKind, MetricName, ScoreType) -> Option<(InputKind, MetricName, MetricValue)> + Send + Sync + 'static
     {
-        self.inner.write().expect("Aggregator").stats = Some(Arc::new(func))
+        write_lock!(self.inner).stats = Some(Arc::new(func))
     }
 
     /// Revert this bucket's statistics generator to the default stats.
     pub fn unset_stats<F>(&self) {
-        self.inner.write().expect("Aggregator").stats = None
+        write_lock!(self.inner).stats = None
     }
 
     /// Set this bucket's aggregated metrics flush output.
@@ -211,17 +218,17 @@ impl AtomicBucket {
 
     /// Set this bucket's aggregated metrics flush output.
     pub fn drain(&self, new_drain: impl Output + Send + Sync + 'static) {
-        self.inner.write().expect("Aggregator").drain = Some(Arc::new(new_drain))
+        write_lock!(self.inner).drain = Some(Arc::new(new_drain))
     }
 
     /// Revert this bucket's flush target to the default output.
     pub fn unset_drain(&self) {
-        self.inner.write().expect("Aggregator").drain = None
+        write_lock!(self.inner).drain = None
     }
 
     /// Immediately flush the bucket's metrics to the specified scope and stats.
     pub fn flush_to(&self, publish_scope: &OutputScope) -> error::Result<()> {
-        let mut inner = self.inner.write().expect("Aggregator");
+        let mut inner = write_lock!(self.inner);
         inner.flush_to(publish_scope)
     }
 
@@ -230,9 +237,7 @@ impl AtomicBucket {
 impl InputScope for AtomicBucket {
     /// Lookup or create scores for the requested metric.
     fn new_metric(&self, name: MetricName, kind: InputKind) -> InputMetric {
-        let scores = self.inner
-            .write()
-            .expect("Aggregator")
+        let scores = write_lock!(self.inner)
             .metrics
             .entry(self.prefix_append(name))
             .or_insert_with(|| Arc::new(AtomicScores::new(kind)))
@@ -245,7 +250,7 @@ impl Flush for AtomicBucket {
     /// Collect and reset aggregated data.
     /// Publish statistics
     fn flush(&self) -> error::Result<()> {
-        let mut inner = self.inner.write().expect("Aggregator");
+        let mut inner = write_lock!(self.inner);
         inner.flush()
     }
 }

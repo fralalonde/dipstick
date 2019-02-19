@@ -19,11 +19,37 @@ extern crate num;
 // FIXME required only for pcg32 seed (for sampling)
 extern crate time;
 
+#[cfg(feature="crossbeam-channel")]
+extern crate crossbeam_channel;
+
+#[cfg(feature="parking_lot")]
+extern crate parking_lot;
+
 //extern crate tiny_http;
 
 #[macro_use]
 mod macros;
 pub use macros::*;
+
+#[cfg(not(feature="parking_lot"))]
+macro_rules! write_lock {
+    ($WUT:expr) => { $WUT.write().unwrap() };
+}
+
+#[cfg(feature="parking_lot")]
+macro_rules! write_lock {
+    ($WUT:expr) => { $WUT.write() };
+}
+
+#[cfg(not(feature="parking_lot"))]
+macro_rules! read_lock {
+    ($WUT:expr) => { $WUT.read().unwrap() };
+}
+
+#[cfg(feature="parking_lot")]
+macro_rules! read_lock {
+    ($WUT:expr) => { $WUT.read() };
+}
 
 mod core;
 pub use core::{Flush, MetricValue};

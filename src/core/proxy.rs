@@ -8,8 +8,14 @@ use core::void::VOID_INPUT;
 use core::error;
 
 use std::collections::{HashMap, BTreeMap};
-use std::sync::{Arc, RwLock, Weak};
+use std::sync::{Arc, Weak};
 use std::fmt;
+
+#[cfg(not(feature="parking_lot"))]
+use std::sync::{RwLock};
+
+#[cfg(feature="parking_lot")]
+use parking_lot::{RwLock};
 
 use atomic_refcell::*;
 
@@ -21,7 +27,7 @@ lazy_static! {
     static ref ROOT_PROXY: Proxy = Proxy::new();
 }
 
-/// A dynamically proxyed metric.
+/// A dynamically proxied metric.
 #[derive(Debug)]
 struct ProxyMetric {
     // basic info for this metric, needed to recreate new corresponding trait object if target changes
@@ -33,14 +39,14 @@ struct ProxyMetric {
     // 0 if no target assigned
     target: (AtomicRefCell<(InputMetric, usize)>),
 
-    // a reference to the the parent proxyer to remove the metric from when it is dropped
+    // a reference to the the parent proxy to remove the metric from when it is dropped
     proxy: Arc<RwLock<InnerProxy>>,
 }
 
 /// Dispatcher weak ref does not prevent dropping but still needs to be cleaned out.
 impl Drop for ProxyMetric {
     fn drop(&mut self) {
-        self.proxy.write().expect("Dispatch Lock").drop_metric(&self.name)
+        write_lock!(self.proxy).drop_metric(&self.name)
     }
 }
 
@@ -179,14 +185,12 @@ impl Proxy {
 
     /// Replace target for this proxy and its children.
     pub fn target<T: InputScope + Send + Sync + 'static>(&self, target: T) {
-        let mut inner = self.inner.write().expect("Dispatch Lock");
-        inner.set_target(self.get_prefixes(), Arc::new(target));
+        write_lock!(self.inner).set_target(self.get_prefixes(), Arc::new(target))
     }
 
     /// Replace target for this proxy and its children.
     pub fn unset_target(&self) {
-        let mut inner = self.inner.write().expect("Dispatch Lock");
-        inner.unset_target(self.get_prefixes());
+        write_lock!(self.inner).unset_target(self.get_prefixes())
     }
 
     /// Install a new default target for all proxies.
@@ -217,7 +221,7 @@ impl InputScope for Proxy {
     /// Lookup or create a proxy stub for the requested metric.
     fn new_metric(&self, name: MetricName, kind: InputKind) -> InputMetric {
         let name: MetricName = self.prefix_append(name);
-        let mut inner = self.inner.write().expect("Dispatch Lock");
+        let mut inner = write_lock!(self.inner);
         let proxy = inner
             .metrics
             .get(&name)
@@ -247,7 +251,7 @@ impl InputScope for Proxy {
 impl Flush for Proxy {
 
     fn flush(&self) -> error::Result<()> {
-        self.inner.write().expect("Dispatch Lock").flush(self.get_prefixes())
+        write_lock!(self.inner).flush(self.get_prefixes())
     }
 }
 

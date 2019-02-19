@@ -1,6 +1,13 @@
 use std::collections::{HashMap};
-use std::sync::{Arc, RwLock};
 use std::cell::RefCell;
+
+use std::sync::{Arc};
+
+#[cfg(not(feature="parking_lot"))]
+use std::sync::{RwLock};
+
+#[cfg(feature="parking_lot")]
+use parking_lot::{RwLock};
 
 /// Label values are immutable but can move around a lot.
 type LabelValue = Arc<String>;
@@ -110,25 +117,25 @@ pub struct AppLabel;
 impl AppLabel {
     /// Retrieve a value from the app scope.
     pub fn get(key: &str) -> Option<Arc<String>> {
-        APP_LABELS.read().expect("App Labels Lock").get(key)
+        read_lock!(APP_LABELS).get(key)
     }
 
     /// Set a new value for the app scope.
     /// Replaces any previous value for the key.
     pub fn set<S: Into<String>>(key: S, value: S) {
-        let b = { APP_LABELS.read().expect("Global Labels").set(key.into(), Arc::new(value.into())) };
-        *APP_LABELS.write().expect("App Labels Lock") = b;
+        let b = { read_lock!(APP_LABELS).set(key.into(), Arc::new(value.into())) };
+        *write_lock!(APP_LABELS) = b;
     }
 
     /// Unset a value for the app scope.
     /// Has no effect if key was not set.
     pub fn unset(key: &str) {
-        let b = { APP_LABELS.read().expect("Global Labels").unset(key) };
-        *APP_LABELS.write().expect("App Labels Lock") = b;
+        let b = { read_lock!(APP_LABELS).unset(key) };
+        *write_lock!(APP_LABELS) = b;
     }
 
     fn collect(map: &mut HashMap<String, LabelValue>) {
-        APP_LABELS.read().expect("Global Labels").collect(map)
+        read_lock!(APP_LABELS).collect(map)
     }
 }
 
@@ -165,7 +172,7 @@ impl Labels {
     /// Used to save metric context before enqueuing value for async output.
     pub fn save_context(&mut self) {
         self.scopes.push(THREAD_LABELS.with(|map| map.borrow().clone()));
-        self.scopes.push(APP_LABELS.read().expect("Global Labels").clone());
+        self.scopes.push(read_lock!(APP_LABELS).clone());
     }
 
     /// Generic label lookup function.

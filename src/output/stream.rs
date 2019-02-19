@@ -13,12 +13,19 @@ use cache::cache_out;
 use queue::queue_out;
 use output::format::{LineFormat, SimpleFormat, Formatting};
 
-use std::sync::{RwLock, Arc};
 use std::io::{Write, self};
 use std::path::Path;
 use std::fs::File;
 use std::rc::Rc;
 use std::cell::RefCell;
+
+use std::sync::{Arc};
+
+#[cfg(not(feature="parking_lot"))]
+use std::sync::{RwLock};
+
+#[cfg(feature="parking_lot")]
+use parking_lot::{RwLock};
 
 /// Buffered metrics text output.
 pub struct Stream<W: Write + Send + Sync + 'static> {
@@ -151,7 +158,7 @@ impl<W: Write + Send + Sync + 'static> OutputScope for TextScope<W> {
                 let mut buffer = Vec::with_capacity(32);
                 match template.print(&mut buffer, value, |key| labels.lookup(key)) {
                     Ok(()) => {
-                        let mut output = output.inner.write().expect("Metrics Text Output");
+                        let mut output = write_lock!(output.inner);
                         if let Err(e) = output.write_all(&buffer).and_then(|_| output.flush()) {
                             debug!("Could not write text metrics: {}", e)
                         }
@@ -168,7 +175,7 @@ impl<W: Write + Send + Sync + 'static> Flush for TextScope<W> {
     fn flush(&self) -> error::Result<()> {
         let mut entries = self.entries.borrow_mut();
         if !entries.is_empty() {
-            let mut output = self.output.inner.write().expect("Metrics Text Output");
+            let mut output = write_lock!(self.output.inner);
             for entry in entries.drain(..) {
                 output.write_all(&entry)?
             }

@@ -7,7 +7,14 @@ use cache::cache_in;
 use queue::queue_in;
 use output::format::{LineFormat, SimpleFormat, Formatting};
 
-use std::sync::{RwLock, Arc};
+use std::sync::{Arc};
+
+#[cfg(not(feature="parking_lot"))]
+use std::sync::{RwLock};
+
+#[cfg(feature="parking_lot")]
+use parking_lot::{RwLock};
+
 use std::io::Write;
 use log;
 
@@ -107,7 +114,7 @@ impl InputScope for LogScope {
                 let mut buffer = Vec::with_capacity(32);
                 match template.print(&mut buffer, value, |key| labels.lookup(key)) {
                     Ok(()) => {
-                        let mut entries = entries.write().expect("TextOutput");
+                        let mut entries = write_lock!(entries);
                         entries.push(buffer)
                     },
                     Err(err) => debug!("Could not format buffered log metric: {}", err),
@@ -135,7 +142,7 @@ impl InputScope for LogScope {
 impl Flush for LogScope {
 
     fn flush(&self) -> error::Result<()> {
-        let mut entries = self.entries.write().expect("Metrics TextBuffer");
+        let mut entries = write_lock!(self.entries);
         if !entries.is_empty() {
             let mut buf: Vec<u8> = Vec::with_capacity(32 * entries.len());
             for entry in entries.drain(..) {

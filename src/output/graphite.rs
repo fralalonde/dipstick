@@ -13,13 +13,20 @@ use output::socket::RetrySocket;
 
 use std::net::ToSocketAddrs;
 
-use std::sync::{Arc, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::io::Write;
 use std::fmt::Debug;
 
 use std::rc::Rc;
 use std::cell::{RefCell, RefMut};
+
+use std::sync::{Arc};
+
+#[cfg(not(feature="parking_lot"))]
+use std::sync::{RwLock};
+
+#[cfg(feature="parking_lot")]
+use parking_lot::{RwLock};
 
 /// Graphite output holds a socket to a graphite server.
 /// The socket is shared between scopes opened from the output.
@@ -136,7 +143,7 @@ impl GraphiteScope {
     fn flush_inner(&self, mut buf: RefMut<String>) -> error::Result<()> {
         if buf.is_empty() { return Ok(()) }
 
-        let mut sock = self.socket.write().expect("Lock Graphite Socket");
+        let mut sock = write_lock!(self.socket);
         match sock.write_all(buf.as_bytes()) {
             Ok(()) => {
                 metrics::GRAPHITE_SENT_BYTES.count(buf.len());
