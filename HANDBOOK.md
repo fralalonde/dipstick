@@ -51,7 +51,7 @@ Value-less metric also makes for a safer API, preventing values other than 1 fro
 Measure an operation's duration.
 Usable either through the time! macro, the closure form or explicit calls to start() and stop().
 While timers internal precision are in nanoseconds, their accuracy depends on platform OS and hardware. 
-Timer's default output format is milliseconds but is scalable up or down.
+Timer's internal precision is microseconds but can be scaled down on output.
  
 ```rust
 extern crate dipstick;
