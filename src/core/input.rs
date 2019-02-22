@@ -203,13 +203,13 @@ impl Gauge {
 }
 
 /// Callback function for gauge observer.
-pub type GaugeCallback = Arc<Fn() -> MetricValue + Send + Sync>;
+pub type GaugeCallback = Arc<Fn() -> MetricValue + Send + Sync + 'static>;
 
 /// Gauge and it's observer callback.
 #[derive(Clone)]
-pub(crate) struct GaugeObserver {
-    pub(crate) gauge: Gauge,
-    pub(crate) callback: GaugeCallback
+pub struct GaugeObserver {
+    pub gauge: Gauge,
+    pub callback: GaugeCallback
 }
 
 /// A timer that sends values to the metrics backend
