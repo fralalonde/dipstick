@@ -2,7 +2,7 @@
 
 use core::Flush;
 use core::input::{InputKind, Input, InputScope, InputMetric, InputDyn};
-use core::attributes::{Attributes, WithAttributes, Prefixed};
+use core::attributes::{Attributes, WithAttributes, Prefixed, OnFlush};
 use core::name::MetricName;
 use core::error;
 
@@ -95,6 +95,7 @@ impl InputScope for MultiInputScope {
 
 impl Flush for MultiInputScope {
     fn flush(&self) -> error::Result<()> {
+        self.notify_flush_listeners();
         for w in &self.scopes {
             w.flush()?;
         }

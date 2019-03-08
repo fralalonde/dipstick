@@ -18,9 +18,8 @@ pub type MetricValue = isize;
 /// Both InputScope and OutputScope share the ability to flush the recorded data.
 pub trait Flush {
     /// Flush does nothing by default.
-    fn flush(&self) -> error::Result<()> {
-        Ok(())
-    }
+    fn flush(&self) -> error::Result<()>;
+
 }
 
 #[cfg(test)]

@@ -2,13 +2,17 @@ use core::clock::TimeHandle;
 use core::{MetricValue, Flush};
 use core::name::MetricName;
 use core::label::Labels;
+use core::scheduler::{set_schedule, CancelHandle};
 
 use std::sync::Arc;
 use std::fmt;
 
+use std::time::Duration;
+
 // TODO maybe define an 'AsValue' trait + impl for supported number types, then drop 'num' crate
 pub use num::{ToPrimitive};
 pub use num::integer;
+use OnFlush;
 
 /// A function trait that opens a new metric capture scope.
 pub trait Input: Send + Sync + 'static + InputDyn {
@@ -69,17 +73,22 @@ pub trait InputScope: Flush {
     fn level(&self, name: &str) -> Level {
         self.new_metric(name.into(), InputKind::Level).into()
     }
+}
 
+pub trait Observe {
     /// Observe a gauge value using a callback function. If multiple callbacks are registered under
     /// the same conflicting key, only the last one will survive.
-    fn observe<F: Fn() -> MetricValue + Send + Sync + 'static>(&self, name: &str, callback: F) where Self: Sized {
-        self.new_observer(name, Arc::new(callback));
-    }
+    fn observe<'a, F: Fn() -> MetricValue + Send + Sync + 'static>(&self, name: &str, value_source: F) -> Observer;
+}
 
-    /// Helper method to make use of `observe()` more pleasant. The Arc wrapper is not necessary
-    /// in the client code now. Consider this as an internal method.
-    fn new_observer(&self, _name: &str, _callback: GaugeCallback) {
-        // TODO: Not yet finished, remove default impl.
+impl<T: InputScope> Observe for T {
+    /// Observe a gauge value using a callback function. If multiple callbacks are registered under
+    /// the same conflicting key, only the last one will survive.
+    fn observe<'a, F: Fn() -> MetricValue + Send + Sync + 'static>(&self, name: &str, value_source: F) -> Observer {
+        Observer {
+            metric: self.new_metric(name.into(), InputKind::Gauge),
+            value_source: Arc::new(value_source),
+        }
     }
 
 }
@@ -200,17 +209,30 @@ impl Gauge {
     pub fn value<V: ToPrimitive>(&self, value: V) {
         self.inner.write(value.to_isize().unwrap(), labels![])
     }
+
 }
 
 /// Callback function for gauge observer.
-pub type GaugeCallback = Arc<Fn() -> MetricValue + Send + Sync + 'static>;
+pub type ValueSourceFn = Arc<Fn() -> MetricValue + Send + Sync + 'static>;
 
-/// Gauge and it's observer callback.
-#[derive(Clone)]
-pub struct GaugeObserver {
-    pub gauge: Gauge,
-    pub callback: GaugeCallback
+pub struct Observer {
+    metric: InputMetric,
+    value_source: ValueSourceFn
 }
+
+impl Observer {
+    pub fn report(&self) {
+        let value = (self.value_source)();
+        self.metric.write(value, labels![])
+    }
+
+    /// Start a thread dedicated to flushing this scope at regular intervals.
+    pub fn every(self, period: Duration) -> CancelHandle {
+        set_schedule("dipstick-observe", period, move || self.report())
+    }
+
+}
+
 
 /// A timer that sends values to the metrics backend
 /// Timers can record time intervals in multiple ways :

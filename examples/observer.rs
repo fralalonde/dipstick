@@ -22,19 +22,21 @@ use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::time::{Duration, Instant};
 
-use dipstick::{AtomicBucket, InputScope, MetricValue, Prefixed, ScheduleFlush, Stream};
+use dipstick::{AtomicBucket, InputScope, MetricValue, Prefixed, ScheduleFlush, Stream,
+               OnFlush, Observer, Observe};
 
 fn main() {
     let start_time = Instant::now();
 
-    let metrics = AtomicBucket::new()
-        .add_prefix("process");
-    // metrics.set_stats(dipstick::stats_all);
+    let mut metrics = AtomicBucket::new().add_prefix("process");
     metrics.set_drain(Stream::to_stderr());
+
     let flush_handle = metrics.flush_every(Duration::from_secs(1));
 
-    metrics.observe("uptime", move || dur2ms(start_time.elapsed()));
-    metrics.observe("threads", threads);
+    let observer = metrics.observe("uptime", move || dur2ms(start_time.elapsed()));
+    metrics.on_flush(move || observer.report());
+
+    metrics.observe("threads", thread_count).every(Duration::from_secs(5));
 
     println!("Press Enter key to exit");
     io::stdin().read_line(&mut String::new()).expect("Example, ignored");
@@ -49,7 +51,7 @@ fn dur2ms(duration: Duration) -> MetricValue {
 }
 
 /// Query number of running threads in this process using Linux's /proc filesystem.
-fn threads() -> MetricValue {
+fn thread_count() -> MetricValue {
     // Example, this code is not production ready at all
     const SEARCH: &str = "Threads:\t";
     let file = File::open("/proc/self/status").unwrap();

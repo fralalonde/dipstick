@@ -6,6 +6,7 @@ use core::output::{OutputMetric, OutputScope};
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
+use std::error::Error;
 
 /// A HashMap wrapper to receive metrics or stats values.
 /// Every received value for a metric replaces the previous one (if any).
@@ -24,7 +25,11 @@ impl OutputScope for StatsMap {
     }
 }
 
-impl Flush for StatsMap {}
+impl Flush for StatsMap {
+    fn flush(&self) -> Result<(), Box<Error + Send + Sync>> {
+        Ok(())
+    }
+}
 
 impl From<StatsMap> for BTreeMap<String, MetricValue> {
     fn from(map: StatsMap) -> Self {

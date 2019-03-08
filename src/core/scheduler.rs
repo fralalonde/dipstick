@@ -1,6 +1,6 @@
 //! Task scheduling facilities.
 
-use core::input::InputScope;
+use core::input::{InputScope};
 
 use std::time::Duration;
 use std::thread;
@@ -13,7 +13,7 @@ use std::sync::atomic::Ordering::SeqCst;
 pub struct CancelHandle(Arc<AtomicBool>);
 
 impl CancelHandle {
-    fn new() -> CancelHandle {
+    pub fn new() -> CancelHandle {
         CancelHandle(Arc::new(AtomicBool::new(false)))
     }
 
@@ -33,7 +33,7 @@ impl CancelHandle {
 /// # Panics
 ///
 /// Panics if the OS fails to create a thread.
-fn set_schedule<F>(thread_name: &str, every: Duration, operation: F) -> CancelHandle
+pub fn set_schedule<F>(thread_name: &str, every: Duration, operation: F) -> CancelHandle
 where
     F: Fn() -> () + Send + 'static,
 {

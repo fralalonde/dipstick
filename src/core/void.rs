@@ -4,6 +4,7 @@ use core::input::{InputKind, InputDyn, InputScope};
 use core::Flush;
 
 use std::sync::Arc;
+use std::error::Error;
 
 lazy_static! {
     /// The reference instance identifying an uninitialized metric config.
@@ -50,4 +51,7 @@ impl OutputScope for VoidOutput {
 }
 
 impl Flush for VoidOutput {
+    fn flush(&self) -> Result<(), Box<Error + Send + Sync>> {
+        Ok(())
+    }
 }

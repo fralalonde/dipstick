@@ -1,8 +1,8 @@
 //! Maintain aggregated metrics for deferred reporting,
 
-use core::attributes::{Attributes, WithAttributes, Prefixed};
+use core::attributes::{Attributes, WithAttributes, Prefixed, OnFlush};
 use core::name::{MetricName};
-use core::input::{GaugeCallback, GaugeObserver, InputKind, InputScope, InputMetric};
+use core::input::{InputKind, InputScope, InputMetric};
 use core::output::{OutputDyn, OutputScope, OutputMetric, Output, output_none};
 use core::clock::TimeHandle;
 use core::{MetricValue, Flush};
@@ -12,7 +12,7 @@ use core::error;
 
 use std::mem;
 use std::isize;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap};
 use std::sync::atomic::AtomicIsize;
 use std::sync::atomic::Ordering::*;
 use std::sync::{Arc};
@@ -58,7 +58,6 @@ struct InnerAtomicBucket {
         -> Option<(InputKind, MetricName, MetricValue)> + Send + Sync + 'static>>,
     drain: Option<Arc<OutputDyn + Send + Sync + 'static>>,
     publish_metadata: bool,
-    gauge_observers: HashMap<MetricName, GaugeObserver>,
 }
 
 impl fmt::Debug for InnerAtomicBucket {
@@ -74,12 +73,7 @@ lazy_static! {
 
 impl InnerAtomicBucket {
 
-    pub fn flush(&mut self) -> error::Result<()> {
-        for observer in self.gauge_observers.values() {
-            let value = (observer.callback)();
-            observer.gauge.value(value);
-        }
-
+    fn flush(&mut self) -> error::Result<()> {
         let pub_scope = match self.drain {
             Some(ref out) => out.output_dyn(),
             None => read_lock!(DEFAULT_AGGREGATE_OUTPUT).output_dyn(),
@@ -103,7 +97,7 @@ impl InnerAtomicBucket {
     /// Take a snapshot of aggregated values and reset them.
     /// Compute stats on captured values using assigned or default stats function.
     /// Write stats to assigned or default output.
-    pub fn flush_to(&mut self, target: &OutputScope) -> error::Result<()> {
+    fn flush_to(&mut self, target: &OutputScope) -> error::Result<()> {
 
         let now = TimeHandle::now();
         let duration_seconds = self.period_start.elapsed_us() as f64 / 1_000_000.0;
@@ -167,7 +161,6 @@ impl AtomicBucket {
                 drain: None,
                 // TODO add API toggle for metadata publish
                 publish_metadata: false,
-                gauge_observers: HashMap::new(),
             }))
         }
     }
@@ -251,20 +244,13 @@ impl InputScope for AtomicBucket {
             .clone();
         InputMetric::new(move |value, _labels| scores.update(value))
     }
-
-    fn new_observer(&self, name: &str, callback: GaugeCallback) {
-        let gauge = self.gauge(name);
-
-        write_lock!(self.inner)
-            .gauge_observers
-            .insert(self.prefix_append(name), GaugeObserver { gauge, callback });
-    }
 }
 
 impl Flush for AtomicBucket {
     /// Collect and reset aggregated data.
     /// Publish statistics
     fn flush(&self) -> error::Result<()> {
+        self.notify_flush_listeners();
         let mut inner = write_lock!(self.inner);
         inner.flush()
     }

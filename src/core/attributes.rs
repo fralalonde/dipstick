@@ -3,6 +3,8 @@ use std::collections::{HashMap};
 use std::default::Default;
 
 use core::name::{NameParts, MetricName};
+use Flush;
+use std::fmt;
 
 /// The actual distribution (random, fixed-cycled, etc) depends on selected sampling method.
 #[derive(Debug, Clone, Copy)]
@@ -47,11 +49,20 @@ impl Default for Buffering {
 
 /// Attributes common to metric components.
 /// Not all attributes used by all components.
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct Attributes {
     naming: NameParts,
     sampling: Sampling,
     buffering: Buffering,
+    flush_listeners: Vec<Arc<Fn() -> () + Send + Sync + 'static>>,
+}
+
+impl fmt::Debug for Attributes {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "naming: {:?}", self.naming)?;
+        write!(f, "sampling: {:?}", self.sampling)?;
+        write!(f, "buffering: {:?}", self.buffering)
+    }
 }
 
 /// This trait should not be exposed outside the crate.
@@ -71,6 +82,23 @@ pub trait WithAttributes: Clone {
     }
 }
 
+pub trait OnFlush {
+    fn on_flush<F: Fn() -> () + Send + Sync + 'static>(&mut self, listener: F);
+    fn notify_flush_listeners(&self);
+}
+
+impl <T> OnFlush for T where T: Flush + WithAttributes {
+    fn on_flush<F: Fn() -> () + Send + Sync + 'static>(&mut self, listener: F) {
+        self.mut_attributes().flush_listeners.push(Arc::new(listener));
+    }
+
+    fn notify_flush_listeners(&self) {
+        for listener in self.get_attributes().flush_listeners.iter() {
+            (listener)()
+        }
+    }
+}
+
 /// Name operations support.
 pub trait Prefixed {
     /// Returns namespace of component.
@@ -78,7 +106,7 @@ pub trait Prefixed {
 
     /// Append a name to the existing names.
     /// Return a clone of the component with the updated names.
-    #[deprecated(since="0.7.2", note="Use add_name()")]
+    #[deprecated(since="0.7.2", note="Use named() or add_name()")]
     fn add_prefix<S: Into<String>>(&self, name: S) -> Self;
 
     /// Append a name to the existing names.
