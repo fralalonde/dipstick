@@ -206,7 +206,7 @@ impl AtomicBucket {
     }
 
     /// Revert this bucket's statistics generator to the default stats.
-    pub fn unset_stats<F>(&self) {
+    pub fn unset_stat(&self) {
         write_lock!(self.inner).stats = None
     }
 
