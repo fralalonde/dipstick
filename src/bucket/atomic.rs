@@ -296,7 +296,7 @@ impl AtomicScores {
     }
 
     /// Update scores with new value
-    pub fn update(&self, value: MetricValue) -> () {
+    pub fn update(&self, value: MetricValue) {
         // TODO detect & report any concurrent updates / resets for measurement of contention
         // Count is tracked for all metrics
         self.scores[HIT].fetch_add(1, Relaxed);
