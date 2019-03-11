@@ -22,8 +22,7 @@ use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::time::{Duration, Instant};
 
-use dipstick::{AtomicBucket, InputScope, MetricValue, Prefixed, ScheduleFlush, Stream,
-               OnFlush, Observer, Observe};
+use dipstick::{AtomicBucket, InputScope, MetricValue, Prefixed, ScheduleFlush, Stream, OnFlush, Schedule};
 
 fn main() {
     let start_time = Instant::now();
@@ -33,10 +32,11 @@ fn main() {
 
     let flush_handle = metrics.flush_every(Duration::from_secs(1));
 
-    let observer = metrics.observe("uptime", move || dur2ms(start_time.elapsed()));
-    metrics.on_flush(move || observer.report());
+    let uptime = metrics.gauge("uptime");
+    metrics.on_flush(move || uptime.value(dur2ms(start_time.elapsed())));
 
-    metrics.observe("threads", thread_count).every(Duration::from_secs(5));
+    let threads = metrics.gauge("threads");
+    metrics.schedule(Duration::from_secs(5), move || threads.value(thread_count()));
 
     println!("Press Enter key to exit");
     io::stdin().read_line(&mut String::new()).expect("Example, ignored");

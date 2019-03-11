@@ -1,6 +1,6 @@
 //! Send metrics to a graphite server.
 
-use core::attributes::{Buffered, Attributes, WithAttributes, Prefixed};
+use core::attributes::{Buffered, Attributes, WithAttributes, Prefixed, OnFlush};
 use core::name::MetricName;
 use core::{Flush, MetricValue};
 use core::input::InputKind;
@@ -100,6 +100,7 @@ impl OutputScope for GraphiteScope {
 impl Flush for GraphiteScope {
 
     fn flush(&self) -> error::Result<()> {
+        self.notify_flush_listeners();
         let buf = self.buffer.borrow_mut();
         self.flush_inner(buf)
     }

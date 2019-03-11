@@ -4,7 +4,7 @@
 
 use core::input::{InputScope, InputMetric, Input, InputKind};
 use core::output::{Output, OutputScope};
-use core::attributes::{Attributes, WithAttributes, Prefixed};
+use core::attributes::{Attributes, WithAttributes, Prefixed, OnFlush};
 use core::name::MetricName;
 use core::Flush;
 use core::error;
@@ -43,6 +43,7 @@ impl InputScope for LockingOutput {
 
 impl Flush for LockingOutput {
     fn flush(&self) -> error::Result<()> {
+        self.notify_flush_listeners();
         self.inner.lock().expect("LockingOutput").flush()
     }
 }

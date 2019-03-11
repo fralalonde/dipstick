@@ -51,9 +51,9 @@ macro_rules! read_lock {
 
 mod core;
 pub use core::{Flush, MetricValue};
-pub use core::attributes::{Prefixed, Sampling, Sampled, Buffered, Buffering, OnFlush};
+pub use core::attributes::{Prefixed, Sampling, Sampled, Buffered, Buffering, OnFlush, Schedule};
 pub use core::name::{MetricName, NameParts};
-pub use core::input::{Input, InputDyn, InputScope, InputMetric, Counter, Timer, Marker, Gauge, Level, InputKind, Observer, Observe};
+pub use core::input::{Input, InputDyn, InputScope, InputMetric, Counter, Timer, Marker, Gauge, Level, InputKind};
 pub use core::output::{Output, OutputDyn, OutputScope, OutputMetric};
 pub use core::scheduler::{ScheduleFlush, CancelHandle};
 pub use core::locking::LockingOutput;

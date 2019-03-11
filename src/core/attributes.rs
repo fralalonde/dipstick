@@ -3,8 +3,11 @@ use std::collections::{HashMap};
 use std::default::Default;
 
 use core::name::{NameParts, MetricName};
-use Flush;
+use ::{Flush, CancelHandle};
 use std::fmt;
+use std::time::Duration;
+use core::scheduler::set_schedule;
+use InputScope;
 
 /// The actual distribution (random, fixed-cycled, etc) depends on selected sampling method.
 #[derive(Debug, Clone, Copy)]
@@ -55,6 +58,7 @@ pub struct Attributes {
     sampling: Sampling,
     buffering: Buffering,
     flush_listeners: Vec<Arc<Fn() -> () + Send + Sync + 'static>>,
+    tasks: Vec<CancelHandle>,
 }
 
 impl fmt::Debug for Attributes {
@@ -82,8 +86,12 @@ pub trait WithAttributes: Clone {
     }
 }
 
+/// Register and notify scope-flush listeners
 pub trait OnFlush {
+    /// Register a new flush listener
     fn on_flush<F: Fn() -> () + Send + Sync + 'static>(&mut self, listener: F);
+
+    /// Notify registered listeners of an impending flush.
     fn notify_flush_listeners(&self);
 }
 
@@ -95,6 +103,27 @@ impl <T> OnFlush for T where T: Flush + WithAttributes {
     fn notify_flush_listeners(&self) {
         for listener in self.get_attributes().flush_listeners.iter() {
             (listener)()
+        }
+    }
+}
+
+pub trait Schedule {
+    fn schedule<F>(&mut self, every: Duration, operation: F) -> CancelHandle
+        where F: Fn() -> () + Send + 'static;
+}
+
+impl<T: InputScope + WithAttributes> Schedule for T {
+    fn schedule<F>(&mut self, every: Duration, operation: F) -> CancelHandle where F: Fn() -> () + Send + 'static {
+        let handle = set_schedule("dipstick-scope", every, operation);
+        self.mut_attributes().tasks.push(handle.clone());
+        handle
+    }
+}
+
+impl Drop for Attributes {
+    fn drop(&mut self) {
+        for t in self.tasks.drain(..) {
+            t.cancel()
         }
     }
 }

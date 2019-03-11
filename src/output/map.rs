@@ -2,6 +2,7 @@ use core::{Flush, MetricValue};
 use core::input::InputKind;
 use core::name::MetricName;
 use core::output::{OutputMetric, OutputScope};
+use core::attributes::{Attributes, WithAttributes, Prefixed, OnFlush};
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -12,11 +13,18 @@ use std::error::Error;
 /// Every received value for a metric replaces the previous one (if any).
 #[derive(Clone, Default)]
 pub struct StatsMap {
+    attributes: Attributes,
     inner: Rc<RefCell<BTreeMap<String, MetricValue>>>,
+}
+
+impl WithAttributes for StatsMap {
+    fn get_attributes(&self) -> &Attributes { &self.attributes }
+    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
 }
 
 impl OutputScope for StatsMap {
     fn new_metric(&self, name: MetricName, _kind: InputKind) -> OutputMetric {
+        let name = self.prefix_append(name);
         let write_to = self.inner.clone();
         let name: String = name.join(".");
         OutputMetric::new(move |value, _labels| {
@@ -27,6 +35,7 @@ impl OutputScope for StatsMap {
 
 impl Flush for StatsMap {
     fn flush(&self) -> Result<(), Box<Error + Send + Sync>> {
+        self.notify_flush_listeners();
         Ok(())
     }
 }

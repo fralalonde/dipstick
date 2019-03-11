@@ -1,7 +1,7 @@
 //! Dispatch metrics to multiple sinks.
 
 use core::Flush;
-use core::attributes::{Attributes, WithAttributes, Prefixed};
+use core::attributes::{Attributes, WithAttributes, Prefixed, OnFlush};
 use core::name::MetricName;
 use core::input::InputKind;
 use core::output::{Output, OutputMetric, OutputScope, OutputDyn};
@@ -98,6 +98,7 @@ impl OutputScope for MultiOutputScope {
 
 impl Flush for MultiOutputScope {
     fn flush(&self) -> error::Result<()> {
+        self.notify_flush_listeners();
         for w in &self.scopes {
             w.flush()?;
         }

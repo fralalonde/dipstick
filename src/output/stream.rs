@@ -4,7 +4,7 @@
 
 use core::{Flush};
 use core::input::InputKind;
-use core::attributes::{Attributes, WithAttributes, Buffered, Prefixed};
+use core::attributes::{Attributes, WithAttributes, Buffered, Prefixed, OnFlush};
 use core::name::MetricName;
 use core::output::{Output, OutputMetric, OutputScope};
 use core::error;
@@ -173,6 +173,7 @@ impl<W: Write + Send + Sync + 'static> OutputScope for TextScope<W> {
 impl<W: Write + Send + Sync + 'static> Flush for TextScope<W> {
 
     fn flush(&self) -> error::Result<()> {
+        self.notify_flush_listeners();
         let mut entries = self.entries.borrow_mut();
         if !entries.is_empty() {
             let mut output = write_lock!(self.output.inner);

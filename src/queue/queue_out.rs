@@ -2,7 +2,7 @@
 //! RawMetrics definitions are still synchronous.
 //! If queue size is exceeded, calling code reverts to blocking.
 
-use core::attributes::{Attributes, WithAttributes, Prefixed};
+use core::attributes::{Attributes, WithAttributes, Prefixed, OnFlush};
 use core::name::MetricName;
 use core::input::{InputKind, Input, InputScope, InputMetric};
 use core::output::{OutputDyn, OutputScope, OutputMetric, Output};
@@ -179,6 +179,7 @@ impl InputScope for OutputQueueScope {
 impl Flush for OutputQueueScope {
 
     fn flush(&self) -> error::Result<()> {
+        self.notify_flush_listeners();
         if let Err(e) = self.sender.send(OutputQueueCmd::Flush(self.target.clone())) {
             metrics::SEND_FAILED.mark();
             debug!("Failed to flush async metrics: {}", e);
