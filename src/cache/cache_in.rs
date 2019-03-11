@@ -2,7 +2,7 @@
 
 use core::Flush;
 use core::input::{InputKind, Input, InputScope, InputMetric, InputDyn};
-use core::attributes::{Attributes, WithAttributes, Prefixed};
+use core::attributes::{Attributes, WithAttributes, Prefixed, OnFlush};
 use core::name::MetricName;
 use cache::lru_cache as lru;
 use core::error;
@@ -97,6 +97,7 @@ impl InputScope for InputScopeCache {
 impl Flush for InputScopeCache {
 
     fn flush(&self) -> error::Result<()> {
+        self.notify_flush_listeners();
         self.target.flush()
     }
 }

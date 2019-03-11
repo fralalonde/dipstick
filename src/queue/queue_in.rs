@@ -2,7 +2,7 @@
 //! Metrics definitions are still synchronous.
 //! If queue size is exceeded, calling code reverts to blocking.
 
-use core::attributes::{Attributes, WithAttributes, Prefixed};
+use core::attributes::{Attributes, WithAttributes, Prefixed, OnFlush};
 use core::name::MetricName;
 use core::input::{InputKind, Input, InputScope, InputDyn, InputMetric};
 use core::{MetricValue, Flush};
@@ -185,6 +185,7 @@ impl InputScope for InputQueueScope {
 impl Flush for InputQueueScope {
 
     fn flush(&self) -> error::Result<()> {
+        self.notify_flush_listeners();
         if let Err(e) = self.sender.send(InputQueueCmd::Flush(self.target.clone())) {
             metrics::SEND_FAILED.mark();
             debug!("Failed to flush async metrics: {}", e);

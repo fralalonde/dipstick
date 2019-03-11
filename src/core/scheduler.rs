@@ -13,7 +13,7 @@ use std::sync::atomic::Ordering::SeqCst;
 pub struct CancelHandle(Arc<AtomicBool>);
 
 impl CancelHandle {
-    pub fn new() -> CancelHandle {
+    fn new() -> CancelHandle {
         CancelHandle(Arc::new(AtomicBool::new(false)))
     }
 

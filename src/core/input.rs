@@ -2,17 +2,13 @@ use core::clock::TimeHandle;
 use core::{MetricValue, Flush};
 use core::name::MetricName;
 use core::label::Labels;
-use core::scheduler::{set_schedule, CancelHandle};
 
 use std::sync::Arc;
 use std::fmt;
 
-use std::time::Duration;
-
 // TODO maybe define an 'AsValue' trait + impl for supported number types, then drop 'num' crate
 pub use num::{ToPrimitive};
 pub use num::integer;
-use OnFlush;
 
 /// A function trait that opens a new metric capture scope.
 pub trait Input: Send + Sync + 'static + InputDyn {
@@ -73,24 +69,6 @@ pub trait InputScope: Flush {
     fn level(&self, name: &str) -> Level {
         self.new_metric(name.into(), InputKind::Level).into()
     }
-}
-
-pub trait Observe {
-    /// Observe a gauge value using a callback function. If multiple callbacks are registered under
-    /// the same conflicting key, only the last one will survive.
-    fn observe<'a, F: Fn() -> MetricValue + Send + Sync + 'static>(&self, name: &str, value_source: F) -> Observer;
-}
-
-impl<T: InputScope> Observe for T {
-    /// Observe a gauge value using a callback function. If multiple callbacks are registered under
-    /// the same conflicting key, only the last one will survive.
-    fn observe<'a, F: Fn() -> MetricValue + Send + Sync + 'static>(&self, name: &str, value_source: F) -> Observer {
-        Observer {
-            metric: self.new_metric(name.into(), InputKind::Gauge),
-            value_source: Arc::new(value_source),
-        }
-    }
-
 }
 
 /// A metric is actually a function that knows to write a metric value to a metric output.
@@ -211,28 +189,6 @@ impl Gauge {
     }
 
 }
-
-/// Callback function for gauge observer.
-pub type ValueSourceFn = Arc<Fn() -> MetricValue + Send + Sync + 'static>;
-
-pub struct Observer {
-    metric: InputMetric,
-    value_source: ValueSourceFn
-}
-
-impl Observer {
-    pub fn report(&self) {
-        let value = (self.value_source)();
-        self.metric.write(value, labels![])
-    }
-
-    /// Start a thread dedicated to flushing this scope at regular intervals.
-    pub fn every(self, period: Duration) -> CancelHandle {
-        set_schedule("dipstick-observe", period, move || self.report())
-    }
-
-}
-
 
 /// A timer that sends values to the metrics backend
 /// Timers can record time intervals in multiple ways :

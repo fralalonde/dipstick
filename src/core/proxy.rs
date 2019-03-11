@@ -1,6 +1,6 @@
 //! Decouple metric definition from configuration with trait objects.
 
-use core::attributes::{Attributes, WithAttributes, Prefixed};
+use core::attributes::{Attributes, WithAttributes, Prefixed, OnFlush};
 use core::name::{MetricName, NameParts};
 use core::Flush;
 use core::input::{InputKind, InputMetric, InputScope};
@@ -251,6 +251,7 @@ impl InputScope for Proxy {
 impl Flush for Proxy {
 
     fn flush(&self) -> error::Result<()> {
+        self.notify_flush_listeners();
         write_lock!(self.inner).flush(self.get_prefixes())
     }
 }
