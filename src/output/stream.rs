@@ -59,7 +59,7 @@ impl<W: Write + Send + Sync + 'static>  Stream<W> {
 impl Stream<File> {
     /// Write metric values to a file.
     pub fn to_file(file: &Path) -> error::Result<Stream<File>> {
-        Ok(Stream::write_to(File::open(file)?))
+        Ok(Stream::write_to(File::create(file)?))
     }
 }
 
