@@ -2,11 +2,11 @@
 
 use core::input::InputScope;
 
-use std::time::Duration;
-use std::thread;
-use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::SeqCst;
+use std::sync::Arc;
+use std::thread;
+use std::time::Duration;
 
 /// A handle to cancel a scheduled task if required.
 #[derive(Debug, Clone)]

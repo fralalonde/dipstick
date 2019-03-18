@@ -1,16 +1,16 @@
-pub mod error;
-pub mod name;
 pub mod attributes;
-pub mod input;
-pub mod output;
-pub mod locking;
 pub mod clock;
-pub mod void;
-pub mod proxy;
+pub mod error;
+pub mod input;
 pub mod label;
-pub mod pcg32;
-pub mod scheduler;
+pub mod locking;
 pub mod metrics;
+pub mod name;
+pub mod output;
+pub mod pcg32;
+pub mod proxy;
+pub mod scheduler;
+pub mod void;
 
 /// Base type for recorded metric values.
 pub type MetricValue = isize;
@@ -25,8 +25,8 @@ pub trait Flush {
 
 #[cfg(test)]
 pub mod test {
-    use super::*;
     use super::input::*;
+    use super::*;
 
     #[test]
     fn test_to_void() {
@@ -39,9 +39,9 @@ pub mod test {
 #[cfg(feature = "bench")]
 pub mod bench {
 
-    use super::input::*;
-    use super::clock::*;
     use super::super::bucket::atomic::*;
+    use super::clock::*;
+    use super::input::*;
     use test;
 
     #[bench]

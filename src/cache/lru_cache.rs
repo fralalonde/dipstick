@@ -2,8 +2,8 @@
 //! Stored values will be held onto as long as there is space.
 //! When space runs out, the oldest unused value will get evicted to make room for a new value.
 
-use std::hash::Hash;
 use std::collections::HashMap;
+use std::hash::Hash;
 
 struct CacheEntry<K, V> {
     key: K,

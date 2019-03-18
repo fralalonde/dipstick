@@ -3,8 +3,8 @@
 
 extern crate dipstick;
 
-use std::time::Duration;
 use dipstick::*;
+use std::time::Duration;
 
 fn main() {
     fn custom_statistics(
@@ -28,7 +28,7 @@ fn main() {
                 } else {
                     None
                 }
-            },
+            }
 
             // scaling the score value and appending unit to name
             (kind, ScoreType::Sum(sum)) => Some((kind, name.append("per_thousand"), sum / 1000)),

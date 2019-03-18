@@ -15,9 +15,6 @@ pub fn raw_write() {
     let metrics_log = dipstick::Log::to_log().metrics();
 
     // define and send metrics using raw channel API
-    let counter = metrics_log.new_metric(
-        "count_a".into(),
-        dipstick::InputKind::Counter,
-    );
+    let counter = metrics_log.new_metric("count_a".into(), dipstick::InputKind::Counter);
     counter.write(1, labels![]);
 }

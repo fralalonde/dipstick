@@ -3,8 +3,8 @@
 
 extern crate dipstick;
 
-use std::time::Duration;
 use dipstick::*;
+use std::time::Duration;
 
 fn main() {
     let metrics = AtomicBucket::new().named("test");

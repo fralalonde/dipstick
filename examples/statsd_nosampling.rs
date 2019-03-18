@@ -6,12 +6,11 @@ use dipstick::*;
 use std::time::Duration;
 
 fn main() {
-    let metrics =
-        Statsd::send_to("localhost:8125")
-            .expect("Connected")
-//            .with_sampling(Sampling::Random(0.2))
-            .named("my_app")
-            .metrics();
+    let metrics = Statsd::send_to("localhost:8125")
+        .expect("Connected")
+        //            .with_sampling(Sampling::Random(0.2))
+        .named("my_app")
+        .metrics();
 
     let counter = metrics.counter("counter_a");
 

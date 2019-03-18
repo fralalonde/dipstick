@@ -3,11 +3,10 @@
 
 extern crate dipstick;
 
-use std::time::Duration;
 use dipstick::*;
+use std::time::Duration;
 
 fn main() {
-
     let app_metrics = AtomicBucket::new();
     app_metrics.drain(Stream::to_stdout());
 

@@ -1,11 +1,11 @@
-use core::{Flush, MetricValue};
 use core::input::InputKind;
 use core::name::MetricName;
 use core::output::{OutputMetric, OutputScope};
+use core::{Flush, MetricValue};
 
-use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
+use std::rc::Rc;
 
 /// A HashMap wrapper to receive metrics or stats values.
 /// Every received value for a metric replaces the previous one (if any).

@@ -1,29 +1,29 @@
-use core::{Flush, MetricValue};
 use core::input::InputKind;
+use core::label::Labels;
 use core::name::MetricName;
 use core::void::Void;
-use core::label::Labels;
+use core::{Flush, MetricValue};
 
 use std::rc::Rc;
 
 /// Define metrics, write values and flush them.
 pub trait OutputScope: Flush {
-
     /// Define a raw metric of the specified type.
     fn new_metric(&self, name: MetricName, kind: InputKind) -> OutputMetric;
-
 }
 
 /// Output metrics are not thread safe.
 #[derive(Clone)]
 pub struct OutputMetric {
-    inner: Rc<Fn(MetricValue, Labels)>
+    inner: Rc<Fn(MetricValue, Labels)>,
 }
 
 impl OutputMetric {
     /// Utility constructor
     pub fn new<F: Fn(MetricValue, Labels) + 'static>(metric: F) -> OutputMetric {
-        OutputMetric { inner: Rc::new(metric) }
+        OutputMetric {
+            inner: Rc::new(metric),
+        }
     }
 
     /// Some may prefer the `metric.write(value)` form to the `(metric)(value)` form.
@@ -34,7 +34,6 @@ impl OutputMetric {
     }
 }
 
-
 /// A function trait that opens a new metric capture scope.
 pub trait Output: Send + Sync + 'static + OutputDyn {
     /// The type of Scope returned byt this output.
@@ -44,7 +43,7 @@ pub trait Output: Send + Sync + 'static + OutputDyn {
     fn new_scope(&self) -> Self::SCOPE;
 
     /// Open a new scope for this output.
-    #[deprecated(since="0.7.2", note="Use new_scope()")]
+    #[deprecated(since = "0.7.2", note = "Use new_scope()")]
     fn output(&self) -> Self::SCOPE {
         self.new_scope()
     }

@@ -2,30 +2,30 @@
 
 // TODO parameterize templates
 
-use core::{Flush};
+use core::attributes::{Attributes, Buffered, Prefixed, WithAttributes};
+use core::error;
 use core::input::InputKind;
-use core::attributes::{Attributes, WithAttributes, Buffered, Prefixed};
 use core::name::MetricName;
 use core::output::{Output, OutputMetric, OutputScope};
-use core::error;
+use core::Flush;
 
 use cache::cache_out;
+use output::format::{Formatting, LineFormat, SimpleFormat};
 use queue::queue_out;
-use output::format::{LineFormat, SimpleFormat, Formatting};
 
-use std::io::{Write, self};
-use std::path::Path;
-use std::fs::File;
-use std::rc::Rc;
 use std::cell::RefCell;
+use std::fs::File;
+use std::io::{self, Write};
+use std::path::Path;
+use std::rc::Rc;
 
-use std::sync::{Arc};
+use std::sync::Arc;
 
-#[cfg(not(feature="parking_lot"))]
-use std::sync::{RwLock};
+#[cfg(not(feature = "parking_lot"))]
+use std::sync::RwLock;
 
-#[cfg(feature="parking_lot")]
-use parking_lot::{RwLock};
+#[cfg(feature = "parking_lot")]
+use parking_lot::RwLock;
 
 /// Buffered metrics text output.
 pub struct Stream<W: Write + Send + Sync + 'static> {
@@ -45,7 +45,7 @@ impl<W: Write + Send + Sync + 'static> Formatting for Stream<W> {
     }
 }
 
-impl<W: Write + Send + Sync + 'static>  Stream<W> {
+impl<W: Write + Send + Sync + 'static> Stream<W> {
     /// Write metric values to provided Write target.
     pub fn write_to(write: W) -> Stream<W> {
         Stream {
@@ -77,7 +77,6 @@ impl Stream<io::Stdout> {
     }
 }
 
-
 // FIXME manual Clone impl required because auto-derive is borked (https://github.com/rust-lang/rust/issues/26925)
 impl<W: Write + Send + Sync + 'static> Clone for Stream<W> {
     fn clone(&self) -> Self {
@@ -90,8 +89,12 @@ impl<W: Write + Send + Sync + 'static> Clone for Stream<W> {
 }
 
 impl<W: Write + Send + Sync + 'static> WithAttributes for Stream<W> {
-    fn get_attributes(&self) -> &Attributes { &self.attributes }
-    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
+    fn get_attributes(&self) -> &Attributes {
+        &self.attributes
+    }
+    fn mut_attributes(&mut self) -> &mut Attributes {
+        &mut self.attributes
+    }
 }
 
 impl<W: Write + Send + Sync + 'static> Buffered for Stream<W> {}
@@ -115,7 +118,6 @@ pub struct TextScope<W: Write + Send + Sync + 'static> {
     output: Stream<W>,
 }
 
-
 impl<W: Write + Send + Sync + 'static> Clone for TextScope<W> {
     fn clone(&self) -> Self {
         TextScope {
@@ -127,8 +129,12 @@ impl<W: Write + Send + Sync + 'static> Clone for TextScope<W> {
 }
 
 impl<W: Write + Send + Sync + 'static> WithAttributes for TextScope<W> {
-    fn get_attributes(&self) -> &Attributes { &self.attributes }
-    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
+    fn get_attributes(&self) -> &Attributes {
+        &self.attributes
+    }
+    fn mut_attributes(&mut self) -> &mut Attributes {
+        &mut self.attributes
+    }
 }
 
 impl<W: Write + Send + Sync + 'static> Buffered for TextScope<W> {}
@@ -147,7 +153,7 @@ impl<W: Write + Send + Sync + 'static> OutputScope for TextScope<W> {
                     Ok(()) => {
                         let mut entries = entries.borrow_mut();
                         entries.push(buffer)
-                    },
+                    }
                     Err(err) => debug!("{}", err),
                 }
             })
@@ -162,7 +168,7 @@ impl<W: Write + Send + Sync + 'static> OutputScope for TextScope<W> {
                         if let Err(e) = output.write_all(&buffer).and_then(|_| output.flush()) {
                             debug!("Could not write text metrics: {}", e)
                         }
-                    },
+                    }
                     Err(err) => debug!("{}", err),
                 }
             })
@@ -171,7 +177,6 @@ impl<W: Write + Send + Sync + 'static> OutputScope for TextScope<W> {
 }
 
 impl<W: Write + Send + Sync + 'static> Flush for TextScope<W> {
-
     fn flush(&self) -> error::Result<()> {
         let mut entries = self.entries.borrow_mut();
         if !entries.is_empty() {

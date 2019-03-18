@@ -1,21 +1,21 @@
 //! Send metrics to a statsd server.
 
-use core::attributes::{Buffered, Attributes, Sampled, Sampling, WithAttributes, Prefixed};
-use core::name::MetricName;
-use core::pcg32;
-use core::{Flush, MetricValue};
+use cache::cache_out;
+use core::attributes::{Attributes, Buffered, Prefixed, Sampled, Sampling, WithAttributes};
+use core::error;
 use core::input::InputKind;
 use core::metrics;
-use core::output::{Output, OutputScope, OutputMetric};
-use core::error;
-use cache::cache_out;
+use core::name::MetricName;
+use core::output::{Output, OutputMetric, OutputScope};
+use core::pcg32;
+use core::{Flush, MetricValue};
 use queue::queue_out;
 
+use std::cell::{RefCell, RefMut};
 use std::net::ToSocketAddrs;
-use std::sync::Arc;
 use std::net::UdpSocket;
 use std::rc::Rc;
-use std::cell::{RefCell, RefMut};
+use std::sync::Arc;
 
 /// Use a safe maximum size for UDP to prevent fragmentation.
 // TODO make configurable?
@@ -62,8 +62,12 @@ impl Output for Statsd {
 }
 
 impl WithAttributes for Statsd {
-    fn get_attributes(&self) -> &Attributes { &self.attributes }
-    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
+    fn get_attributes(&self) -> &Attributes {
+        &self.attributes
+    }
+    fn mut_attributes(&mut self) -> &mut Attributes {
+        &mut self.attributes
+    }
 }
 
 /// Statsd Input
@@ -99,9 +103,13 @@ impl OutputScope for StatsdScope {
         let cloned = self.clone();
 
         if let Sampling::Random(float_rate) = self.get_sampling() {
-            suffix.push_str(&format!{"|@{}\n", float_rate});
+            suffix.push_str(&format! {"|@{}\n", float_rate});
             let int_sampling_rate = pcg32::to_int_rate(float_rate);
-            let metric = StatsdMetric { prefix, suffix, scale };
+            let metric = StatsdMetric {
+                prefix,
+                suffix,
+                scale,
+            };
 
             OutputMetric::new(move |value, _labels| {
                 if pcg32::accept_sample(int_sampling_rate) {
@@ -110,16 +118,17 @@ impl OutputScope for StatsdScope {
             })
         } else {
             suffix.push_str("\n");
-            let metric = StatsdMetric { prefix, suffix, scale };
-            OutputMetric::new(move |value, _labels| {
-                cloned.print(&metric, value)
-            })
+            let metric = StatsdMetric {
+                prefix,
+                suffix,
+                scale,
+            };
+            OutputMetric::new(move |value, _labels| cloned.print(&metric, value))
         }
     }
 }
 
 impl Flush for StatsdScope {
-
     fn flush(&self) -> error::Result<()> {
         let buf = self.buffer.borrow_mut();
         self.flush_inner(buf)
@@ -127,7 +136,7 @@ impl Flush for StatsdScope {
 }
 
 impl StatsdScope {
-    fn print(&self, metric: &StatsdMetric, value: MetricValue)  {
+    fn print(&self, metric: &StatsdMetric, value: MetricValue) {
         let scaled_value = value / metric.scale;
         let value_str = scaled_value.to_string();
         let entry_len = metric.prefix.len() + value_str.len() + metric.suffix.len();
@@ -143,7 +152,6 @@ impl StatsdScope {
             // buffer is nearly full, make room
             let _ = self.flush_inner(buffer);
             buffer = self.buffer.borrow_mut();
-
         } else {
             if !buffer.is_empty() {
                 // separate from previous entry
@@ -170,7 +178,7 @@ impl StatsdScope {
                 }
                 Err(e) => {
                     metrics::STATSD_SEND_ERR.mark();
-                    return Err(e.into())
+                    return Err(e.into());
                 }
             };
             buffer.clear();
@@ -180,8 +188,12 @@ impl StatsdScope {
 }
 
 impl WithAttributes for StatsdScope {
-    fn get_attributes(&self) -> &Attributes { &self.attributes }
-    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
+    fn get_attributes(&self) -> &Attributes {
+        &self.attributes
+    }
+    fn mut_attributes(&mut self) -> &mut Attributes {
+        &mut self.attributes
+    }
 }
 
 impl Buffered for StatsdScope {}
@@ -250,9 +262,9 @@ impl Drop for StatsdScope {
 #[cfg(feature = "bench")]
 mod bench {
 
+    use super::*;
     use core::attributes::*;
     use core::input::*;
-    use super::*;
     use test;
 
     #[bench]
@@ -265,8 +277,10 @@ mod bench {
 
     #[bench]
     pub fn buffering_statsd(b: &mut test::Bencher) {
-        let sd = Statsd::send_to("localhost:2003").unwrap()
-            .buffered(Buffering::BufferSize(65465)).metrics();
+        let sd = Statsd::send_to("localhost:2003")
+            .unwrap()
+            .buffered(Buffering::BufferSize(65465))
+            .metrics();
         let timer = sd.new_metric("timer".into(), InputKind::Timer);
 
         b.iter(|| test::black_box(timer.write(2000, labels![])));

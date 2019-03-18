@@ -2,21 +2,21 @@
 //! Metrics definitions are still synchronous.
 //! If queue size is exceeded, calling code reverts to blocking.
 
-use core::attributes::{Attributes, WithAttributes, Prefixed};
-use core::name::MetricName;
-use core::input::{InputKind, Input, InputScope, InputDyn, InputMetric};
-use core::{MetricValue, Flush};
-use core::metrics;
 use cache::cache_in::CachedInput;
+use core::attributes::{Attributes, Prefixed, WithAttributes};
 use core::error;
+use core::input::{Input, InputDyn, InputKind, InputMetric, InputScope};
 use core::label::Labels;
+use core::metrics;
+use core::name::MetricName;
+use core::{Flush, MetricValue};
 
-use std::sync::Arc;
-#[cfg(not(feature="crossbeam-channel"))]
+#[cfg(not(feature = "crossbeam-channel"))]
 use std::sync::mpsc;
+use std::sync::Arc;
 use std::thread;
 
-#[cfg(feature="crossbeam-channel")]
+#[cfg(feature = "crossbeam-channel")]
 use crossbeam_channel as crossbeam;
 
 /// Wrap this output behind an asynchronous metrics dispatch queue.
@@ -32,7 +32,7 @@ pub trait QueuedInput: Input + Send + Sync + 'static + Sized {
 /// # Panics
 ///
 /// Panics if the OS fails to create a thread.
-#[cfg(not(feature="crossbeam-channel"))]
+#[cfg(not(feature = "crossbeam-channel"))]
 fn new_async_channel(length: usize) -> Arc<mpsc::SyncSender<InputQueueCmd>> {
     let (sender, receiver) = mpsc::sync_channel::<InputQueueCmd>(length);
 
@@ -43,9 +43,11 @@ fn new_async_channel(length: usize) -> Arc<mpsc::SyncSender<InputQueueCmd>> {
             while !done {
                 match receiver.recv() {
                     Ok(InputQueueCmd::Write(metric, value, labels)) => metric.write(value, labels),
-                    Ok(InputQueueCmd::Flush(scope)) => if let Err(e) = scope.flush() {
-                        debug!("Could not asynchronously flush metrics: {}", e);
-                    },
+                    Ok(InputQueueCmd::Flush(scope)) => {
+                        if let Err(e) = scope.flush() {
+                            debug!("Could not asynchronously flush metrics: {}", e);
+                        }
+                    }
                     Err(e) => {
                         debug!("Async metrics receive loop terminated: {}", e);
                         // cannot break from within match, use safety pin instead
@@ -61,7 +63,7 @@ fn new_async_channel(length: usize) -> Arc<mpsc::SyncSender<InputQueueCmd>> {
 /// # Panics
 ///
 /// Panics if the OS fails to create a thread.
-#[cfg(feature="crossbeam-channel")]
+#[cfg(feature = "crossbeam-channel")]
 fn new_async_channel(length: usize) -> Arc<crossbeam::Sender<InputQueueCmd>> {
     let (sender, receiver) = crossbeam::bounded::<InputQueueCmd>(length);
 
@@ -72,9 +74,11 @@ fn new_async_channel(length: usize) -> Arc<crossbeam::Sender<InputQueueCmd>> {
             while !done {
                 match receiver.recv() {
                     Ok(InputQueueCmd::Write(metric, value, labels)) => metric.write(value, labels),
-                    Ok(InputQueueCmd::Flush(scope)) => if let Err(e) = scope.flush() {
-                        debug!("Could not asynchronously flush metrics: {}", e);
-                    },
+                    Ok(InputQueueCmd::Flush(scope)) => {
+                        if let Err(e) = scope.flush() {
+                            debug!("Could not asynchronously flush metrics: {}", e);
+                        }
+                    }
                     Err(e) => {
                         debug!("Async metrics receive loop terminated: {}", e);
                         // cannot break from within match, use safety pin instead
@@ -92,9 +96,9 @@ fn new_async_channel(length: usize) -> Arc<crossbeam::Sender<InputQueueCmd>> {
 pub struct InputQueue {
     attributes: Attributes,
     target: Arc<InputDyn + Send + Sync + 'static>,
-    #[cfg(not(feature="crossbeam-channel"))]
+    #[cfg(not(feature = "crossbeam-channel"))]
     sender: Arc<mpsc::SyncSender<InputQueueCmd>>,
-    #[cfg(feature="crossbeam-channel")]
+    #[cfg(feature = "crossbeam-channel")]
     sender: Arc<crossbeam::Sender<InputQueueCmd>>,
 }
 
@@ -112,8 +116,12 @@ impl InputQueue {
 impl CachedInput for InputQueue {}
 
 impl WithAttributes for InputQueue {
-    fn get_attributes(&self) -> &Attributes { &self.attributes }
-    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
+    fn get_attributes(&self) -> &Attributes {
+        &self.attributes
+    }
+    fn mut_attributes(&mut self) -> &mut Attributes {
+        &mut self.attributes
+    }
 }
 
 impl Input for InputQueue {
@@ -144,16 +152,19 @@ pub enum InputQueueCmd {
 #[derive(Clone)]
 pub struct InputQueueScope {
     attributes: Attributes,
-    #[cfg(not(feature="crossbeam-channel"))]
+    #[cfg(not(feature = "crossbeam-channel"))]
     sender: Arc<mpsc::SyncSender<InputQueueCmd>>,
-    #[cfg(feature="crossbeam-channel")]
+    #[cfg(feature = "crossbeam-channel")]
     sender: Arc<crossbeam::Sender<InputQueueCmd>>,
     target: Arc<InputScope + Send + Sync + 'static>,
 }
 
 impl InputQueueScope {
     /// Wrap new scopes with an asynchronous metric write & flush dispatcher.
-    pub fn wrap<SC: InputScope + Send + Sync + 'static>(target_scope: SC, queue_length: usize) -> Self {
+    pub fn wrap<SC: InputScope + Send + Sync + 'static>(
+        target_scope: SC,
+        queue_length: usize,
+    ) -> Self {
         InputQueueScope {
             attributes: Attributes::default(),
             sender: new_async_channel(queue_length),
@@ -163,8 +174,12 @@ impl InputQueueScope {
 }
 
 impl WithAttributes for InputQueueScope {
-    fn get_attributes(&self) -> &Attributes { &self.attributes }
-    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
+    fn get_attributes(&self) -> &Attributes {
+        &self.attributes
+    }
+    fn mut_attributes(&mut self) -> &mut Attributes {
+        &mut self.attributes
+    }
 }
 
 impl InputScope for InputQueueScope {
@@ -174,7 +189,8 @@ impl InputScope for InputQueueScope {
         let sender = self.sender.clone();
         InputMetric::new(move |value, mut labels| {
             labels.save_context();
-            if let Err(e) = sender.send(InputQueueCmd::Write(target_metric.clone(), value, labels)) {
+            if let Err(e) = sender.send(InputQueueCmd::Write(target_metric.clone(), value, labels))
+            {
                 metrics::SEND_FAILED.mark();
                 debug!("Failed to send async metrics: {}", e);
             }
@@ -183,7 +199,6 @@ impl InputScope for InputQueueScope {
 }
 
 impl Flush for InputQueueScope {
-
     fn flush(&self) -> error::Result<()> {
         if let Err(e) = self.sender.send(InputQueueCmd::Flush(self.target.clone())) {
             metrics::SEND_FAILED.mark();
@@ -194,4 +209,3 @@ impl Flush for InputQueueScope {
         }
     }
 }
-

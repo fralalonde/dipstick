@@ -8,7 +8,8 @@ use time;
 
 fn seed() -> u64 {
     let seed = 5573589319906701683_u64;
-    let seed = seed.wrapping_mul(6364136223846793005)
+    let seed = seed
+        .wrapping_mul(6364136223846793005)
         .wrapping_add(1442695040888963407)
         .wrapping_add(time::precise_time_ns());
     seed.wrapping_mul(6364136223846793005)

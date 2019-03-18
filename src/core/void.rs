@@ -1,6 +1,6 @@
-use core::output::{Output, OutputScope, OutputMetric};
+use core::input::{InputDyn, InputKind, InputScope};
 use core::name::MetricName;
-use core::input::{InputKind, InputDyn, InputScope};
+use core::output::{Output, OutputMetric, OutputScope};
 use core::Flush;
 
 use std::sync::Arc;
@@ -17,14 +17,13 @@ lazy_static! {
 #[derive(Clone)]
 pub struct Void {}
 
-
 /// Discard metrics output.
 #[derive(Clone)]
 pub struct VoidOutput {}
 
 impl Void {
     /// Void metrics builder.
-    #[deprecated(since="0.7.2", note="Use new()")]
+    #[deprecated(since = "0.7.2", note = "Use new()")]
     pub fn metrics() -> Self {
         Self::new()
     }
@@ -49,5 +48,4 @@ impl OutputScope for VoidOutput {
     }
 }
 
-impl Flush for VoidOutput {
-}
+impl Flush for VoidOutput {}
