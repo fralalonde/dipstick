@@ -1,11 +1,11 @@
 //! A TCP Socket wrapper that reconnects automatically.
 
+use std::fmt;
+use std::io;
+use std::io::Write;
 use std::net::TcpStream;
 use std::net::{SocketAddr, ToSocketAddrs};
-use std::io;
 use std::time::{Duration, Instant};
-use std::fmt;
-use std::io::Write;
 
 const MIN_RECONNECT_DELAY_MS: u64 = 50;
 const MAX_RECONNECT_DELAY_MS: u64 = 10_000;

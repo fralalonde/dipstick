@@ -1,19 +1,19 @@
 //! Metric input scope caching.
 
-use core::Flush;
-use core::input::{InputKind, Input, InputScope, InputMetric, InputDyn};
-use core::attributes::{Attributes, WithAttributes, Prefixed};
-use core::name::MetricName;
 use cache::lru_cache as lru;
+use core::attributes::{Attributes, Prefixed, WithAttributes};
 use core::error;
+use core::input::{Input, InputDyn, InputKind, InputMetric, InputScope};
+use core::name::MetricName;
+use core::Flush;
 
-use std::sync::{Arc};
+use std::sync::Arc;
 
-#[cfg(not(feature="parking_lot"))]
-use std::sync::{RwLock};
+#[cfg(not(feature = "parking_lot"))]
+use std::sync::RwLock;
 
-#[cfg(feature="parking_lot")]
-use parking_lot::{RwLock};
+#[cfg(feature = "parking_lot")]
+use parking_lot::RwLock;
 
 /// Wrap an input with a metric definition cache.
 /// This can provide performance benefits for metrics that are dynamically defined at runtime on each access.
@@ -43,14 +43,18 @@ impl InputCache {
         InputCache {
             attributes: Attributes::default(),
             target: Arc::new(target),
-            cache: Arc::new(RwLock::new(lru::LRUCache::with_capacity(max_size)))
+            cache: Arc::new(RwLock::new(lru::LRUCache::with_capacity(max_size))),
         }
     }
 }
 
 impl WithAttributes for InputCache {
-    fn get_attributes(&self) -> &Attributes { &self.attributes }
-    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
+    fn get_attributes(&self) -> &Attributes {
+        &self.attributes
+    }
+    fn mut_attributes(&mut self) -> &mut Attributes {
+        &mut self.attributes
+    }
 }
 
 impl Input for InputCache {
@@ -75,16 +79,18 @@ pub struct InputScopeCache {
 }
 
 impl WithAttributes for InputScopeCache {
-    fn get_attributes(&self) -> &Attributes { &self.attributes }
-    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
+    fn get_attributes(&self) -> &Attributes {
+        &self.attributes
+    }
+    fn mut_attributes(&mut self) -> &mut Attributes {
+        &mut self.attributes
+    }
 }
 
 impl InputScope for InputScopeCache {
     fn new_metric(&self, name: MetricName, kind: InputKind) -> InputMetric {
         let name = self.prefix_append(name);
-        let lookup = {
-            write_lock!(self.cache).get(&name).cloned()
-        };
+        let lookup = { write_lock!(self.cache).get(&name).cloned() };
         lookup.unwrap_or_else(|| {
             let new_metric = self.target.new_metric(name.clone(), kind);
             // FIXME (perf) having to take another write lock for a cache miss
@@ -95,7 +101,6 @@ impl InputScope for InputScopeCache {
 }
 
 impl Flush for InputScopeCache {
-
     fn flush(&self) -> error::Result<()> {
         self.target.flush()
     }

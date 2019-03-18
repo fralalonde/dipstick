@@ -2,26 +2,26 @@
 //! RawMetrics definitions are still synchronous.
 //! If queue size is exceeded, calling code reverts to blocking.
 
-use core::attributes::{Attributes, WithAttributes, Prefixed};
-use core::name::MetricName;
-use core::input::{InputKind, Input, InputScope, InputMetric};
-use core::output::{OutputDyn, OutputScope, OutputMetric, Output};
-use core::{MetricValue, Flush};
-use core::metrics;
 use cache::cache_in;
+use core::attributes::{Attributes, Prefixed, WithAttributes};
 use core::error;
+use core::input::{Input, InputKind, InputMetric, InputScope};
 use core::label::Labels;
+use core::metrics;
+use core::name::MetricName;
+use core::output::{Output, OutputDyn, OutputMetric, OutputScope};
+use core::{Flush, MetricValue};
 
-use std::rc::Rc;
-use std::ops;
 use std::fmt;
+use std::ops;
+use std::rc::Rc;
 
-use std::sync::Arc;
-#[cfg(not(feature="crossbeam-channel"))]
+#[cfg(not(feature = "crossbeam-channel"))]
 use std::sync::mpsc;
+use std::sync::Arc;
 use std::thread;
 
-#[cfg(feature="crossbeam-channel")]
+#[cfg(feature = "crossbeam-channel")]
 use crossbeam_channel as crossbeam;
 
 /// Wrap this raw output behind an asynchronous metrics dispatch queue.
@@ -35,7 +35,7 @@ pub trait QueuedOutput: Output + Sized {
 /// # Panics
 ///
 /// Panics if the OS fails to create a thread.
-#[cfg(not(feature="crossbeam-channel"))]
+#[cfg(not(feature = "crossbeam-channel"))]
 fn new_async_channel(length: usize) -> Arc<mpsc::SyncSender<OutputQueueCmd>> {
     let (sender, receiver) = mpsc::sync_channel::<OutputQueueCmd>(length);
 
@@ -46,9 +46,11 @@ fn new_async_channel(length: usize) -> Arc<mpsc::SyncSender<OutputQueueCmd>> {
             while !done {
                 match receiver.recv() {
                     Ok(OutputQueueCmd::Write(metric, value, labels)) => metric.write(value, labels),
-                    Ok(OutputQueueCmd::Flush(scope)) => if let Err(e) = scope.flush() {
-                        debug!("Could not asynchronously flush metrics: {}", e);
-                    },
+                    Ok(OutputQueueCmd::Flush(scope)) => {
+                        if let Err(e) = scope.flush() {
+                            debug!("Could not asynchronously flush metrics: {}", e);
+                        }
+                    }
                     Err(e) => {
                         debug!("Async metrics receive loop terminated: {}", e);
                         // cannot break from within match, use safety pin instead
@@ -64,7 +66,7 @@ fn new_async_channel(length: usize) -> Arc<mpsc::SyncSender<OutputQueueCmd>> {
 /// # Panics
 ///
 /// Panics if the OS fails to create a thread.
-#[cfg(feature="crossbeam-channel")]
+#[cfg(feature = "crossbeam-channel")]
 fn new_async_channel(length: usize) -> Arc<crossbeam::Sender<OutputQueueCmd>> {
     let (sender, receiver) = crossbeam::bounded::<OutputQueueCmd>(length);
 
@@ -75,9 +77,11 @@ fn new_async_channel(length: usize) -> Arc<crossbeam::Sender<OutputQueueCmd>> {
             while !done {
                 match receiver.recv() {
                     Ok(OutputQueueCmd::Write(metric, value, labels)) => metric.write(value, labels),
-                    Ok(OutputQueueCmd::Flush(scope)) => if let Err(e) = scope.flush() {
-                        debug!("Could not asynchronously flush metrics: {}", e);
-                    },
+                    Ok(OutputQueueCmd::Flush(scope)) => {
+                        if let Err(e) = scope.flush() {
+                            debug!("Could not asynchronously flush metrics: {}", e);
+                        }
+                    }
                     Err(e) => {
                         debug!("Async metrics receive loop terminated: {}", e);
                         // cannot break from within match, use safety pin instead
@@ -90,15 +94,14 @@ fn new_async_channel(length: usize) -> Arc<crossbeam::Sender<OutputQueueCmd>> {
     Arc::new(sender)
 }
 
-
 /// Wrap scope with an asynchronous metric write & flush dispatcher.
 #[derive(Clone)]
 pub struct OutputQueue {
     attributes: Attributes,
     target: Arc<OutputDyn + Send + Sync + 'static>,
-    #[cfg(not(feature="crossbeam-channel"))]
+    #[cfg(not(feature = "crossbeam-channel"))]
     q_sender: Arc<mpsc::SyncSender<OutputQueueCmd>>,
-    #[cfg(feature="crossbeam-channel")]
+    #[cfg(feature = "crossbeam-channel")]
     q_sender: Arc<crossbeam::Sender<OutputQueueCmd>>,
 }
 
@@ -114,8 +117,12 @@ impl OutputQueue {
 }
 
 impl WithAttributes for OutputQueue {
-    fn get_attributes(&self) -> &Attributes { &self.attributes }
-    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
+    fn get_attributes(&self) -> &Attributes {
+        &self.attributes
+    }
+    fn mut_attributes(&mut self) -> &mut Attributes {
+        &mut self.attributes
+    }
 }
 
 impl cache_in::CachedInput for OutputQueue {}
@@ -132,7 +139,6 @@ impl Input for OutputQueue {
             target: Arc::new(target_scope),
         }
     }
-
 }
 
 /// This is only `pub` because `error` module needs to know about it.
@@ -149,16 +155,20 @@ pub enum OutputQueueCmd {
 #[derive(Clone)]
 pub struct OutputQueueScope {
     attributes: Attributes,
-    #[cfg(not(feature="crossbeam-channel"))]
+    #[cfg(not(feature = "crossbeam-channel"))]
     sender: Arc<mpsc::SyncSender<OutputQueueCmd>>,
-    #[cfg(feature="crossbeam-channel")]
+    #[cfg(feature = "crossbeam-channel")]
     sender: Arc<crossbeam::Sender<OutputQueueCmd>>,
     target: Arc<UnsafeScope>,
 }
 
 impl WithAttributes for OutputQueueScope {
-    fn get_attributes(&self) -> &Attributes { &self.attributes }
-    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
+    fn get_attributes(&self) -> &Attributes {
+        &self.attributes
+    }
+    fn mut_attributes(&mut self) -> &mut Attributes {
+        &mut self.attributes
+    }
 }
 
 impl InputScope for OutputQueueScope {
@@ -168,7 +178,8 @@ impl InputScope for OutputQueueScope {
         let sender = self.sender.clone();
         InputMetric::new(move |value, mut labels| {
             labels.save_context();
-            if let Err(e) = sender.send(OutputQueueCmd::Write(target_metric.clone(), value, labels)) {
+            if let Err(e) = sender.send(OutputQueueCmd::Write(target_metric.clone(), value, labels))
+            {
                 metrics::SEND_FAILED.mark();
                 debug!("Failed to send async metrics: {}", e);
             }
@@ -177,7 +188,6 @@ impl InputScope for OutputQueueScope {
 }
 
 impl Flush for OutputQueueScope {
-
     fn flush(&self) -> error::Result<()> {
         if let Err(e) = self.sender.send(OutputQueueCmd::Flush(self.target.clone())) {
             metrics::SEND_FAILED.mark();
@@ -192,7 +202,7 @@ impl Flush for OutputQueueScope {
 /// Wrap an OutputScope to make it Send + Sync, allowing it to travel the world of threads.
 /// Obviously, it should only still be used from a single thread or dragons may occur.
 #[derive(Clone)]
-pub struct UnsafeScope(Rc<OutputScope + 'static> );
+pub struct UnsafeScope(Rc<OutputScope + 'static>);
 
 /// This is ok because scope will only ever be used by the dispatcher thread.
 unsafe impl Send for UnsafeScope {}
@@ -214,7 +224,6 @@ impl ops::Deref for UnsafeScope {
     }
 }
 
-
 impl fmt::Debug for OutputMetric {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Box<Fn(Value)>")
@@ -224,4 +233,3 @@ impl fmt::Debug for OutputMetric {
 unsafe impl Send for OutputMetric {}
 
 unsafe impl Sync for OutputMetric {}
-

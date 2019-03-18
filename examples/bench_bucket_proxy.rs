@@ -2,12 +2,12 @@
 
 extern crate dipstick;
 
-use std::thread::sleep;
-use std::time::Duration;
 use dipstick::*;
-use std::thread;
 use std::env::args;
 use std::str::FromStr;
+use std::thread;
+use std::thread::sleep;
+use std::time::Duration;
 
 fn main() {
     let event = Proxy::default().marker("a");
@@ -30,5 +30,4 @@ fn main() {
     }
     sleep(Duration::from_secs(5));
     bucket.flush_to(&Stream::to_stdout().new_scope()).unwrap();
-
 }

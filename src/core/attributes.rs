@@ -1,8 +1,8 @@
-use std::sync::Arc;
-use std::collections::{HashMap};
+use std::collections::HashMap;
 use std::default::Default;
+use std::sync::Arc;
 
-use core::name::{NameParts, MetricName};
+use core::name::{MetricName, NameParts};
 
 /// The actual distribution (random, fixed-cycled, etc) depends on selected sampling method.
 #[derive(Debug, Clone, Copy)]
@@ -15,7 +15,7 @@ pub enum Sampling {
     /// - 1.0+ records everything
     /// - 0.5 records one of two values
     /// - 0.0 records nothing
-    Random(f64)
+    Random(f64),
 }
 
 impl Default for Sampling {
@@ -78,7 +78,7 @@ pub trait Prefixed {
 
     /// Append a name to the existing names.
     /// Return a clone of the component with the updated names.
-    #[deprecated(since="0.7.2", note="Use add_name()")]
+    #[deprecated(since = "0.7.2", note = "Use add_name()")]
     fn add_prefix<S: Into<String>>(&self, name: S) -> Self;
 
     /// Append a name to the existing names.
@@ -108,11 +108,9 @@ pub trait Label {
 
     /// Join namespace and prepend in newly defined metrics.
     fn label(&self, name: &str) -> Self;
-
 }
 
 impl<T: WithAttributes> Prefixed for T {
-
     /// Returns namespace of component.
     fn get_prefixes(&self) -> &NameParts {
         &self.get_attributes().naming
@@ -138,7 +136,6 @@ impl<T: WithAttributes> Prefixed for T {
     fn add_prefix<S: Into<String>>(&self, name: S) -> Self {
         self.add_name(name)
     }
-
 }
 
 /// Apply statistical sampling to collected metrics data.

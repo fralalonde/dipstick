@@ -3,10 +3,10 @@
 
 extern crate dipstick;
 
-use std::thread::sleep;
-use std::io;
-use std::time::Duration;
 use dipstick::*;
+use std::io;
+use std::thread::sleep;
+use std::time::Duration;
 
 fn main() {
     // for this demo, print metric values to the console

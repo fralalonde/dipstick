@@ -2,10 +2,10 @@
 
 extern crate dipstick;
 
+use dipstick::{Input, InputScope, QueuedOutput, Stream};
+use std::thread;
 use std::thread::sleep;
 use std::time::Duration;
-use dipstick::{Stream, InputScope, QueuedOutput, Input};
-use std::thread;
 
 fn main() {
     let async_metrics = Stream::to_stdout().queued(100).metrics();
@@ -21,5 +21,4 @@ fn main() {
         });
     }
     sleep(Duration::from_secs(5000));
-
 }

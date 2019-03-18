@@ -162,7 +162,7 @@ macro_rules! metrics {
     };
 
     (@internal $WITH:expr; $TYPE:ty;) => ()
-    
+
 }
 
 #[cfg(test)]
@@ -170,7 +170,7 @@ mod test {
     use core::input::*;
     use core::proxy::Proxy;
 
-    metrics!{TEST: Proxy = "test_prefix" => {
+    metrics! {TEST: Proxy = "test_prefix" => {
         pub M1: Marker = "failed";
         C1: Counter = "failed";
         G1: Gauge = "failed";

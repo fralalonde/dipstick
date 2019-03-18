@@ -2,10 +2,9 @@
 
 extern crate dipstick;
 
+use dipstick::{Input, InputScope, Prefixed, Proxy, Stream};
 use std::thread::sleep;
 use std::time::Duration;
-use dipstick::{Proxy, Stream, InputScope, Input, Prefixed};
-
 
 fn main() {
     let root_proxy = Proxy::default();
@@ -50,5 +49,4 @@ fn main() {
 
         println!()
     }
-
 }

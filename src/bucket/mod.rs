@@ -1,8 +1,8 @@
 pub mod atomic;
 
 use core::input::InputKind;
+use core::name::MetricName;
 use core::MetricValue;
-use core::name::{MetricName};
 
 /// Possibly aggregated scores.
 #[derive(Debug, Clone, Copy)]
@@ -24,16 +24,22 @@ pub enum ScoreType {
 /// A predefined export strategy reporting all aggregated stats for all metric types.
 /// Resulting stats are named by appending a short suffix to each metric's name.
 #[allow(dead_code)]
-pub fn stats_all(kind: InputKind, name: MetricName, score: ScoreType)
-    -> Option<(InputKind, MetricName, MetricValue)>
-{
+pub fn stats_all(
+    kind: InputKind,
+    name: MetricName,
+    score: ScoreType,
+) -> Option<(InputKind, MetricName, MetricValue)> {
     match score {
         ScoreType::Count(hit) => Some((InputKind::Counter, name.make_name("count"), hit)),
         ScoreType::Sum(sum) => Some((kind, name.make_name("sum"), sum)),
         ScoreType::Mean(mean) => Some((kind, name.make_name("mean"), mean.round() as MetricValue)),
         ScoreType::Max(max) => Some((InputKind::Gauge, name.make_name("max"), max)),
         ScoreType::Min(min) => Some((InputKind::Gauge, name.make_name("min"), min)),
-        ScoreType::Rate(rate) => Some((InputKind::Gauge, name.make_name("rate"), rate.round() as MetricValue)),
+        ScoreType::Rate(rate) => Some((
+            InputKind::Gauge,
+            name.make_name("rate"),
+            rate.round() as MetricValue,
+        )),
     }
 }
 
@@ -42,9 +48,11 @@ pub fn stats_all(kind: InputKind, name: MetricName, score: ScoreType)
 /// Since there is only one stat per metric, there is no risk of collision
 /// and so exported stats copy their metric's name.
 #[allow(dead_code)]
-pub fn stats_average(kind: InputKind, name: MetricName, score: ScoreType)
-    -> Option<(InputKind, MetricName, MetricValue)>
-{
+pub fn stats_average(
+    kind: InputKind,
+    name: MetricName,
+    score: ScoreType,
+) -> Option<(InputKind, MetricName, MetricValue)> {
     match kind {
         InputKind::Marker => match score {
             ScoreType::Count(count) => Some((InputKind::Counter, name, count)),
@@ -64,9 +72,11 @@ pub fn stats_average(kind: InputKind, name: MetricName, score: ScoreType)
 /// Since there is only one stat per metric, there is no risk of collision
 /// and so exported stats copy their metric's name.
 #[allow(dead_code)]
-pub fn stats_summary(kind: InputKind, name: MetricName, score: ScoreType)
-    -> Option<(InputKind, MetricName, MetricValue)>
-{
+pub fn stats_summary(
+    kind: InputKind,
+    name: MetricName,
+    score: ScoreType,
+) -> Option<(InputKind, MetricName, MetricValue)> {
     match kind {
         InputKind::Marker => match score {
             ScoreType::Count(count) => Some((InputKind::Counter, name, count)),

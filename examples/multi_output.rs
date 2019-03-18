@@ -16,11 +16,16 @@ fn main() {
     let same_type_metrics = MultiOutput::new()
         .add_target(Stream::to_stderr().named("yeah"))
         .add_target(Stream::to_stderr().named("ouch"))
-        .named("both").metrics();
+        .named("both")
+        .metrics();
 
     loop {
-        different_type_metrics.new_metric("counter_a".into(), InputKind::Counter).write(123, labels![]);
-        same_type_metrics.new_metric("timer_a".into(), InputKind::Timer).write(6677, labels![]);
+        different_type_metrics
+            .new_metric("counter_a".into(), InputKind::Counter)
+            .write(123, labels![]);
+        same_type_metrics
+            .new_metric("timer_a".into(), InputKind::Timer)
+            .write(6677, labels![]);
         std::thread::sleep(Duration::from_millis(400));
     }
 }

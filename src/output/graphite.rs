@@ -1,32 +1,32 @@
 //! Send metrics to a graphite server.
 
-use core::attributes::{Buffered, Attributes, WithAttributes, Prefixed};
-use core::name::MetricName;
-use core::{Flush, MetricValue};
+use cache::cache_out;
+use core::attributes::{Attributes, Buffered, Prefixed, WithAttributes};
+use core::error;
 use core::input::InputKind;
 use core::metrics;
-use core::output::{Output, OutputScope, OutputMetric};
-use core::error;
-use queue::queue_out;
-use cache::cache_out;
+use core::name::MetricName;
+use core::output::{Output, OutputMetric, OutputScope};
+use core::{Flush, MetricValue};
 use output::socket::RetrySocket;
+use queue::queue_out;
 
 use std::net::ToSocketAddrs;
 
-use std::time::{SystemTime, UNIX_EPOCH};
-use std::io::Write;
 use std::fmt::Debug;
+use std::io::Write;
+use std::time::{SystemTime, UNIX_EPOCH};
 
-use std::rc::Rc;
 use std::cell::{RefCell, RefMut};
+use std::rc::Rc;
 
-use std::sync::{Arc};
+use std::sync::Arc;
 
-#[cfg(not(feature="parking_lot"))]
-use std::sync::{RwLock};
+#[cfg(not(feature = "parking_lot"))]
+use std::sync::RwLock;
 
-#[cfg(feature="parking_lot")]
-use parking_lot::{RwLock};
+#[cfg(feature = "parking_lot")]
+use parking_lot::RwLock;
 
 /// Graphite output holds a socket to a graphite server.
 /// The socket is shared between scopes opened from the output.
@@ -62,8 +62,12 @@ impl Graphite {
 }
 
 impl WithAttributes for Graphite {
-    fn get_attributes(&self) -> &Attributes { &self.attributes }
-    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
+    fn get_attributes(&self) -> &Attributes {
+        &self.attributes
+    }
+    fn mut_attributes(&mut self) -> &mut Attributes {
+        &mut self.attributes
+    }
 }
 
 impl Buffered for Graphite {}
@@ -98,7 +102,6 @@ impl OutputScope for GraphiteScope {
 }
 
 impl Flush for GraphiteScope {
-
     fn flush(&self) -> error::Result<()> {
         let buf = self.buffer.borrow_mut();
         self.flush_inner(buf)
@@ -106,7 +109,7 @@ impl Flush for GraphiteScope {
 }
 
 impl GraphiteScope {
-    fn print(&self, metric: &GraphiteMetric, value: MetricValue)  {
+    fn print(&self, metric: &GraphiteMetric, value: MetricValue) {
         let scaled_value = value / metric.scale;
         let value_str = scaled_value.to_string();
 
@@ -141,7 +144,9 @@ impl GraphiteScope {
     }
 
     fn flush_inner(&self, mut buf: RefMut<String>) -> error::Result<()> {
-        if buf.is_empty() { return Ok(()) }
+        if buf.is_empty() {
+            return Ok(());
+        }
 
         let mut sock = write_lock!(self.socket);
         match sock.write_all(buf.as_bytes()) {
@@ -157,13 +162,16 @@ impl GraphiteScope {
                 Err(e.into())
             }
         }
-
     }
 }
 
 impl WithAttributes for GraphiteScope {
-    fn get_attributes(&self) -> &Attributes { &self.attributes }
-    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
+    fn get_attributes(&self) -> &Attributes {
+        &self.attributes
+    }
+    fn mut_attributes(&mut self) -> &mut Attributes {
+        &mut self.attributes
+    }
 }
 
 impl Buffered for GraphiteScope {}
@@ -194,9 +202,9 @@ impl Drop for GraphiteScope {
 #[cfg(feature = "bench")]
 mod bench {
 
+    use super::*;
     use core::attributes::*;
     use core::input::*;
-    use super::*;
     use test;
 
     #[bench]
@@ -209,8 +217,10 @@ mod bench {
 
     #[bench]
     pub fn buffering_graphite(b: &mut test::Bencher) {
-        let sd = Graphite::send_to("localhost:2003").unwrap()
-            .buffered(Buffering::BufferSize(65465)).metrics();
+        let sd = Graphite::send_to("localhost:2003")
+            .unwrap()
+            .buffered(Buffering::BufferSize(65465))
+            .metrics();
         let timer = sd.new_metric("timer".into(), InputKind::Timer);
 
         b.iter(|| test::black_box(timer.write(2000, labels![])));

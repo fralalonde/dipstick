@@ -2,8 +2,8 @@
 
 extern crate dipstick;
 
-use std::time::Duration;
 use std::thread::sleep;
+use std::time::Duration;
 
 use dipstick::*;
 

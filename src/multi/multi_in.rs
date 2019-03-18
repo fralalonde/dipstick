@@ -1,10 +1,10 @@
 //! Dispatch metrics to multiple sinks.
 
-use core::Flush;
-use core::input::{InputKind, Input, InputScope, InputMetric, InputDyn};
-use core::attributes::{Attributes, WithAttributes, Prefixed};
-use core::name::MetricName;
+use core::attributes::{Attributes, Prefixed, WithAttributes};
 use core::error;
+use core::input::{Input, InputDyn, InputKind, InputMetric, InputScope};
+use core::name::MetricName;
+use core::Flush;
 
 use std::sync::Arc;
 
@@ -29,7 +29,7 @@ impl Input for MultiInput {
 
 impl MultiInput {
     /// Create a new multi-input dispatcher.
-    #[deprecated(since="0.7.2", note="Use new()")]
+    #[deprecated(since = "0.7.2", note = "Use new()")]
     pub fn input() -> Self {
         Self::new()
     }
@@ -51,8 +51,12 @@ impl MultiInput {
 }
 
 impl WithAttributes for MultiInput {
-    fn get_attributes(&self) -> &Attributes { &self.attributes }
-    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
+    fn get_attributes(&self) -> &Attributes {
+        &self.attributes
+    }
+    fn mut_attributes(&mut self) -> &mut Attributes {
+        &mut self.attributes
+    }
 }
 
 /// Dispatch metric values to a list of scopes.
@@ -78,17 +82,20 @@ impl MultiInputScope {
         cloned.scopes.push(Arc::new(scope));
         cloned
     }
-
 }
 
 impl InputScope for MultiInputScope {
     fn new_metric(&self, name: MetricName, kind: InputKind) -> InputMetric {
         let name = &self.prefix_append(name);
-        let metrics: Vec<InputMetric> = self.scopes.iter()
+        let metrics: Vec<InputMetric> = self
+            .scopes
+            .iter()
             .map(move |scope| scope.new_metric(name.clone(), kind))
             .collect();
-        InputMetric::new(move |value, labels| for metric in &metrics {
-            metric.write(value, labels.clone())
+        InputMetric::new(move |value, labels| {
+            for metric in &metrics {
+                metric.write(value, labels.clone())
+            }
         })
     }
 }
@@ -103,6 +110,10 @@ impl Flush for MultiInputScope {
 }
 
 impl WithAttributes for MultiInputScope {
-    fn get_attributes(&self) -> &Attributes { &self.attributes }
-    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
+    fn get_attributes(&self) -> &Attributes {
+        &self.attributes
+    }
+    fn mut_attributes(&mut self) -> &mut Attributes {
+        &mut self.attributes
+    }
 }

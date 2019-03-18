@@ -2,13 +2,16 @@
 
 extern crate dipstick;
 
+use dipstick::*;
+use std::io;
 use std::thread::sleep;
 use std::time::Duration;
-use std::io;
-use dipstick::*;
 
 fn main() {
-    let metrics = Stream::write_to(io::stdout()).cached(5).metrics().named("cache");
+    let metrics = Stream::write_to(io::stdout())
+        .cached(5)
+        .metrics()
+        .named("cache");
 
     loop {
         // report some ad-hoc metric values from our "application" loop
