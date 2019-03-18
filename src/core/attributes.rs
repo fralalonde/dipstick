@@ -107,7 +107,11 @@ impl <T> OnFlush for T where T: Flush + WithAttributes {
     }
 }
 
+/// Schedule a recurring task
 pub trait Schedule {
+
+    /// Schedule a recurring task.
+    /// The returned handle can be used to cancel the task.
     fn schedule<F>(&mut self, every: Duration, operation: F) -> CancelHandle
         where F: Fn() -> () + Send + 'static;
 }
@@ -229,5 +233,24 @@ pub trait Buffered: WithAttributes {
     /// Returns true otherwise.
     fn is_buffered(&self) -> bool {
         !(self.get_attributes().buffering == Buffering::Unbuffered)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use StatsMap;
+    use core::attributes::OnFlush;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use core::Flush;
+    use std::sync::Arc;
+
+    #[test]
+    fn on_flush() {
+        let flushed = Arc::new(AtomicBool::new(false));
+        let mut map = StatsMap::default();
+        let flushed1 = flushed.clone();
+        map.on_flush(move || flushed1.store(true, Ordering::Relaxed));
+        map.flush().unwrap();
+        assert_eq!(true, flushed.load(Ordering::Relaxed))
     }
 }

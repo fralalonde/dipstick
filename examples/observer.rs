@@ -27,8 +27,8 @@ use dipstick::{AtomicBucket, InputScope, MetricValue, Prefixed, ScheduleFlush, S
 fn main() {
     let start_time = Instant::now();
 
-    let mut metrics = AtomicBucket::new().add_prefix("process");
-    metrics.set_drain(Stream::to_stderr());
+    let mut metrics = AtomicBucket::new().named("process");
+    metrics.drain(Stream::to_stderr());
 
     let flush_handle = metrics.flush_every(Duration::from_secs(1));
 

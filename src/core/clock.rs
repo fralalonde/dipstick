@@ -13,6 +13,14 @@ use core::MetricValue;
 /// Wrapped so it may be changed safely later.
 pub struct TimeHandle(Instant);
 
+impl Deref for TimeHandle {
+    type Target = Instant;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 impl TimeHandle {
     /// Get a handle on current time.
     /// Used by the TimerMetric start_time() method.
@@ -34,6 +42,7 @@ impl TimeHandle {
 
 /// The mock clock is thread local so that tests can run in parallel without affecting each other.
 use std::cell::RefCell;
+use std::ops::Deref;
 thread_local! {
     static MOCK_CLOCK: RefCell<Instant> = RefCell::new(Instant::now());
 }
