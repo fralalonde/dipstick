@@ -1,6 +1,6 @@
 //! Task scheduling facilities.
 
-use core::input::InputScope;
+use crate::core::input::InputScope;
 
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::SeqCst;

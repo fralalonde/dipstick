@@ -1,11 +1,11 @@
-use cache::cache_in;
-use core::attributes::{Attributes, Buffered, Prefixed, WithAttributes};
-use core::error;
-use core::input::{Input, InputKind, InputMetric, InputScope};
-use core::name::MetricName;
-use core::Flush;
-use output::format::{Formatting, LineFormat, SimpleFormat};
-use queue::queue_in;
+use crate::cache::cache_in;
+use crate::core::attributes::{Attributes, Buffered, Prefixed, WithAttributes};
+use crate::core::error;
+use crate::core::input::{Input, InputKind, InputMetric, InputScope};
+use crate::core::name::MetricName;
+use crate::core::Flush;
+use crate::output::format::{Formatting, LineFormat, SimpleFormat};
+use crate::queue::queue_in;
 
 use std::sync::Arc;
 
@@ -176,7 +176,7 @@ impl Drop for LogScope {
 
 #[cfg(test)]
 mod test {
-    use core::input::*;
+    use crate::core::input::*;
 
     #[test]
     fn test_to_log() {

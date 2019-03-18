@@ -1,7 +1,7 @@
-use core::input::{InputDyn, InputKind, InputScope};
-use core::name::MetricName;
-use core::output::{Output, OutputMetric, OutputScope};
-use core::Flush;
+use crate::core::input::{InputDyn, InputKind, InputScope};
+use crate::core::name::MetricName;
+use crate::core::output::{Output, OutputMetric, OutputScope};
+use crate::core::Flush;
 
 use std::sync::Arc;
 

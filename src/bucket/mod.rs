@@ -1,8 +1,8 @@
 pub mod atomic;
 
-use core::input::InputKind;
-use core::name::MetricName;
-use core::MetricValue;
+use crate::core::input::InputKind;
+use crate::core::name::MetricName;
+use crate::core::MetricValue;
 
 /// Possibly aggregated scores.
 #[derive(Debug, Clone, Copy)]

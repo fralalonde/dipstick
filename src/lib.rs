@@ -34,7 +34,7 @@ extern crate parking_lot;
 
 #[macro_use]
 mod macros;
-pub use macros::*;
+pub use crate::macros::*;
 
 #[cfg(not(feature = "parking_lot"))]
 macro_rules! write_lock {
@@ -65,48 +65,48 @@ macro_rules! read_lock {
 }
 
 mod core;
-pub use core::attributes::{Buffered, Buffering, Prefixed, Sampled, Sampling};
-pub use core::clock::TimeHandle;
-pub use core::error::Result;
-pub use core::input::{
+pub use crate::core::attributes::{Buffered, Buffering, Prefixed, Sampled, Sampling};
+pub use crate::core::clock::TimeHandle;
+pub use crate::core::error::Result;
+pub use crate::core::input::{
     Counter, Gauge, Input, InputDyn, InputKind, InputMetric, InputScope, Level, Marker, Timer,
 };
-pub use core::label::{AppLabel, Labels, ThreadLabel};
-pub use core::locking::LockingOutput;
-pub use core::name::{MetricName, NameParts};
-pub use core::output::{Output, OutputDyn, OutputMetric, OutputScope};
-pub use core::scheduler::{CancelHandle, ScheduleFlush};
-pub use core::void::Void;
-pub use core::{Flush, MetricValue};
+pub use crate::core::label::{AppLabel, Labels, ThreadLabel};
+pub use crate::core::locking::LockingOutput;
+pub use crate::core::name::{MetricName, NameParts};
+pub use crate::core::output::{Output, OutputDyn, OutputMetric, OutputScope};
+pub use crate::core::scheduler::{CancelHandle, ScheduleFlush};
+pub use crate::core::void::Void;
+pub use crate::core::{Flush, MetricValue};
 
 #[cfg(test)]
-pub use core::clock::{mock_clock_advance, mock_clock_reset};
+pub use crate::core::clock::{mock_clock_advance, mock_clock_reset};
 
-pub use core::proxy::Proxy;
+pub use crate::core::proxy::Proxy;
 
 mod output;
-pub use output::format::{Formatting, LabelOp, LineFormat, LineOp, LineTemplate, SimpleFormat};
-pub use output::graphite::{Graphite, GraphiteMetric, GraphiteScope};
-pub use output::log::{Log, LogScope};
-pub use output::map::StatsMap;
-pub use output::statsd::{Statsd, StatsdMetric, StatsdScope};
-pub use output::stream::{Stream, TextScope};
+pub use crate::output::format::{Formatting, LabelOp, LineFormat, LineOp, LineTemplate, SimpleFormat};
+pub use crate::output::graphite::{Graphite, GraphiteMetric, GraphiteScope};
+pub use crate::output::log::{Log, LogScope};
+pub use crate::output::map::StatsMap;
+pub use crate::output::statsd::{Statsd, StatsdMetric, StatsdScope};
+pub use crate::output::stream::{Stream, TextScope};
 
 //#[cfg(feature="prometheus")]
-pub use output::prometheus::{Prometheus, PrometheusScope};
+pub use crate::output::prometheus::{Prometheus, PrometheusScope};
 
 mod bucket;
-pub use bucket::atomic::AtomicBucket;
-pub use bucket::{stats_all, stats_average, stats_summary, ScoreType};
+pub use crate::bucket::atomic::AtomicBucket;
+pub use crate::bucket::{stats_all, stats_average, stats_summary, ScoreType};
 
 mod cache;
-pub use cache::cache_in::CachedInput;
-pub use cache::cache_out::CachedOutput;
+pub use crate::cache::cache_in::CachedInput;
+pub use crate::cache::cache_out::CachedOutput;
 
 mod multi;
-pub use multi::multi_in::{MultiInput, MultiInputScope};
-pub use multi::multi_out::{MultiOutput, MultiOutputScope};
+pub use crate::multi::multi_in::{MultiInput, MultiInputScope};
+pub use crate::multi::multi_out::{MultiOutput, MultiOutputScope};
 
 mod queue;
-pub use queue::queue_in::{InputQueue, InputQueueScope, QueuedInput};
-pub use queue::queue_out::{OutputQueue, OutputQueueScope, QueuedOutput};
+pub use crate::queue::queue_in::{InputQueue, InputQueueScope, QueuedInput};
+pub use crate::queue::queue_out::{OutputQueue, OutputQueueScope, QueuedOutput};

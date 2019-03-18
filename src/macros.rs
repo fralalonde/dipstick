@@ -52,7 +52,7 @@ macro_rules! labels {
             $(
                 let _ = _map.insert($key.into(), ::std::sync::Arc::new($value.into()));
             )*
-            ::Labels::from(_map)
+            crate::Labels::from(_map)
         }
     };
     () => {
@@ -167,8 +167,8 @@ macro_rules! metrics {
 
 #[cfg(test)]
 mod test {
-    use core::input::*;
-    use core::proxy::Proxy;
+    use crate::core::input::*;
+    use crate::core::proxy::Proxy;
 
     metrics! {TEST: Proxy = "test_prefix" => {
         pub M1: Marker = "failed";

@@ -1,7 +1,7 @@
 use self::LineOp::*;
-use core::input::InputKind;
-use core::name::MetricName;
-use core::MetricValue;
+use crate::core::input::InputKind;
+use crate::core::name::MetricName;
+use crate::core::MetricValue;
 
 use std::io;
 use std::sync::Arc;
@@ -110,7 +110,7 @@ impl LineFormat for SimpleFormat {
 #[cfg(test)]
 pub mod test {
     use super::*;
-    use core::label::Labels;
+    use crate::core::label::Labels;
 
     pub struct TestFormat;
 

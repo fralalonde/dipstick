@@ -2,12 +2,12 @@
 //! This makes all outputs also immediately usable as inputs.
 //! The alternatives are queuing or thread local.
 
-use core::attributes::{Attributes, Prefixed, WithAttributes};
-use core::error;
-use core::input::{Input, InputKind, InputMetric, InputScope};
-use core::name::MetricName;
-use core::output::{Output, OutputScope};
-use core::Flush;
+use crate::core::attributes::{Attributes, Prefixed, WithAttributes};
+use crate::core::error;
+use crate::core::input::{Input, InputKind, InputMetric, InputScope};
+use crate::core::name::MetricName;
+use crate::core::output::{Output, OutputScope};
+use crate::core::Flush;
 use std::rc::Rc;
 
 use std::ops;

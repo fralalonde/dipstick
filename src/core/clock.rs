@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use std::time::Instant;
 
-use core::MetricValue;
+use crate::core::MetricValue;
 
 #[derive(Debug, Copy, Clone)]
 /// A handle to the start time of a counter.

@@ -4,7 +4,7 @@
 #![cfg_attr(feature = "tool_lints", allow(clippy::unreadable_literal))]
 
 use std::cell::RefCell;
-use time;
+use crate::time;
 
 fn seed() -> u64 {
     let seed = 5573589319906701683_u64;

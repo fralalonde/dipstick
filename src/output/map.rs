@@ -1,7 +1,7 @@
-use core::input::InputKind;
-use core::name::MetricName;
-use core::output::{OutputMetric, OutputScope};
-use core::{Flush, MetricValue};
+use crate::core::input::InputKind;
+use crate::core::name::MetricName;
+use crate::core::output::{OutputMetric, OutputScope};
+use crate::core::{Flush, MetricValue};
 
 use std::cell::RefCell;
 use std::collections::BTreeMap;

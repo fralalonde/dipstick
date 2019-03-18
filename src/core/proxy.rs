@@ -1,11 +1,11 @@
 //! Decouple metric definition from configuration with trait objects.
 
-use core::attributes::{Attributes, Prefixed, WithAttributes};
-use core::error;
-use core::input::{InputKind, InputMetric, InputScope};
-use core::name::{MetricName, NameParts};
-use core::void::VOID_INPUT;
-use core::Flush;
+use crate::core::attributes::{Attributes, Prefixed, WithAttributes};
+use crate::core::error;
+use crate::core::input::{InputKind, InputMetric, InputScope};
+use crate::core::name::{MetricName, NameParts};
+use crate::core::void::VOID_INPUT;
+use crate::core::Flush;
 
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;

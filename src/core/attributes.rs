@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::default::Default;
 use std::sync::Arc;
 
-use core::name::{MetricName, NameParts};
+use crate::core::name::{MetricName, NameParts};
 
 /// The actual distribution (random, fixed-cycled, etc) depends on selected sampling method.
 #[derive(Debug, Clone, Copy)]

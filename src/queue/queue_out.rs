@@ -2,15 +2,15 @@
 //! RawMetrics definitions are still synchronous.
 //! If queue size is exceeded, calling code reverts to blocking.
 
-use cache::cache_in;
-use core::attributes::{Attributes, Prefixed, WithAttributes};
-use core::error;
-use core::input::{Input, InputKind, InputMetric, InputScope};
-use core::label::Labels;
-use core::metrics;
-use core::name::MetricName;
-use core::output::{Output, OutputDyn, OutputMetric, OutputScope};
-use core::{Flush, MetricValue};
+use crate::cache::cache_in;
+use crate::core::attributes::{Attributes, Prefixed, WithAttributes};
+use crate::core::error;
+use crate::core::input::{Input, InputKind, InputMetric, InputScope};
+use crate::core::label::Labels;
+use crate::core::metrics;
+use crate::core::name::MetricName;
+use crate::core::output::{Output, OutputDyn, OutputMetric, OutputScope};
+use crate::core::{Flush, MetricValue};
 
 use std::fmt;
 use std::ops;

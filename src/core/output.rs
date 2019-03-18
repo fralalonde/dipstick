@@ -1,8 +1,8 @@
-use core::input::InputKind;
-use core::label::Labels;
-use core::name::MetricName;
-use core::void::Void;
-use core::{Flush, MetricValue};
+use crate::core::input::InputKind;
+use crate::core::label::Labels;
+use crate::core::name::MetricName;
+use crate::core::void::Void;
+use crate::core::{Flush, MetricValue};
 
 use std::rc::Rc;
 

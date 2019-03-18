@@ -1,15 +1,15 @@
 //! Send metrics to a statsd server.
 
-use cache::cache_out;
-use core::attributes::{Attributes, Buffered, Prefixed, Sampled, Sampling, WithAttributes};
-use core::error;
-use core::input::InputKind;
-use core::metrics;
-use core::name::MetricName;
-use core::output::{Output, OutputMetric, OutputScope};
-use core::pcg32;
-use core::{Flush, MetricValue};
-use queue::queue_out;
+use crate::cache::cache_out;
+use crate::core::attributes::{Attributes, Buffered, Prefixed, Sampled, Sampling, WithAttributes};
+use crate::core::error;
+use crate::core::input::InputKind;
+use crate::core::metrics;
+use crate::core::name::MetricName;
+use crate::core::output::{Output, OutputMetric, OutputScope};
+use crate::core::pcg32;
+use crate::core::{Flush, MetricValue};
+use crate::queue::queue_out;
 
 use std::cell::{RefCell, RefMut};
 use std::net::ToSocketAddrs;
