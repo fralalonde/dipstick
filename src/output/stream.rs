@@ -14,7 +14,7 @@ use output::format::{Formatting, LineFormat, SimpleFormat};
 use queue::queue_out;
 
 use std::cell::RefCell;
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io::{self, Write};
 use std::path::Path;
 use std::rc::Rc;
@@ -58,8 +58,26 @@ impl<W: Write + Send + Sync + 'static> Stream<W> {
 
 impl Stream<File> {
     /// Write metric values to a file.
-    pub fn to_file(file: &Path) -> error::Result<Stream<File>> {
-        Ok(Stream::write_to(File::create(file)?))
+    pub fn to_file<P: AsRef<Path>>(file: P) -> error::Result<Stream<File>> {
+        let file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .append(true)
+            .open(file)?;
+        Ok(Stream::write_to(file))
+    }
+
+    /// Write to a new file.
+    ///
+    /// Creates a new file to dump data into. If `clobber` is set to true, it allows overwriting
+    /// existing file, if false, the attempt will result in an error.
+    pub fn to_new_file<P: AsRef<Path>>(file: P, clobber: bool) -> error::Result<Stream<File>> {
+        let file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .create_new(!clobber)
+            .open(file)?;
+        Ok(Stream::write_to(file))
     }
 }
 
