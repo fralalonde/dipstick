@@ -2,12 +2,13 @@ use std::sync::Arc;
 use std::collections::{HashMap};
 use std::default::Default;
 
+use core::scheduler::SCHEDULER;
 use core::name::{NameParts, MetricName};
 use ::{Flush, CancelHandle};
 use std::fmt;
 use std::time::Duration;
-use core::scheduler::set_schedule;
-use InputScope;
+use ::{InputScope, Gauge};
+use MetricValue;
 
 /// The actual distribution (random, fixed-cycled, etc) depends on selected sampling method.
 #[derive(Debug, Clone, Copy)]
@@ -108,17 +109,19 @@ impl <T> OnFlush for T where T: Flush + WithAttributes {
 }
 
 /// Schedule a recurring task
-pub trait Schedule {
+pub trait Observe {
 
     /// Schedule a recurring task.
     /// The returned handle can be used to cancel the task.
-    fn schedule<F>(&mut self, every: Duration, operation: F) -> CancelHandle
-        where F: Fn() -> () + Send + 'static;
+    fn observe<F>(&mut self, gauge: Gauge, every: Duration, operation: F) -> CancelHandle
+        where F: Fn() -> MetricValue + Send + Sync + 'static;
 }
 
-impl<T: InputScope + WithAttributes> Schedule for T {
-    fn schedule<F>(&mut self, every: Duration, operation: F) -> CancelHandle where F: Fn() -> () + Send + 'static {
-        let handle = set_schedule("dipstick-scope", every, operation);
+impl<T: InputScope + WithAttributes> Observe for T {
+    fn observe<F>(&mut self, gauge: Gauge,  period: Duration, operation: F) -> CancelHandle
+        where F: Fn() -> MetricValue + Send + Sync + 'static
+    {
+        let handle = SCHEDULER.schedule(period, move || gauge.value(operation())) ;
         self.mut_attributes().tasks.push(handle.clone());
         handle
     }

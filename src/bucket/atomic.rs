@@ -211,7 +211,7 @@ impl AtomicBucket {
     }
 
     /// Set this bucket's aggregated metrics flush output.
-    #[deprecated(since="0.7.2", note="Use drain()")]
+    #[deprecated(since="0.7.2", note="Use sink()")]
     pub fn set_drain(&self, new_drain: impl Output + Send + Sync + 'static) {
         self.drain(new_drain)
     }
