@@ -247,10 +247,10 @@ pub mod test {
 
     use std::sync::Mutex;
 
-    /// Label tests use the globally shared AppLabels which may make them interfere as tests are run concurrently.
-    /// We do not want to mandate usage of `RUST_TEST_THREADS=1` which would penalize the whole test suite.
-    /// Instead we use a local mutex to make sure the label tests run in sequence.
     lazy_static!{
+        /// Label tests use the globally shared AppLabels which may make them interfere as tests are run concurrently.
+        /// We do not want to mandate usage of `RUST_TEST_THREADS=1` which would penalize the whole test suite.
+        /// Instead we use a local mutex to make sure the label tests run in sequence.
         static ref TEST_SEQUENCE: Mutex<()> = Mutex::new(());
     }
 

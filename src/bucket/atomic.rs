@@ -465,7 +465,7 @@ mod test {
     use bucket::{stats_all, stats_average, stats_summary};
 
     use core::clock::{mock_clock_advance, mock_clock_reset};
-    use output::map::StatsMap;
+    use output::map::StatsMapScope;
 
     use std::time::Duration;
     use std::collections::BTreeMap;
@@ -506,7 +506,7 @@ mod test {
 
         mock_clock_advance(Duration::from_secs(3));
 
-        let map = StatsMap::default();
+        let map = StatsMapScope::default();
         metrics.flush_to(&map).unwrap();
         map.into()
     }

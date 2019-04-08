@@ -31,18 +31,6 @@ impl CancelHandle {
     }
 }
 
-///// Starts a new thread for every task.
-/////
-///// # Panics
-/////
-///// Panics if the OS fails to create a thread.
-//pub fn set_schedule<F>(_thread_name: &str, every: Duration, operation: F) -> CancelHandle
-//    where
-//        F: Fn() -> () + Send + Sync + 'static,
-//{
-//    SCHEDULER.schedule(every, operation)
-//}
-
 /// Enable background periodical publication of metrics
 pub trait ScheduleFlush {
     /// Flush this scope at regular intervals.

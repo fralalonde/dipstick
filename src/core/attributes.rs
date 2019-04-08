@@ -89,22 +89,40 @@ pub trait WithAttributes: Clone {
 
 /// Register and notify scope-flush listeners
 pub trait OnFlush {
-    /// Register a new flush listener
-    fn on_flush<F: Fn() -> () + Send + Sync + 'static>(&mut self, listener: F);
-
     /// Notify registered listeners of an impending flush.
     fn notify_flush_listeners(&self);
 }
 
 impl <T> OnFlush for T where T: Flush + WithAttributes {
-    fn on_flush<F: Fn() -> () + Send + Sync + 'static>(&mut self, listener: F) {
-        self.mut_attributes().flush_listeners.push(Arc::new(listener));
-    }
-
     fn notify_flush_listeners(&self) {
-        for listener in self.get_attributes().flush_listeners.iter() {
+        for listener in &self.get_attributes().flush_listeners {
             (listener)()
         }
+    }
+}
+
+pub struct ObserveWhen<'a, T, F> {
+    target: &'a mut T,
+    gauge: Gauge,
+    operation: Arc<F>,
+}
+
+impl<'a, T, F> ObserveWhen<'a, T, F>
+    where F: Fn() -> MetricValue + Send + Sync + 'static,
+          T: InputScope + WithAttributes + Send + Sync,
+{
+    pub fn on_flush(self) {
+        let gauge = self.gauge;
+        let op = self.operation;
+        self.target.mut_attributes().flush_listeners.push(Arc::new(move || gauge.value(op())));
+    }
+
+    pub fn every(self, period: Duration,) -> CancelHandle {
+        let gauge = self.gauge;
+        let op = self.operation;
+        let handle = SCHEDULER.schedule(period, move || gauge.value(op()));
+        self.target.mut_attributes().tasks.push(handle.clone());
+        handle
     }
 }
 
@@ -113,24 +131,27 @@ pub trait Observe {
 
     /// Schedule a recurring task.
     /// The returned handle can be used to cancel the task.
-    fn observe<F>(&mut self, gauge: Gauge, every: Duration, operation: F) -> CancelHandle
-        where F: Fn() -> MetricValue + Send + Sync + 'static;
+    fn observe<F>(&mut self, gauge: Gauge, operation: F) -> ObserveWhen<Self, F>
+        where F: Fn() -> MetricValue + Send + Sync + 'static, Self: Sized;
+
 }
 
 impl<T: InputScope + WithAttributes> Observe for T {
-    fn observe<F>(&mut self, gauge: Gauge,  period: Duration, operation: F) -> CancelHandle
-        where F: Fn() -> MetricValue + Send + Sync + 'static
+    fn observe<F>(&mut self, gauge: Gauge, operation: F) -> ObserveWhen<Self, F>
+        where F: Fn() -> MetricValue + Send + Sync + 'static, Self: Sized
     {
-        let handle = SCHEDULER.schedule(period, move || gauge.value(operation())) ;
-        self.mut_attributes().tasks.push(handle.clone());
-        handle
+        ObserveWhen {
+            target: self,
+            gauge,
+            operation: Arc::new(operation),
+        }
     }
 }
 
 impl Drop for Attributes {
     fn drop(&mut self) {
-        for t in self.tasks.drain(..) {
-            t.cancel()
+        for task in self.tasks.drain(..) {
+            task.cancel()
         }
     }
 }
@@ -182,12 +203,10 @@ impl<T: WithAttributes> Prefixed for T {
         &self.get_attributes().naming
     }
 
-    /// Replace any existing names with a single name.
-    /// Return a clone of the component with the new name.
-    /// If multiple names are required, `add_name` may also be used.
-    fn named<S: Into<String>>(&self, name: S) -> Self {
-        let parts = NameParts::from(name);
-        self.with_attributes(|new_attr| new_attr.naming = parts.clone())
+    /// Append a name to the existing names.
+    /// Return a clone of the component with the updated names.
+    fn add_prefix<S: Into<String>>(&self, name: S) -> Self {
+        self.add_name(name)
     }
 
     /// Append a name to the existing names.
@@ -197,10 +216,12 @@ impl<T: WithAttributes> Prefixed for T {
         self.with_attributes(|new_attr| new_attr.naming.push_back(name.clone()))
     }
 
-    /// Append a name to the existing names.
-    /// Return a clone of the component with the updated names.
-    fn add_prefix<S: Into<String>>(&self, name: S) -> Self {
-        self.add_name(name)
+    /// Replace any existing names with a single name.
+    /// Return a clone of the component with the new name.
+    /// If multiple names are required, `add_name` may also be used.
+    fn named<S: Into<String>>(&self, name: S) -> Self {
+        let parts = NameParts::from(name);
+        self.with_attributes(|new_attr| new_attr.naming = parts.clone())
     }
 
 }
@@ -241,19 +262,19 @@ pub trait Buffered: WithAttributes {
 
 #[cfg(test)]
 mod test {
-    use StatsMap;
-    use core::attributes::OnFlush;
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use output::map::StatsMap;
+    use core::attributes::*;
+    use core::input::*;
     use core::Flush;
-    use std::sync::Arc;
+    use core::input::Input;
+    use StatsMapScope;
 
     #[test]
     fn on_flush() {
-        let flushed = Arc::new(AtomicBool::new(false));
-        let mut map = StatsMap::default();
-        let flushed1 = flushed.clone();
-        map.on_flush(move || flushed1.store(true, Ordering::Relaxed));
-        map.flush().unwrap();
-        assert_eq!(true, flushed.load(Ordering::Relaxed))
+        let mut metrics: StatsMapScope = StatsMap::default().metrics();
+        let gauge = metrics.gauge("my_gauge");
+        metrics.observe(gauge, || 4).on_flush();
+        metrics.flush().unwrap();
+        assert_eq!(Some(&4), metrics.into_map().get("my_gauge"))
     }
 }

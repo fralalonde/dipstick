@@ -5,34 +5,13 @@ use std::ops::Add;
 use std::time::Duration;
 
 use std::time::Instant;
-use std::ops::Deref;
 
 use core::MetricValue;
-
-#[cfg(test)]
-use std::sync::{Arc};
-
-use std::cell::RefCell;
-
-#[cfg(not(feature="parking_lot"))]
-use std::sync::{RwLock};
-
-#[cfg(feature="parking_lot")]
-use parking_lot::{RwLock};
-
 
 #[derive(Debug, Copy, Clone)]
 /// A handle to the start time of a counter.
 /// Wrapped so it may be changed safely later.
 pub struct TimeHandle(Instant);
-
-impl Deref for TimeHandle {
-    type Target = Instant;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
 
 impl TimeHandle {
     /// Get a handle on current time.
@@ -53,11 +32,10 @@ impl TimeHandle {
     }
 }
 
-/// Use independent mock clock per thread so that tests can run concurrently without interfering.
-/// Tests covering concurrent behavior can override this and share a single clock between threads.
-#[cfg(test)]
+/// The mock clock is thread local so that tests can run in parallel without affecting each other.
+use std::cell::RefCell;
 thread_local! {
-    static MOCK_CLOCK: RefCell<Arc<RwLock<Instant>>> = RefCell::new(Arc::new(RwLock::new(Instant::now())));
+    static MOCK_CLOCK: RefCell<Instant> = RefCell::new(Instant::now());
 }
 
 /// Set the mock clock to the current time.
@@ -69,10 +47,8 @@ pub fn mock_clock_reset() {
     if !cfg!(not(test)) {
         warn!("Mock clock used outside of cfg[]tests has no effect")
     }
-    // TODO mock_clock crate
-    MOCK_CLOCK.with(|clock_cell| {
-        let now = clock_cell.borrow();
-        *write_lock!(now) = Instant::now();
+    MOCK_CLOCK.with(|now| {
+        *now.borrow_mut() = Instant::now();
     })
 }
 
@@ -83,46 +59,23 @@ pub fn mock_clock_reset() {
 /// Not feature-gated so it stays visible to outside crates but may not be used outside of tests.
 #[cfg(test)]
 pub fn mock_clock_advance(period: Duration) {
-    MOCK_CLOCK.with(|clock_cell| {
-        let now = clock_cell.borrow();
-        let mut now = write_lock!(now);
-        println!("advancing mock clock {:?} + {:?}", *now, period);
+    MOCK_CLOCK.with(|now| {
+        let mut now = now.borrow_mut();
         *now = now.add(period);
-        println!("advanced mock clock {:?}", *now);
     })
 }
-
-//#[cfg(test)]
-//pub fn share_mock_clock() -> Arc<RwLock<Instant>> {
-//    // TODO mock_clock crate
-//    MOCK_CLOCK.with(|clock_cell| {
-//        let now = clock_cell.borrow();
-//        now.clone()
-//    })
-//}
-//
-//#[cfg(test)]
-//pub fn use_mock_clock(shared: Arc<RwLock<Instant>>) {
-//    // TODO mock_clock crate
-//    MOCK_CLOCK.with(|clock_cell| {
-//        let mut clock = clock_cell.borrow_mut();
-//        *clock = shared
-//    })
-//}
 
 #[cfg(not(test))]
 fn now() -> Instant {
     Instant::now()
 }
 
+#[cfg(test)]
 /// Metrics mock_clock enabled!
 /// thread::sleep will have no effect on metrics.
 /// Use advance_time() to simulate passing time.
-#[cfg(test)]
 fn now() -> Instant {
-    MOCK_CLOCK.with(|clock_cell| {
-        let clock = clock_cell.borrow();
-        let now = read_lock!(clock);
-        *now
+    MOCK_CLOCK.with(|now| {
+        *now.borrow()
     })
 }

@@ -72,7 +72,7 @@ pub use output::format::{LineFormat, SimpleFormat, LineOp, LabelOp, LineTemplate
 pub use output::stream::{Stream, TextScope};
 pub use output::graphite::{Graphite, GraphiteScope, GraphiteMetric};
 pub use output::statsd::{Statsd, StatsdScope, StatsdMetric};
-pub use output::map::{StatsMap};
+pub use output::map::StatsMapScope;
 pub use output::log::{Log, LogScope};
 
 //#[cfg(feature="prometheus")]
