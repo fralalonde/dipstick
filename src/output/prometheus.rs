@@ -1,7 +1,7 @@
 //! Send metrics to a Prometheus server.
 
 use cache::cache_out;
-use core::attributes::{Attributes, Buffered, Prefixed, WithAttributes};
+use core::attributes::{Attributes, Buffered, OnFlush, Prefixed, WithAttributes};
 use core::error;
 use core::input::InputKind;
 use core::label::Labels;
@@ -90,6 +90,7 @@ impl OutputScope for PrometheusScope {
 
 impl Flush for PrometheusScope {
     fn flush(&self) -> error::Result<()> {
+        self.notify_flush_listeners();
         let buf = self.buffer.borrow_mut();
         self.flush_inner(buf)
     }

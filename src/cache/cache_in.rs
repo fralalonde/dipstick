@@ -1,7 +1,7 @@
 //! Metric input scope caching.
 
 use cache::lru_cache as lru;
-use core::attributes::{Attributes, Prefixed, WithAttributes};
+use core::attributes::{Attributes, OnFlush, Prefixed, WithAttributes};
 use core::error;
 use core::input::{Input, InputDyn, InputKind, InputMetric, InputScope};
 use core::name::MetricName;
@@ -102,6 +102,7 @@ impl InputScope for InputScopeCache {
 
 impl Flush for InputScopeCache {
     fn flush(&self) -> error::Result<()> {
+        self.notify_flush_listeners();
         self.target.flush()
     }
 }

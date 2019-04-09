@@ -2,7 +2,7 @@
 //! This makes all outputs also immediately usable as inputs.
 //! The alternatives are queuing or thread local.
 
-use core::attributes::{Attributes, Prefixed, WithAttributes};
+use core::attributes::{Attributes, OnFlush, Prefixed, WithAttributes};
 use core::error;
 use core::input::{Input, InputKind, InputMetric, InputScope};
 use core::name::MetricName;
@@ -49,6 +49,7 @@ impl InputScope for LockingOutput {
 
 impl Flush for LockingOutput {
     fn flush(&self) -> error::Result<()> {
+        self.notify_flush_listeners();
         self.inner.lock().expect("LockingOutput").flush()
     }
 }

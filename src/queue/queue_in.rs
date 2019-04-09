@@ -3,7 +3,7 @@
 //! If queue size is exceeded, calling code reverts to blocking.
 
 use cache::cache_in::CachedInput;
-use core::attributes::{Attributes, Prefixed, WithAttributes};
+use core::attributes::{Attributes, OnFlush, Prefixed, WithAttributes};
 use core::error;
 use core::input::{Input, InputDyn, InputKind, InputMetric, InputScope};
 use core::label::Labels;
@@ -200,6 +200,7 @@ impl InputScope for InputQueueScope {
 
 impl Flush for InputQueueScope {
     fn flush(&self) -> error::Result<()> {
+        self.notify_flush_listeners();
         if let Err(e) = self.sender.send(InputQueueCmd::Flush(self.target.clone())) {
             metrics::SEND_FAILED.mark();
             debug!("Failed to flush async metrics: {}", e);

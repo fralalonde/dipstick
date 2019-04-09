@@ -3,6 +3,7 @@ use core::name::MetricName;
 use core::output::{Output, OutputMetric, OutputScope};
 use core::Flush;
 
+use std::error::Error;
 use std::sync::Arc;
 
 lazy_static! {
@@ -48,4 +49,8 @@ impl OutputScope for VoidOutput {
     }
 }
 
-impl Flush for VoidOutput {}
+impl Flush for VoidOutput {
+    fn flush(&self) -> Result<(), Box<Error + Send + Sync>> {
+        Ok(())
+    }
+}

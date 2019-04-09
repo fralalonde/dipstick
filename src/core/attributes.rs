@@ -3,6 +3,18 @@ use std::default::Default;
 use std::sync::Arc;
 
 use core::name::{MetricName, NameParts};
+use core::scheduler::SCHEDULER;
+use std::fmt;
+use std::time::Duration;
+use MetricValue;
+use {CancelHandle, Flush};
+use {Gauge, InputScope};
+
+#[cfg(not(feature = "parking_lot"))]
+use std::sync::RwLock;
+
+#[cfg(feature = "parking_lot")]
+use parking_lot::RwLock;
 
 /// The actual distribution (random, fixed-cycled, etc) depends on selected sampling method.
 #[derive(Debug, Clone, Copy)]
@@ -45,13 +57,25 @@ impl Default for Buffering {
     }
 }
 
+type Shared<T> = Arc<RwLock<T>>;
+
 /// Attributes common to metric components.
 /// Not all attributes used by all components.
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct Attributes {
     naming: NameParts,
     sampling: Sampling,
     buffering: Buffering,
+    flush_listeners: Shared<Vec<Arc<Fn() -> () + Send + Sync + 'static>>>,
+    tasks: Shared<Vec<CancelHandle>>,
+}
+
+impl fmt::Debug for Attributes {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "naming: {:?}", self.naming)?;
+        write!(f, "sampling: {:?}", self.sampling)?;
+        write!(f, "buffering: {:?}", self.buffering)
+    }
 }
 
 /// This trait should not be exposed outside the crate.
@@ -71,6 +95,84 @@ pub trait WithAttributes: Clone {
     }
 }
 
+/// Register and notify scope-flush listeners
+pub trait OnFlush {
+    /// Notify registered listeners of an impending flush.
+    fn notify_flush_listeners(&self);
+}
+
+impl<T> OnFlush for T
+where
+    T: Flush + WithAttributes,
+{
+    fn notify_flush_listeners(&self) {
+        for listener in read_lock!(self.get_attributes().flush_listeners).iter() {
+            (listener)()
+        }
+    }
+}
+
+pub struct ObserveWhen<'a, T, F> {
+    target: &'a T,
+    gauge: Gauge,
+    operation: Arc<F>,
+}
+
+impl<'a, T, F> ObserveWhen<'a, T, F>
+where
+    F: Fn() -> MetricValue + Send + Sync + 'static,
+    T: InputScope + WithAttributes + Send + Sync,
+{
+    /// Observe the metric's value upon flushing the scope.
+    pub fn on_flush(self) {
+        let gauge = self.gauge;
+        let op = self.operation;
+        write_lock!(self.target.get_attributes().flush_listeners)
+            .push(Arc::new(move || gauge.value(op())));
+    }
+
+    /// Observe the metric's value periodically.
+    pub fn every(self, period: Duration) -> CancelHandle {
+        let gauge = self.gauge;
+        let op = self.operation;
+        let handle = SCHEDULER.schedule(period, move || gauge.value(op()));
+        write_lock!(self.target.get_attributes().tasks).push(handle.clone());
+        handle
+    }
+}
+
+/// Schedule a recurring task
+pub trait Observe {
+    /// Provide a source for a metric's values.
+    fn observe<F>(&self, gauge: Gauge, operation: F) -> ObserveWhen<Self, F>
+    where
+        F: Fn() -> MetricValue + Send + Sync + 'static,
+        Self: Sized;
+}
+
+impl<T: InputScope + WithAttributes> Observe for T {
+    fn observe<F>(&self, gauge: Gauge, operation: F) -> ObserveWhen<Self, F>
+    where
+        F: Fn() -> MetricValue + Send + Sync + 'static,
+        Self: Sized,
+    {
+        ObserveWhen {
+            target: self,
+            gauge,
+            operation: Arc::new(operation),
+        }
+    }
+}
+
+impl Drop for Attributes {
+    fn drop(&mut self) {
+        let mut tasks = write_lock!(self.tasks);
+        for task in tasks.drain(..) {
+            task.cancel()
+        }
+    }
+}
+
 /// Name operations support.
 pub trait Prefixed {
     /// Returns namespace of component.
@@ -78,7 +180,7 @@ pub trait Prefixed {
 
     /// Append a name to the existing names.
     /// Return a clone of the component with the updated names.
-    #[deprecated(since = "0.7.2", note = "Use add_name()")]
+    #[deprecated(since = "0.7.2", note = "Use named() or add_name()")]
     fn add_prefix<S: Into<String>>(&self, name: S) -> Self;
 
     /// Append a name to the existing names.
@@ -116,12 +218,10 @@ impl<T: WithAttributes> Prefixed for T {
         &self.get_attributes().naming
     }
 
-    /// Replace any existing names with a single name.
-    /// Return a clone of the component with the new name.
-    /// If multiple names are required, `add_name` may also be used.
-    fn named<S: Into<String>>(&self, name: S) -> Self {
-        let parts = NameParts::from(name);
-        self.with_attributes(|new_attr| new_attr.naming = parts.clone())
+    /// Append a name to the existing names.
+    /// Return a clone of the component with the updated names.
+    fn add_prefix<S: Into<String>>(&self, name: S) -> Self {
+        self.add_name(name)
     }
 
     /// Append a name to the existing names.
@@ -131,10 +231,12 @@ impl<T: WithAttributes> Prefixed for T {
         self.with_attributes(|new_attr| new_attr.naming.push_back(name.clone()))
     }
 
-    /// Append a name to the existing names.
-    /// Return a clone of the component with the updated names.
-    fn add_prefix<S: Into<String>>(&self, name: S) -> Self {
-        self.add_name(name)
+    /// Replace any existing names with a single name.
+    /// Return a clone of the component with the new name.
+    /// If multiple names are required, `add_name` may also be used.
+    fn named<S: Into<String>>(&self, name: S) -> Self {
+        let parts = NameParts::from(name);
+        self.with_attributes(|new_attr| new_attr.naming = parts.clone())
     }
 }
 
@@ -169,5 +271,24 @@ pub trait Buffered: WithAttributes {
     /// Returns true otherwise.
     fn is_buffered(&self) -> bool {
         !(self.get_attributes().buffering == Buffering::Unbuffered)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use core::attributes::*;
+    use core::input::Input;
+    use core::input::*;
+    use core::Flush;
+    use output::map::StatsMap;
+    use StatsMapScope;
+
+    #[test]
+    fn on_flush() {
+        let metrics: StatsMapScope = StatsMap::default().metrics();
+        let gauge = metrics.gauge("my_gauge");
+        metrics.observe(gauge, || 4).on_flush();
+        metrics.flush().unwrap();
+        assert_eq!(Some(&4), metrics.into_map().get("my_gauge"))
     }
 }

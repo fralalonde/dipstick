@@ -30,8 +30,6 @@ extern crate crossbeam_channel;
 #[cfg(feature = "parking_lot")]
 extern crate parking_lot;
 
-//extern crate tiny_http;
-
 #[macro_use]
 mod macros;
 pub use macros::*;
@@ -65,7 +63,7 @@ macro_rules! read_lock {
 }
 
 mod core;
-pub use core::attributes::{Buffered, Buffering, Prefixed, Sampled, Sampling};
+pub use core::attributes::{Buffered, Buffering, Observe, OnFlush, Prefixed, Sampled, Sampling};
 pub use core::clock::TimeHandle;
 pub use core::error::Result;
 pub use core::input::{
@@ -88,7 +86,7 @@ mod output;
 pub use output::format::{Formatting, LabelOp, LineFormat, LineOp, LineTemplate, SimpleFormat};
 pub use output::graphite::{Graphite, GraphiteMetric, GraphiteScope};
 pub use output::log::{Log, LogScope};
-pub use output::map::StatsMap;
+pub use output::map::StatsMapScope;
 pub use output::statsd::{Statsd, StatsdMetric, StatsdScope};
 pub use output::stream::{Stream, TextScope};
 

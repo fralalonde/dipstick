@@ -1,7 +1,9 @@
 //! Send metrics to a statsd server.
 
 use cache::cache_out;
-use core::attributes::{Attributes, Buffered, Prefixed, Sampled, Sampling, WithAttributes};
+use core::attributes::{
+    Attributes, Buffered, OnFlush, Prefixed, Sampled, Sampling, WithAttributes,
+};
 use core::error;
 use core::input::InputKind;
 use core::metrics;
@@ -130,6 +132,7 @@ impl OutputScope for StatsdScope {
 
 impl Flush for StatsdScope {
     fn flush(&self) -> error::Result<()> {
+        self.notify_flush_listeners();
         let buf = self.buffer.borrow_mut();
         self.flush_inner(buf)
     }

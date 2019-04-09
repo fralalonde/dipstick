@@ -2,7 +2,7 @@
 
 use bucket::ScoreType::*;
 use bucket::{stats_summary, ScoreType};
-use core::attributes::{Attributes, Prefixed, WithAttributes};
+use core::attributes::{Attributes, OnFlush, Prefixed, WithAttributes};
 use core::clock::TimeHandle;
 use core::error;
 use core::input::{InputKind, InputMetric, InputScope};
@@ -83,7 +83,7 @@ lazy_static! {
 }
 
 impl InnerAtomicBucket {
-    pub fn flush(&mut self) -> error::Result<()> {
+    fn flush(&mut self) -> error::Result<()> {
         let pub_scope = match self.drain {
             Some(ref out) => out.output_dyn(),
             None => read_lock!(DEFAULT_AGGREGATE_OUTPUT).output_dyn(),
@@ -110,7 +110,7 @@ impl InnerAtomicBucket {
     /// Take a snapshot of aggregated values and reset them.
     /// Compute stats on captured values using assigned or default stats function.
     /// Write stats to assigned or default output.
-    pub fn flush_to(&mut self, target: &OutputScope) -> error::Result<()> {
+    fn flush_to(&mut self, target: &OutputScope) -> error::Result<()> {
         let now = TimeHandle::now();
         let duration_seconds = self.period_start.elapsed_us() as f64 / 1_000_000.0;
         self.period_start = now;
@@ -234,7 +234,7 @@ impl AtomicBucket {
     }
 
     /// Revert this bucket's statistics generator to the default stats.
-    pub fn unset_stat(&self) {
+    pub fn unset_stats<F>(&self) {
         write_lock!(self.inner).stats = None
     }
 
@@ -277,6 +277,7 @@ impl Flush for AtomicBucket {
     /// Collect and reset aggregated data.
     /// Publish statistics
     fn flush(&self) -> error::Result<()> {
+        self.notify_flush_listeners();
         let mut inner = write_lock!(self.inner);
         inner.flush()
     }
@@ -327,7 +328,7 @@ impl AtomicScores {
     }
 
     /// Update scores with new value
-    pub fn update(&self, value: MetricValue) {
+    pub fn update(&self, value: MetricValue) -> () {
         // TODO detect & report any concurrent updates / resets for measurement of contention
         // Count is tracked for all metrics
         self.scores[HIT].fetch_add(1, Relaxed);
@@ -494,7 +495,7 @@ mod test {
     use bucket::{stats_all, stats_average, stats_summary};
 
     use core::clock::{mock_clock_advance, mock_clock_reset};
-    use output::map::StatsMap;
+    use output::map::StatsMapScope;
 
     use std::collections::BTreeMap;
     use std::time::Duration;
@@ -535,7 +536,7 @@ mod test {
 
         mock_clock_advance(Duration::from_secs(3));
 
-        let map = StatsMap::default();
+        let map = StatsMapScope::default();
         metrics.flush_to(&map).unwrap();
         map.into()
     }

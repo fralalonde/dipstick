@@ -2,11 +2,13 @@
 
 use core::input::InputScope;
 
+use std::cmp::{max, Ordering};
+use std::collections::BinaryHeap;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::SeqCst;
-use std::sync::Arc;
+use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// A handle to cancel a scheduled task if required.
 #[derive(Debug, Clone)]
@@ -19,7 +21,9 @@ impl CancelHandle {
 
     /// Signals the task to stop.
     pub fn cancel(&self) {
-        self.0.store(true, SeqCst);
+        if self.0.swap(true, SeqCst) {
+            warn!("Scheduled task was already cancelled.")
+        }
     }
 
     fn is_cancelled(&self) -> bool {
@@ -27,43 +31,17 @@ impl CancelHandle {
     }
 }
 
-/// Schedule a task to run periodically.
-/// Starts a new thread for every task.
-///
-/// # Panics
-///
-/// Panics if the OS fails to create a thread.
-fn set_schedule<F>(every: Duration, operation: F) -> CancelHandle
-where
-    F: Fn() -> () + Send + 'static,
-{
-    let handle = CancelHandle::new();
-    let inner_handle = handle.clone();
-
-    thread::Builder::new()
-        .name("dipstick-scheduler".to_string())
-        .spawn(move || loop {
-            thread::sleep(every);
-            if inner_handle.is_cancelled() {
-                break;
-            }
-            operation();
-        })
-        .unwrap(); // TODO: Panic, change API to return Result?
-    handle
-}
-
 /// Enable background periodical publication of metrics
 pub trait ScheduleFlush {
-    /// Start a thread dedicated to flushing this scope at regular intervals.
+    /// Flush this scope at regular intervals.
     fn flush_every(&self, period: Duration) -> CancelHandle;
 }
 
 impl<T: InputScope + Send + Sync + Clone + 'static> ScheduleFlush for T {
-    /// Start a thread dedicated to flushing this scope at regular intervals.
+    /// Flush this scope at regular intervals.
     fn flush_every(&self, period: Duration) -> CancelHandle {
         let scope = self.clone();
-        set_schedule(period, move || {
+        SCHEDULER.schedule(period, move || {
             if let Err(err) = scope.flush() {
                 error!("Could not flush metrics: {}", err);
             }
@@ -71,26 +49,198 @@ impl<T: InputScope + Send + Sync + Clone + 'static> ScheduleFlush for T {
     }
 }
 
-//use std::net::{SocketAddr, ToSocketAddrs};
-//
-//use tiny_http::{Server, StatusCode, self};
-//
-//pub fn http_serve<A: ToSocketAddrs, F: Fn()>(addresses: A) -> CancelHandle {
-//    let handle = CancelHandle::new();
-//    let inner_handle = handle.clone();
-//    let server = tiny_http::Server::http("0.0.0.0:0")?;
-//
-//    thread::spawn(move || loop {
-//        match server.recv_timeout(Duration::from_secs(1)) {
-//            Ok(Some(req)) => {
-//                let response = tiny_http::Response::new_empty(StatusCode::from(200));
-//                if let Err(err) = req.respond(response) {
-//                    warn!("Metrics response error: {}", err)
-//                }
-//            }
-//            Ok(None) => if inner_handle.is_cancelled() { break; }
-//            Err(err) => warn!("Metrics request error: {}", err)
-//        };
-//    });
-//    handle
-//}
+lazy_static! {
+    pub static ref SCHEDULER: Scheduler = Scheduler::new();
+}
+
+struct ScheduledTask {
+    next_time: Instant,
+    period: Duration,
+    handle: CancelHandle,
+    operation: Arc<Fn() -> () + Send + Sync + 'static>,
+}
+
+impl Ord for ScheduledTask {
+    fn cmp(&self, other: &ScheduledTask) -> Ordering {
+        other.next_time.cmp(&self.next_time)
+    }
+}
+
+impl PartialOrd for ScheduledTask {
+    fn partial_cmp(&self, other: &ScheduledTask) -> Option<Ordering> {
+        other.next_time.partial_cmp(&self.next_time)
+    }
+}
+
+impl PartialEq for ScheduledTask {
+    fn eq(&self, other: &ScheduledTask) -> bool {
+        self.next_time.eq(&other.next_time)
+    }
+}
+
+impl Eq for ScheduledTask {}
+
+pub struct Scheduler {
+    next_tasks: Arc<(Mutex<BinaryHeap<ScheduledTask>>, Condvar)>,
+}
+
+pub static MIN_DELAY: Duration = Duration::from_millis(50);
+
+impl Scheduler {
+    /// Launch a new scheduler thread.
+    fn new() -> Self {
+        let sched: Arc<(Mutex<BinaryHeap<ScheduledTask>>, Condvar)> =
+            Arc::new((Mutex::new(BinaryHeap::new()), Condvar::new()));
+        let sched1 = Arc::downgrade(&sched);
+
+        thread::Builder::new()
+            .name("dipstick_scheduler".to_string())
+            .spawn(move || {
+                let mut wait_for = MIN_DELAY;
+                while let Some(sss) = sched1.upgrade() {
+                    let &(ref heap_mutex, ref condvar) = &*sss;
+                    let heap = heap_mutex.lock().unwrap();
+                    let (mut tasks, _timed_out) = condvar.wait_timeout(heap, wait_for).unwrap();
+                    'work: loop {
+                        let now = Instant::now();
+                        match tasks.peek() {
+                            Some(task) if task.next_time > now => {
+                                // next task is not ready yet, update schedule
+                                wait_for = max(MIN_DELAY, task.next_time - now);
+                                break 'work;
+                            }
+                            None => {
+                                // TODO no tasks left. exit thread?
+                                break 'work;
+                            }
+                            _ => {}
+                        }
+                        if let Some(mut task) = tasks.pop() {
+                            if task.handle.is_cancelled() {
+                                // do not execute, do not reinsert
+                                continue;
+                            }
+                            (task.operation)();
+                            task.next_time = now + task.period;
+                            tasks.push(task);
+                        }
+                    }
+                }
+            })
+            .unwrap();
+
+        Scheduler { next_tasks: sched }
+    }
+
+    #[cfg(test)]
+    pub fn task_count(&self) -> usize {
+        self.next_tasks.0.lock().unwrap().len()
+    }
+
+    /// Schedule a task to run periodically.
+    pub fn schedule<F>(&self, period: Duration, operation: F) -> CancelHandle
+    where
+        F: Fn() -> () + Send + Sync + 'static,
+    {
+        let handle = CancelHandle::new();
+        let new_task = ScheduledTask {
+            next_time: Instant::now() + period,
+            period,
+            handle: handle.clone(),
+            operation: Arc::new(operation),
+        };
+        self.next_tasks.0.lock().unwrap().push(new_task);
+        self.next_tasks.1.notify_one();
+        handle
+    }
+}
+
+#[cfg(test)]
+pub mod test {
+    use super::*;
+    use std::sync::atomic::AtomicUsize;
+
+    #[test]
+    fn schedule_one_and_cancel() {
+        let trig1a = Arc::new(AtomicUsize::new(0));
+        let trig1b = trig1a.clone();
+
+        let sched = Scheduler::new();
+
+        let handle1 = sched.schedule(Duration::from_millis(50), move || {
+            trig1b.fetch_add(1, SeqCst);
+        });
+        assert_eq!(sched.task_count(), 1);
+        thread::sleep(Duration::from_millis(170));
+        assert_eq!(3, trig1a.load(SeqCst));
+
+        handle1.cancel();
+        thread::sleep(Duration::from_millis(70));
+        assert_eq!(sched.task_count(), 0);
+        assert_eq!(3, trig1a.load(SeqCst));
+    }
+
+    #[test]
+    fn schedule_two_and_cancel() {
+        let trig1a = Arc::new(AtomicUsize::new(0));
+        let trig1b = trig1a.clone();
+
+        let trig2a = Arc::new(AtomicUsize::new(0));
+        let trig2b = trig2a.clone();
+
+        let sched = Scheduler::new();
+
+        let handle1 = sched.schedule(Duration::from_millis(50), move || {
+            trig1b.fetch_add(1, SeqCst);
+            println!("ran 1");
+        });
+
+        let handle2 = sched.schedule(Duration::from_millis(100), move || {
+            trig2b.fetch_add(1, SeqCst);
+            println!("ran 2");
+        });
+
+        thread::sleep(Duration::from_millis(110));
+        assert_eq!(2, trig1a.load(SeqCst));
+        assert_eq!(1, trig2a.load(SeqCst));
+
+        handle1.cancel();
+        thread::sleep(Duration::from_millis(110));
+        assert_eq!(2, trig1a.load(SeqCst));
+        assert_eq!(2, trig2a.load(SeqCst));
+
+        handle2.cancel();
+        thread::sleep(Duration::from_millis(160));
+        assert_eq!(2, trig1a.load(SeqCst));
+        assert_eq!(2, trig2a.load(SeqCst));
+    }
+
+    #[test]
+    fn schedule_one_and_more() {
+        let trig1a = Arc::new(AtomicUsize::new(0));
+        let trig1b = trig1a.clone();
+
+        let sched = Scheduler::new();
+
+        let handle1 = sched.schedule(Duration::from_millis(100), move || {
+            trig1b.fetch_add(1, SeqCst);
+        });
+
+        thread::sleep(Duration::from_millis(110));
+        assert_eq!(1, trig1a.load(SeqCst));
+
+        let trig2a = Arc::new(AtomicUsize::new(0));
+        let trig2b = trig2a.clone();
+
+        let handle2 = sched.schedule(Duration::from_millis(50), move || {
+            trig2b.fetch_add(1, SeqCst);
+        });
+
+        thread::sleep(Duration::from_millis(110));
+        assert_eq!(2, trig1a.load(SeqCst));
+        assert_eq!(2, trig2a.load(SeqCst));
+
+        handle1.cancel();
+        handle2.cancel();
+    }
+}

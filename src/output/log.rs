@@ -1,5 +1,5 @@
 use cache::cache_in;
-use core::attributes::{Attributes, Buffered, Prefixed, WithAttributes};
+use core::attributes::{Attributes, Buffered, OnFlush, Prefixed, WithAttributes};
 use core::error;
 use core::input::{Input, InputKind, InputMetric, InputScope};
 use core::name::MetricName;
@@ -150,6 +150,7 @@ impl InputScope for LogScope {
 
 impl Flush for LogScope {
     fn flush(&self) -> error::Result<()> {
+        self.notify_flush_listeners();
         let mut entries = write_lock!(self.entries);
         if !entries.is_empty() {
             let mut buf: Vec<u8> = Vec::with_capacity(32 * entries.len());

@@ -2,7 +2,7 @@
 
 // TODO parameterize templates
 
-use core::attributes::{Attributes, Buffered, Prefixed, WithAttributes};
+use core::attributes::{Attributes, Buffered, OnFlush, Prefixed, WithAttributes};
 use core::error;
 use core::input::InputKind;
 use core::name::MetricName;
@@ -67,7 +67,7 @@ impl Stream<File> {
         Ok(Stream::write_to(file))
     }
 
-    /// Write to a new file.
+    /// Write metrics to a new file.
     ///
     /// Creates a new file to dump data into. If `clobber` is set to true, it allows overwriting
     /// existing file, if false, the attempt will result in an error.
@@ -82,7 +82,7 @@ impl Stream<File> {
 }
 
 impl Stream<io::Stderr> {
-    /// Write metric values to stdout.
+    /// Write metric values to stderr.
     pub fn to_stderr() -> Stream<io::Stderr> {
         Stream::write_to(io::stderr())
     }
@@ -196,6 +196,7 @@ impl<W: Write + Send + Sync + 'static> OutputScope for TextScope<W> {
 
 impl<W: Write + Send + Sync + 'static> Flush for TextScope<W> {
     fn flush(&self) -> error::Result<()> {
+        self.notify_flush_listeners();
         let mut entries = self.entries.borrow_mut();
         if !entries.is_empty() {
             let mut output = write_lock!(self.output.inner);

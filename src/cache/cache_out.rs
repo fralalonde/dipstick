@@ -1,7 +1,7 @@
 //! Metric output scope caching.
 
 use cache::lru_cache as lru;
-use core::attributes::{Attributes, Prefixed, WithAttributes};
+use core::attributes::{Attributes, OnFlush, Prefixed, WithAttributes};
 use core::error;
 use core::input::InputKind;
 use core::name::MetricName;
@@ -105,6 +105,7 @@ impl OutputScope for OutputScopeCache {
 
 impl Flush for OutputScopeCache {
     fn flush(&self) -> error::Result<()> {
+        self.notify_flush_listeners();
         self.target.flush()
     }
 }
