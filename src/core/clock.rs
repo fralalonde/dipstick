@@ -52,7 +52,6 @@ pub fn mock_clock_reset() {
     })
 }
 
-
 /// Advance the mock clock by a certain amount of time.
 /// Enables writing reproducible metrics tests in combination with #mock_clock_reset()
 /// Should be after metrics have been produced but before they are published.
@@ -75,7 +74,5 @@ fn now() -> Instant {
 /// thread::sleep will have no effect on metrics.
 /// Use advance_time() to simulate passing time.
 fn now() -> Instant {
-    MOCK_CLOCK.with(|now| {
-        *now.borrow()
-    })
+    MOCK_CLOCK.with(|now| *now.borrow())
 }

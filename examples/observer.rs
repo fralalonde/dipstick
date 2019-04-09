@@ -15,7 +15,7 @@
 
 extern crate dipstick;
 
-use std::time::{Duration};
+use std::time::Duration;
 
 use dipstick::*;
 
@@ -28,7 +28,9 @@ fn main() {
     metrics.observe(uptime, || 6).on_flush();
 
     let threads = metrics.gauge("threads");
-    metrics.observe(threads, thread_count).every(Duration::from_secs(1));
+    metrics
+        .observe(threads, thread_count)
+        .every(Duration::from_secs(1));
 
     loop {
         std::thread::sleep(Duration::from_millis(40));

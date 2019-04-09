@@ -1,5 +1,5 @@
-use std::ops::{Deref,DerefMut};
-use std::collections::{VecDeque};
+use std::collections::VecDeque;
+use std::ops::{Deref, DerefMut};
 
 /// A double-ended vec of strings constituting a metric name or a future part thereof.
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd, Default)]
@@ -10,18 +10,17 @@ pub struct NameParts {
 }
 
 impl NameParts {
-
     /// Returns true if this instance is equal to or a subset (more specific) of the target instance.
     /// e.g. `a.b.c` is within `a.b`
     /// e.g. `a.d.c` is not within `a.b`
     pub fn is_within(&self, other: &NameParts) -> bool {
         // quick check: if this name has less parts it cannot be equal or more specific
         if self.len() < other.nodes.len() {
-            return false
+            return false;
         }
         for (i, part) in other.nodes.iter().enumerate() {
             if part != &self.nodes[i] {
-                return false
+                return false;
             }
         }
         true
@@ -75,20 +74,20 @@ pub struct MetricName {
 }
 
 impl MetricName {
-
     /// Prepend to the existing namespace.
     pub fn prepend<S: Into<NameParts>>(mut self, namespace: S) -> Self {
-        let parts: NameParts =  namespace.into();
-        parts.iter().rev().for_each(|node|
-            self.nodes.push_front(node.clone())
-        );
+        let parts: NameParts = namespace.into();
+        parts
+            .iter()
+            .rev()
+            .for_each(|node| self.nodes.push_front(node.clone()));
         self
     }
 
     /// Append to the existing namespace.
     pub fn append<S: Into<NameParts>>(mut self, namespace: S) -> Self {
         let offset = self.nodes.len() - 1;
-        let parts: NameParts =  namespace.into();
+        let parts: NameParts = namespace.into();
         for (i, part) in parts.iter().enumerate() {
             self.nodes.insert(i + offset, part.clone())
         }
@@ -97,13 +96,19 @@ impl MetricName {
 
     /// Combine name parts into a string.
     pub fn join(&self, separator: &str) -> String {
-        self.nodes.iter().map(|s| &**s).collect::<Vec<&str>>().join(separator)
+        self.nodes
+            .iter()
+            .map(|s| &**s)
+            .collect::<Vec<&str>>()
+            .join(separator)
     }
 }
 
 impl<S: Into<String>> From<S> for MetricName {
     fn from(name: S) -> Self {
-        MetricName { nodes: NameParts::from(name) }
+        MetricName {
+            nodes: NameParts::from(name),
+        }
     }
 }
 
@@ -119,7 +124,6 @@ impl DerefMut for MetricName {
         &mut self.nodes
     }
 }
-
 
 #[cfg(test)]
 mod test {

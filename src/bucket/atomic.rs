@@ -1,33 +1,37 @@
 //! Maintain aggregated metrics for deferred reporting,
 
-use core::attributes::{Attributes, WithAttributes, Prefixed, OnFlush};
-use core::name::{MetricName};
-use core::input::{InputKind, InputScope, InputMetric};
-use core::output::{OutputDyn, OutputScope, OutputMetric, Output, output_none};
-use core::clock::TimeHandle;
-use core::{MetricValue, Flush};
-use bucket::{ScoreType, stats_summary};
 use bucket::ScoreType::*;
+use bucket::{stats_summary, ScoreType};
+use core::attributes::{Attributes, OnFlush, Prefixed, WithAttributes};
+use core::clock::TimeHandle;
 use core::error;
+use core::input::{InputKind, InputMetric, InputScope};
+use core::name::MetricName;
+use core::output::{output_none, Output, OutputDyn, OutputMetric, OutputScope};
+use core::{Flush, MetricValue};
 
-use std::mem;
+use std::collections::BTreeMap;
 use std::isize;
-use std::collections::{BTreeMap};
+use std::mem;
 use std::sync::atomic::AtomicIsize;
 use std::sync::atomic::Ordering::*;
-use std::sync::{Arc};
+use std::sync::Arc;
 
-#[cfg(not(feature="parking_lot"))]
-use std::sync::{RwLock};
+#[cfg(not(feature = "parking_lot"))]
+use std::sync::RwLock;
 
-#[cfg(feature="parking_lot")]
-use parking_lot::{RwLock};
+#[cfg(feature = "parking_lot")]
+use parking_lot::RwLock;
 
-use std::fmt;
 use std::borrow::Borrow;
+use std::fmt;
 
 /// A function type to transform aggregated scores into publishable statistics.
-pub type StatsFn = Fn(InputKind, MetricName, ScoreType) -> Option<(InputKind, MetricName, MetricValue)> + Send + Sync + 'static;
+pub type StatsFn =
+    Fn(InputKind, MetricName, ScoreType) -> Option<(InputKind, MetricName, MetricValue)>
+        + Send
+        + Sync
+        + 'static;
 
 fn initial_stats() -> &'static StatsFn {
     &stats_summary
@@ -38,9 +42,10 @@ fn initial_drain() -> Arc<OutputDyn + Send + Sync> {
 }
 
 lazy_static! {
-    static ref DEFAULT_AGGREGATE_STATS: RwLock<Arc<StatsFn>> = RwLock::new(Arc::new(initial_stats()));
-
-    static ref DEFAULT_AGGREGATE_OUTPUT: RwLock<Arc<OutputDyn + Send + Sync>> = RwLock::new(initial_drain());
+    static ref DEFAULT_AGGREGATE_STATS: RwLock<Arc<StatsFn>> =
+        RwLock::new(Arc::new(initial_stats()));
+    static ref DEFAULT_AGGREGATE_OUTPUT: RwLock<Arc<OutputDyn + Send + Sync>> =
+        RwLock::new(initial_drain());
 }
 
 /// Central aggregation structure.
@@ -54,8 +59,14 @@ pub struct AtomicBucket {
 struct InnerAtomicBucket {
     metrics: BTreeMap<MetricName, Arc<AtomicScores>>,
     period_start: TimeHandle,
-    stats: Option<Arc<Fn(InputKind, MetricName, ScoreType)
-        -> Option<(InputKind, MetricName, MetricValue)> + Send + Sync + 'static>>,
+    stats: Option<
+        Arc<
+            Fn(InputKind, MetricName, ScoreType) -> Option<(InputKind, MetricName, MetricValue)>
+                + Send
+                + Sync
+                + 'static,
+        >,
+    >,
     drain: Option<Arc<OutputDyn + Send + Sync + 'static>>,
     publish_metadata: bool,
 }
@@ -72,7 +83,6 @@ lazy_static! {
 }
 
 impl InnerAtomicBucket {
-
     fn flush(&mut self) -> error::Result<()> {
         let pub_scope = match self.drain {
             Some(ref out) => out.output_dyn(),
@@ -85,10 +95,13 @@ impl InnerAtomicBucket {
         // purge: if bucket is the last owner of the metric, remove it
         // TODO parameterize whether to keep ad-hoc metrics after publish
         let mut purged = self.metrics.clone();
-        self.metrics.iter()
+        self.metrics
+            .iter()
             .filter(|&(_k, v)| Arc::strong_count(v) == 1)
             .map(|(k, _v)| k)
-            .for_each(|k| { purged.remove(k); });
+            .for_each(|k| {
+                purged.remove(k);
+            });
         self.metrics = purged;
 
         Ok(())
@@ -98,16 +111,19 @@ impl InnerAtomicBucket {
     /// Compute stats on captured values using assigned or default stats function.
     /// Write stats to assigned or default output.
     fn flush_to(&mut self, target: &OutputScope) -> error::Result<()> {
-
         let now = TimeHandle::now();
         let duration_seconds = self.period_start.elapsed_us() as f64 / 1_000_000.0;
         self.period_start = now;
 
-        let mut snapshot: Vec<(&MetricName, InputKind, Vec<ScoreType>)> = self.metrics.iter()
-            .flat_map(|(name, scores)| if let Some(values) = scores.reset(duration_seconds) {
-                Some((name, scores.metric_kind(), values))
-            } else {
-                None
+        let mut snapshot: Vec<(&MetricName, InputKind, Vec<ScoreType>)> = self
+            .metrics
+            .iter()
+            .flat_map(|(name, scores)| {
+                if let Some(values) = scores.reset(duration_seconds) {
+                    Some((name, scores.metric_kind(), values))
+                } else {
+                    None
+                }
             })
             .collect();
 
@@ -119,7 +135,11 @@ impl InnerAtomicBucket {
         } else {
             // TODO add switch for metadata such as PERIOD_LENGTH
             if self.publish_metadata {
-                snapshot.push((&PERIOD_LENGTH, InputKind::Timer, vec![Sum((duration_seconds * 1000.0) as isize)]));
+                snapshot.push((
+                    &PERIOD_LENGTH,
+                    InputKind::Timer,
+                    vec![Sum((duration_seconds * 1000.0) as isize)],
+                ));
             }
 
             let stats_fn = match self.stats {
@@ -140,7 +160,6 @@ impl InnerAtomicBucket {
             target.flush()
         }
     }
-
 }
 
 impl<S: AsRef<str>> From<S> for AtomicBucket {
@@ -161,14 +180,17 @@ impl AtomicBucket {
                 drain: None,
                 // TODO add API toggle for metadata publish
                 publish_metadata: false,
-            }))
+            })),
         }
     }
 
     /// Set the default aggregated metrics statistics generator.
     pub fn default_stats<F>(func: F)
-        where
-            F: Fn(InputKind, MetricName, ScoreType) -> Option<(InputKind, MetricName, MetricValue)> + Send + Sync + 'static
+    where
+        F: Fn(InputKind, MetricName, ScoreType) -> Option<(InputKind, MetricName, MetricValue)>
+            + Send
+            + Sync
+            + 'static,
     {
         *write_lock!(DEFAULT_AGGREGATE_STATS) = Arc::new(func)
     }
@@ -189,18 +211,24 @@ impl AtomicBucket {
     }
 
     /// Set this bucket's statistics generator.
-    #[deprecated(since="0.7.2", note="Use stats()")]
+    #[deprecated(since = "0.7.2", note = "Use stats()")]
     pub fn set_stats<F>(&self, func: F)
-        where
-            F: Fn(InputKind, MetricName, ScoreType) -> Option<(InputKind, MetricName, MetricValue)> + Send + Sync + 'static
+    where
+        F: Fn(InputKind, MetricName, ScoreType) -> Option<(InputKind, MetricName, MetricValue)>
+            + Send
+            + Sync
+            + 'static,
     {
         self.stats(func)
     }
 
     /// Set this bucket's statistics generator.
     pub fn stats<F>(&self, func: F)
-        where
-            F: Fn(InputKind, MetricName, ScoreType) -> Option<(InputKind, MetricName, MetricValue)> + Send + Sync + 'static
+    where
+        F: Fn(InputKind, MetricName, ScoreType) -> Option<(InputKind, MetricName, MetricValue)>
+            + Send
+            + Sync
+            + 'static,
     {
         write_lock!(self.inner).stats = Some(Arc::new(func))
     }
@@ -211,7 +239,7 @@ impl AtomicBucket {
     }
 
     /// Set this bucket's aggregated metrics flush output.
-    #[deprecated(since="0.7.2", note="Use sink()")]
+    #[deprecated(since = "0.7.2", note = "Use sink()")]
     pub fn set_drain(&self, new_drain: impl Output + Send + Sync + 'static) {
         self.drain(new_drain)
     }
@@ -231,7 +259,6 @@ impl AtomicBucket {
         let mut inner = write_lock!(self.inner);
         inner.flush_to(publish_scope)
     }
-
 }
 
 impl InputScope for AtomicBucket {
@@ -257,8 +284,12 @@ impl Flush for AtomicBucket {
 }
 
 impl WithAttributes for AtomicBucket {
-    fn get_attributes(&self) -> &Attributes { &self.attributes }
-    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
+    fn get_attributes(&self) -> &Attributes {
+        &self.attributes
+    }
+    fn mut_attributes(&mut self) -> &mut Attributes {
+        &mut self.attributes
+    }
 }
 
 const HIT: usize = 0;
@@ -354,7 +385,6 @@ impl AtomicScores {
     pub fn reset(&self, duration_seconds: f64) -> Option<Vec<ScoreType>> {
         let mut scores = AtomicScores::blank();
         if self.snapshot(&mut scores) {
-
             let mut snapshot = Vec::new();
             match self.kind {
                 InputKind::Marker => {
@@ -421,8 +451,8 @@ fn swap_if(counter: &AtomicIsize, new_value: isize, compare: fn(isize, isize) ->
 #[cfg(feature = "bench")]
 mod bench {
 
-    use test;
     use super::*;
+    use test;
 
     #[bench]
     fn update_marker(b: &mut test::Bencher) {
@@ -467,8 +497,8 @@ mod test {
     use core::clock::{mock_clock_advance, mock_clock_reset};
     use output::map::StatsMapScope;
 
-    use std::time::Duration;
     use std::collections::BTreeMap;
+    use std::time::Duration;
 
     fn make_stats(stats_fn: &'static StatsFn) -> BTreeMap<String, MetricValue> {
         mock_clock_reset();

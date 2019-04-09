@@ -2,7 +2,7 @@
 
 extern crate dipstick;
 
-use dipstick::{MultiInput, Graphite, Stream, Input, InputScope, Prefixed};
+use dipstick::{Graphite, Input, InputScope, MultiInput, Prefixed, Stream};
 use std::time::Duration;
 
 fn main() {

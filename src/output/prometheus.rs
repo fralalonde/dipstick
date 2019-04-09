@@ -1,18 +1,18 @@
 //! Send metrics to a Prometheus server.
 
-use core::attributes::{Buffered, Attributes, WithAttributes, Prefixed, OnFlush};
-use core::name::MetricName;
-use core::{Flush, MetricValue};
-use core::input::InputKind;
-use core::metrics;
-use core::output::{Output, OutputScope, OutputMetric};
-use core::error;
-use queue::queue_out;
 use cache::cache_out;
+use core::attributes::{Attributes, Buffered, OnFlush, Prefixed, WithAttributes};
+use core::error;
+use core::input::InputKind;
 use core::label::Labels;
+use core::metrics;
+use core::name::MetricName;
+use core::output::{Output, OutputMetric, OutputScope};
+use core::{Flush, MetricValue};
+use queue::queue_out;
 
-use std::rc::Rc;
 use std::cell::{RefCell, RefMut};
+use std::rc::Rc;
 
 /// Prometheus output holds a socket to a Prometheus server.
 /// The socket is shared between scopes opened from the output.
@@ -50,8 +50,12 @@ impl Prometheus {
 }
 
 impl WithAttributes for Prometheus {
-    fn get_attributes(&self) -> &Attributes { &self.attributes }
-    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
+    fn get_attributes(&self) -> &Attributes {
+        &self.attributes
+    }
+    fn mut_attributes(&mut self) -> &mut Attributes {
+        &mut self.attributes
+    }
 }
 
 impl Buffered for Prometheus {}
@@ -85,7 +89,6 @@ impl OutputScope for PrometheusScope {
 }
 
 impl Flush for PrometheusScope {
-
     fn flush(&self) -> error::Result<()> {
         self.notify_flush_listeners();
         let buf = self.buffer.borrow_mut();
@@ -94,7 +97,7 @@ impl Flush for PrometheusScope {
 }
 
 impl PrometheusScope {
-    fn print(&self, metric: &PrometheusMetric, value: MetricValue, labels: Labels)  {
+    fn print(&self, metric: &PrometheusMetric, value: MetricValue, labels: Labels) {
         let scaled_value = value / metric.scale;
         let value_str = scaled_value.to_string();
 
@@ -127,7 +130,10 @@ impl PrometheusScope {
         let buffer = self.buffer.borrow_mut();
         if strbuf.len() + buffer.len() > BUFFER_FLUSH_THRESHOLD {
             metrics::PROMETHEUS_OVERFLOW.mark();
-            warn!("Prometheus Buffer Size Exceeded: {}", BUFFER_FLUSH_THRESHOLD);
+            warn!(
+                "Prometheus Buffer Size Exceeded: {}",
+                BUFFER_FLUSH_THRESHOLD
+            );
             let _ = self.flush_inner(buffer);
         } else {
             if !self.is_buffered() {
@@ -139,9 +145,14 @@ impl PrometheusScope {
     }
 
     fn flush_inner(&self, mut buf: RefMut<String>) -> error::Result<()> {
-        if buf.is_empty() { return Ok(()) }
+        if buf.is_empty() {
+            return Ok(());
+        }
 
-        match minreq::get(self.push_url.as_ref()).with_body(buf.as_ref()).send() {
+        match minreq::get(self.push_url.as_ref())
+            .with_body(buf.as_ref())
+            .send()
+        {
             Ok(_res) => {
                 metrics::PROMETHEUS_SENT_BYTES.count(buf.len());
                 trace!("Sent {} bytes to Prometheus", buf.len());
@@ -158,8 +169,12 @@ impl PrometheusScope {
 }
 
 impl WithAttributes for PrometheusScope {
-    fn get_attributes(&self) -> &Attributes { &self.attributes }
-    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
+    fn get_attributes(&self) -> &Attributes {
+        &self.attributes
+    }
+    fn mut_attributes(&mut self) -> &mut Attributes {
+        &mut self.attributes
+    }
 }
 
 impl Buffered for PrometheusScope {}
@@ -190,9 +205,9 @@ impl Drop for PrometheusScope {
 #[cfg(feature = "bench")]
 mod bench {
 
+    use super::*;
     use core::attributes::*;
     use core::input::*;
-    use super::*;
     use test;
 
     #[bench]
@@ -205,8 +220,10 @@ mod bench {
 
     #[bench]
     pub fn buffering_prometheus(b: &mut test::Bencher) {
-        let sd = Prometheus::push_to("localhost:2003").unwrap()
-            .buffered(Buffering::BufferSize(65465)).metrics();
+        let sd = Prometheus::push_to("localhost:2003")
+            .unwrap()
+            .buffered(Buffering::BufferSize(65465))
+            .metrics();
         let timer = sd.new_metric("timer".into(), InputKind::Timer);
 
         b.iter(|| test::black_box(timer.write(2000, labels![])));

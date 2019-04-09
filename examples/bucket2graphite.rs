@@ -3,8 +3,8 @@
 
 extern crate dipstick;
 
-use std::time::Duration;
 use dipstick::*;
+use std::time::Duration;
 
 fn main() {
     // adding a name to the bucket
@@ -12,8 +12,12 @@ fn main() {
 
     // adding two names to Graphite output
     // metrics will be prefixed with "machine1.application.test"
-    bucket.drain(Graphite::send_to("localhost:2003").expect("Socket")
-        .named("machine1").add_name("application"));
+    bucket.drain(
+        Graphite::send_to("localhost:2003")
+            .expect("Socket")
+            .named("machine1")
+            .add_name("application"),
+    );
 
     bucket.flush_every(Duration::from_secs(3));
 

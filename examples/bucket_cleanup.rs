@@ -4,9 +4,8 @@ extern crate dipstick;
 
 use dipstick::*;
 
-use std::time::Duration;
 use std::thread::sleep;
-
+use std::time::Duration;
 
 fn main() {
     let bucket = AtomicBucket::new();

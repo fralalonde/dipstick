@@ -2,43 +2,49 @@
 //! This makes all outputs also immediately usable as inputs.
 //! The alternatives are queuing or thread local.
 
-use core::input::{InputScope, InputMetric, Input, InputKind};
-use core::output::{Output, OutputScope};
-use core::attributes::{Attributes, WithAttributes, Prefixed, OnFlush};
-use core::name::MetricName;
-use core::Flush;
+use core::attributes::{Attributes, OnFlush, Prefixed, WithAttributes};
 use core::error;
+use core::input::{Input, InputKind, InputMetric, InputScope};
+use core::name::MetricName;
+use core::output::{Output, OutputScope};
+use core::Flush;
 use std::rc::Rc;
 
-use std::sync::{Arc, Mutex};
 use std::ops;
+use std::sync::{Arc, Mutex};
 
 /// Synchronous thread-safety for metric output using basic locking.
 #[derive(Clone)]
 pub struct LockingOutput {
     attributes: Attributes,
-    inner: Arc<Mutex<LockedOutputScope>>
+    inner: Arc<Mutex<LockedOutputScope>>,
 }
 
 impl WithAttributes for LockingOutput {
-    fn get_attributes(&self) -> &Attributes { &self.attributes }
-    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
+    fn get_attributes(&self) -> &Attributes {
+        &self.attributes
+    }
+    fn mut_attributes(&mut self) -> &mut Attributes {
+        &mut self.attributes
+    }
 }
 
 impl InputScope for LockingOutput {
-
     fn new_metric(&self, name: MetricName, kind: InputKind) -> InputMetric {
         let name = self.prefix_append(name);
         // lock when creating metrics
-        let raw_metric = self.inner.lock().expect("LockingOutput").new_metric(name, kind);
+        let raw_metric = self
+            .inner
+            .lock()
+            .expect("LockingOutput")
+            .new_metric(name, kind);
         let mutex = self.inner.clone();
         InputMetric::new(move |value, labels| {
             // lock when collecting values
             let _guard = mutex.lock().expect("LockingOutput");
             raw_metric.write(value, labels)
-        } )
+        })
     }
-
 }
 
 impl Flush for LockingOutput {
@@ -54,7 +60,7 @@ impl<T: Output + Send + Sync + 'static> Input for T {
     fn metrics(&self) -> Self::SCOPE {
         LockingOutput {
             attributes: Attributes::default(),
-            inner: Arc::new(Mutex::new(LockedOutputScope(self.output_dyn())))
+            inner: Arc::new(Mutex::new(LockedOutputScope(self.output_dyn()))),
         }
     }
 }
@@ -62,7 +68,7 @@ impl<T: Output + Send + Sync + 'static> Input for T {
 /// Wrap an OutputScope to make it Send + Sync, allowing it to travel the world of threads.
 /// Obviously, it should only still be used from a single thread at a time or dragons may occur.
 #[derive(Clone)]
-struct LockedOutputScope(Rc<OutputScope + 'static> );
+struct LockedOutputScope(Rc<OutputScope + 'static>);
 
 impl ops::Deref for LockedOutputScope {
     type Target = OutputScope + 'static;
@@ -73,4 +79,3 @@ impl ops::Deref for LockedOutputScope {
 
 unsafe impl Send for LockedOutputScope {}
 unsafe impl Sync for LockedOutputScope {}
-

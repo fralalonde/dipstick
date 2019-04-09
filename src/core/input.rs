@@ -1,14 +1,14 @@
 use core::clock::TimeHandle;
-use core::{MetricValue, Flush};
-use core::name::MetricName;
 use core::label::Labels;
+use core::name::MetricName;
+use core::{Flush, MetricValue};
 
-use std::sync::Arc;
 use std::fmt;
+use std::sync::Arc;
 
 // TODO maybe define an 'AsValue' trait + impl for supported number types, then drop 'num' crate
-pub use num::{ToPrimitive};
 pub use num::integer;
+pub use num::ToPrimitive;
 
 /// A function trait that opens a new metric capture scope.
 pub trait Input: Send + Sync + 'static + InputDyn {
@@ -19,7 +19,7 @@ pub trait Input: Send + Sync + 'static + InputDyn {
     fn metrics(&self) -> Self::SCOPE;
 
     /// Open a new scope from this input.
-    #[deprecated(since="0.7.2", note="Use metrics()")]
+    #[deprecated(since = "0.7.2", note = "Use metrics()")]
     fn input(&self) -> Self::SCOPE {
         self.metrics()
     }
@@ -74,7 +74,7 @@ pub trait InputScope: Flush {
 /// A metric is actually a function that knows to write a metric value to a metric output.
 #[derive(Clone)]
 pub struct InputMetric {
-    inner: Arc<Fn(MetricValue, Labels) + Send + Sync>
+    inner: Arc<Fn(MetricValue, Labels) + Send + Sync>,
 }
 
 impl fmt::Debug for InputMetric {
@@ -86,7 +86,9 @@ impl fmt::Debug for InputMetric {
 impl InputMetric {
     /// Utility constructor
     pub fn new<F: Fn(MetricValue, Labels) + Send + Sync + 'static>(metric: F) -> InputMetric {
-        InputMetric { inner: Arc::new(metric) }
+        InputMetric {
+            inner: Arc::new(metric),
+        }
     }
 
     /// Collect a new value for this metric.
@@ -120,7 +122,7 @@ impl<'a> From<&'a str> for InputKind {
             "Gauge" => InputKind::Gauge,
             "Timer" => InputKind::Timer,
             "Level" => InputKind::Level,
-            _ => panic!("No InputKind '{}' defined", s)
+            _ => panic!("No InputKind '{}' defined", s),
         }
     }
 }
@@ -187,7 +189,6 @@ impl Gauge {
     pub fn value<V: ToPrimitive>(&self, value: V) {
         self.inner.write(value.to_isize().unwrap(), labels![])
     }
-
 }
 
 /// A timer that sends values to the metrics backend

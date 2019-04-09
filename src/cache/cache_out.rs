@@ -1,20 +1,20 @@
 //! Metric output scope caching.
 
-use core::Flush;
-use core::attributes::{Attributes, WithAttributes, Prefixed, OnFlush};
-use core::name::MetricName;
-use core::output::{Output, OutputMetric, OutputScope, OutputDyn};
-use core::input::InputKind;
 use cache::lru_cache as lru;
+use core::attributes::{Attributes, OnFlush, Prefixed, WithAttributes};
 use core::error;
+use core::input::InputKind;
+use core::name::MetricName;
+use core::output::{Output, OutputDyn, OutputMetric, OutputScope};
+use core::Flush;
 
-use std::sync::{Arc};
+use std::sync::Arc;
 
-#[cfg(not(feature="parking_lot"))]
-use std::sync::{RwLock};
+#[cfg(not(feature = "parking_lot"))]
+use std::sync::RwLock;
 
-#[cfg(feature="parking_lot")]
-use parking_lot::{RwLock};
+#[cfg(feature = "parking_lot")]
+use parking_lot::RwLock;
 
 use std::rc::Rc;
 
@@ -46,14 +46,18 @@ impl OutputCache {
         OutputCache {
             attributes: Attributes::default(),
             target: Arc::new(target),
-            cache: Arc::new(RwLock::new(lru::LRUCache::with_capacity(max_size)))
+            cache: Arc::new(RwLock::new(lru::LRUCache::with_capacity(max_size))),
         }
     }
 }
 
 impl WithAttributes for OutputCache {
-    fn get_attributes(&self) -> &Attributes { &self.attributes }
-    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
+    fn get_attributes(&self) -> &Attributes {
+        &self.attributes
+    }
+    fn mut_attributes(&mut self) -> &mut Attributes {
+        &mut self.attributes
+    }
 }
 
 impl Output for OutputCache {
@@ -78,16 +82,18 @@ pub struct OutputScopeCache {
 }
 
 impl WithAttributes for OutputScopeCache {
-    fn get_attributes(&self) -> &Attributes { &self.attributes }
-    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
+    fn get_attributes(&self) -> &Attributes {
+        &self.attributes
+    }
+    fn mut_attributes(&mut self) -> &mut Attributes {
+        &mut self.attributes
+    }
 }
 
 impl OutputScope for OutputScopeCache {
     fn new_metric(&self, name: MetricName, kind: InputKind) -> OutputMetric {
         let name = self.prefix_append(name);
-        let lookup = {
-            write_lock!(self.cache).get(&name).cloned()
-        };
+        let lookup = { write_lock!(self.cache).get(&name).cloned() };
         lookup.unwrap_or_else(|| {
             let new_metric = self.target.new_metric(name.clone(), kind);
             // FIXME (perf) having to take another write lock for a cache miss
@@ -98,10 +104,8 @@ impl OutputScope for OutputScopeCache {
 }
 
 impl Flush for OutputScopeCache {
-
     fn flush(&self) -> error::Result<()> {
         self.notify_flush_listeners();
         self.target.flush()
     }
 }
-

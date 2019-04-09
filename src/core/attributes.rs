@@ -1,21 +1,20 @@
-use std::sync::{Arc};
-use std::collections::{HashMap};
+use std::collections::HashMap;
 use std::default::Default;
+use std::sync::Arc;
 
+use core::name::{MetricName, NameParts};
 use core::scheduler::SCHEDULER;
-use core::name::{NameParts, MetricName};
-use ::{Flush, CancelHandle};
 use std::fmt;
 use std::time::Duration;
-use ::{InputScope, Gauge};
 use MetricValue;
+use {CancelHandle, Flush};
+use {Gauge, InputScope};
 
-#[cfg(not(feature="parking_lot"))]
-use std::sync::{RwLock};
+#[cfg(not(feature = "parking_lot"))]
+use std::sync::RwLock;
 
-#[cfg(feature="parking_lot")]
-use parking_lot::{RwLock};
-
+#[cfg(feature = "parking_lot")]
+use parking_lot::RwLock;
 
 /// The actual distribution (random, fixed-cycled, etc) depends on selected sampling method.
 #[derive(Debug, Clone, Copy)]
@@ -28,7 +27,7 @@ pub enum Sampling {
     /// - 1.0+ records everything
     /// - 0.5 records one of two values
     /// - 0.0 records nothing
-    Random(f64)
+    Random(f64),
 }
 
 impl Default for Sampling {
@@ -102,7 +101,10 @@ pub trait OnFlush {
     fn notify_flush_listeners(&self);
 }
 
-impl <T> OnFlush for T where T: Flush + WithAttributes {
+impl<T> OnFlush for T
+where
+    T: Flush + WithAttributes,
+{
     fn notify_flush_listeners(&self) {
         for listener in read_lock!(self.get_attributes().flush_listeners).iter() {
             (listener)()
@@ -117,16 +119,18 @@ pub struct ObserveWhen<'a, T, F> {
 }
 
 impl<'a, T, F> ObserveWhen<'a, T, F>
-    where F: Fn() -> MetricValue + Send + Sync + 'static,
-          T: InputScope + WithAttributes + Send + Sync,
+where
+    F: Fn() -> MetricValue + Send + Sync + 'static,
+    T: InputScope + WithAttributes + Send + Sync,
 {
     pub fn on_flush(self) {
         let gauge = self.gauge;
         let op = self.operation;
-        write_lock!(self.target.mut_attributes().flush_listeners).push(Arc::new(move || gauge.value(op())));
+        write_lock!(self.target.mut_attributes().flush_listeners)
+            .push(Arc::new(move || gauge.value(op())));
     }
 
-    pub fn every(self, period: Duration,) -> CancelHandle {
+    pub fn every(self, period: Duration) -> CancelHandle {
         let gauge = self.gauge;
         let op = self.operation;
         let handle = SCHEDULER.schedule(period, move || gauge.value(op()));
@@ -137,17 +141,19 @@ impl<'a, T, F> ObserveWhen<'a, T, F>
 
 /// Schedule a recurring task
 pub trait Observe {
-
     /// Schedule a recurring task.
     /// The returned handle can be used to cancel the task.
     fn observe<F>(&mut self, gauge: Gauge, operation: F) -> ObserveWhen<Self, F>
-        where F: Fn() -> MetricValue + Send + Sync + 'static, Self: Sized;
-
+    where
+        F: Fn() -> MetricValue + Send + Sync + 'static,
+        Self: Sized;
 }
 
 impl<T: InputScope + WithAttributes> Observe for T {
     fn observe<F>(&mut self, gauge: Gauge, operation: F) -> ObserveWhen<Self, F>
-        where F: Fn() -> MetricValue + Send + Sync + 'static, Self: Sized
+    where
+        F: Fn() -> MetricValue + Send + Sync + 'static,
+        Self: Sized,
     {
         ObserveWhen {
             target: self,
@@ -173,7 +179,7 @@ pub trait Prefixed {
 
     /// Append a name to the existing names.
     /// Return a clone of the component with the updated names.
-    #[deprecated(since="0.7.2", note="Use named() or add_name()")]
+    #[deprecated(since = "0.7.2", note = "Use named() or add_name()")]
     fn add_prefix<S: Into<String>>(&self, name: S) -> Self;
 
     /// Append a name to the existing names.
@@ -203,11 +209,9 @@ pub trait Label {
 
     /// Join namespace and prepend in newly defined metrics.
     fn label(&self, name: &str) -> Self;
-
 }
 
 impl<T: WithAttributes> Prefixed for T {
-
     /// Returns namespace of component.
     fn get_prefixes(&self) -> &NameParts {
         &self.get_attributes().naming
@@ -233,7 +237,6 @@ impl<T: WithAttributes> Prefixed for T {
         let parts = NameParts::from(name);
         self.with_attributes(|new_attr| new_attr.naming = parts.clone())
     }
-
 }
 
 /// Apply statistical sampling to collected metrics data.
@@ -272,11 +275,11 @@ pub trait Buffered: WithAttributes {
 
 #[cfg(test)]
 mod test {
-    use output::map::StatsMap;
     use core::attributes::*;
+    use core::input::Input;
     use core::input::*;
     use core::Flush;
-    use core::input::Input;
+    use output::map::StatsMap;
     use StatsMapScope;
 
     #[test]

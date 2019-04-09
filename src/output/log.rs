@@ -1,22 +1,22 @@
-use core::{Flush};
-use core::input::{InputKind, Input, InputScope, InputMetric};
-use core::attributes::{Attributes, WithAttributes, Buffered, Prefixed, OnFlush};
-use core::name::MetricName;
-use core::error;
 use cache::cache_in;
+use core::attributes::{Attributes, Buffered, OnFlush, Prefixed, WithAttributes};
+use core::error;
+use core::input::{Input, InputKind, InputMetric, InputScope};
+use core::name::MetricName;
+use core::Flush;
+use output::format::{Formatting, LineFormat, SimpleFormat};
 use queue::queue_in;
-use output::format::{LineFormat, SimpleFormat, Formatting};
 
-use std::sync::{Arc};
+use std::sync::Arc;
 
-#[cfg(not(feature="parking_lot"))]
-use std::sync::{RwLock};
+#[cfg(not(feature = "parking_lot"))]
+use std::sync::RwLock;
 
-#[cfg(feature="parking_lot")]
-use parking_lot::{RwLock};
+#[cfg(feature = "parking_lot")]
+use parking_lot::RwLock;
 
-use std::io::Write;
 use log;
+use std::io::Write;
 
 /// Buffered metrics log output.
 #[derive(Clone)]
@@ -40,8 +40,12 @@ impl Input for Log {
 }
 
 impl WithAttributes for Log {
-    fn get_attributes(&self) -> &Attributes { &self.attributes }
-    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
+    fn get_attributes(&self) -> &Attributes {
+        &self.attributes
+    }
+    fn mut_attributes(&mut self) -> &mut Attributes {
+        &mut self.attributes
+    }
 }
 
 impl Buffered for Log {}
@@ -70,7 +74,7 @@ impl Log {
             attributes: Attributes::default(),
             format: Arc::new(SimpleFormat::default()),
             level: log::Level::Info,
-            target: None
+            target: None,
         }
     }
 
@@ -89,12 +93,15 @@ impl Log {
         cloned.target = Some(target.to_string());
         cloned
     }
-
 }
 
 impl WithAttributes for LogScope {
-    fn get_attributes(&self) -> &Attributes { &self.attributes }
-    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
+    fn get_attributes(&self) -> &Attributes {
+        &self.attributes
+    }
+    fn mut_attributes(&mut self) -> &mut Attributes {
+        &mut self.attributes
+    }
 }
 
 impl Buffered for LogScope {}
@@ -116,7 +123,7 @@ impl InputScope for LogScope {
                     Ok(()) => {
                         let mut entries = write_lock!(entries);
                         entries.push(buffer)
-                    },
+                    }
                     Err(err) => debug!("Could not format buffered log metric: {}", err),
                 }
             })
@@ -127,10 +134,12 @@ impl InputScope for LogScope {
             InputMetric::new(move |value, labels| {
                 let mut buffer = Vec::with_capacity(32);
                 match template.print(&mut buffer, value, |key| labels.lookup(key)) {
-                    Ok(()) => if let Some(target) = &target {
-                        log!(target: target, level, "{:?}", &buffer)
-                    } else {
-                        log!(level, "{:?}", &buffer)
+                    Ok(()) => {
+                        if let Some(target) = &target {
+                            log!(target: target, level, "{:?}", &buffer)
+                        } else {
+                            log!(level, "{:?}", &buffer)
+                        }
                     }
                     Err(err) => debug!("Could not format buffered log metric: {}", err),
                 }
@@ -140,7 +149,6 @@ impl InputScope for LogScope {
 }
 
 impl Flush for LogScope {
-
     fn flush(&self) -> error::Result<()> {
         self.notify_flush_listeners();
         let mut entries = write_lock!(self.entries);

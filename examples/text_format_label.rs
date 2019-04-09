@@ -2,10 +2,12 @@
 
 extern crate dipstick;
 
+use dipstick::{
+    AppLabel, Formatting, Input, InputKind, InputScope, LabelOp, LineFormat, LineOp, LineTemplate,
+    MetricName, Stream,
+};
 use std::thread::sleep;
 use std::time::Duration;
-use dipstick::{Stream, InputScope, Input, Formatting, AppLabel,
-               MetricName, InputKind, LineTemplate, LineFormat, LineOp, LabelOp};
 
 /// Generates template like "$METRIC $value $label_value["abc"]\n"
 struct MyFormat;
@@ -16,21 +18,29 @@ impl LineFormat for MyFormat {
             LineOp::Literal(format!("{} ", name.join(".")).to_uppercase().into()),
             LineOp::ValueAsText,
             LineOp::Literal(" ".into()),
-            LineOp::LabelExists("abc".into(),
-                vec![LabelOp::LabelKey, LabelOp::Literal(":".into()), LabelOp::LabelValue],
+            LineOp::LabelExists(
+                "abc".into(),
+                vec![
+                    LabelOp::LabelKey,
+                    LabelOp::Literal(":".into()),
+                    LabelOp::LabelValue,
+                ],
             ),
             LineOp::NewLine,
-        ].into()
+        ]
+        .into()
     }
 }
 
 fn main() {
-    let counter = Stream::to_stderr().formatting(MyFormat).metrics().counter("counter_a");
+    let counter = Stream::to_stderr()
+        .formatting(MyFormat)
+        .metrics()
+        .counter("counter_a");
     AppLabel::set("abc", "xyz");
     loop {
         // report some metric values from our "application" loop
         counter.count(11);
         sleep(Duration::from_millis(500));
     }
-
 }

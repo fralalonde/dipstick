@@ -1,14 +1,14 @@
-use core::{Flush, MetricValue};
+use core::attributes::{Attributes, OnFlush, Prefixed, WithAttributes};
 use core::input::InputKind;
+use core::input::{Input, InputMetric, InputScope};
 use core::name::MetricName;
-use core::input::{InputMetric, InputScope, Input};
-use core::attributes::{Attributes, WithAttributes, Prefixed, OnFlush};
+use core::{Flush, MetricValue};
 
 use std::collections::BTreeMap;
 use std::error::Error;
 
 use std::sync::{Arc, RwLock};
-use ::{OutputScope, OutputMetric};
+use {OutputMetric, OutputScope};
 
 /// A BTreeMap wrapper to receive metrics or stats values.
 /// Every received value for a metric replaces the previous one (if any).
@@ -18,8 +18,12 @@ pub struct StatsMap {
 }
 
 impl WithAttributes for StatsMap {
-    fn get_attributes(&self) -> &Attributes { &self.attributes }
-    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
+    fn get_attributes(&self) -> &Attributes {
+        &self.attributes
+    }
+    fn mut_attributes(&mut self) -> &mut Attributes {
+        &mut self.attributes
+    }
 }
 
 impl Input for StatsMap {
@@ -42,8 +46,12 @@ pub struct StatsMapScope {
 }
 
 impl WithAttributes for StatsMapScope {
-    fn get_attributes(&self) -> &Attributes { &self.attributes }
-    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
+    fn get_attributes(&self) -> &Attributes {
+        &self.attributes
+    }
+    fn mut_attributes(&mut self) -> &mut Attributes {
+        &mut self.attributes
+    }
 }
 
 impl InputScope for StatsMapScope {
@@ -67,7 +75,6 @@ impl OutputScope for StatsMapScope {
         })
     }
 }
-
 
 impl Flush for StatsMapScope {
     fn flush(&self) -> Result<(), Box<Error + Send + Sync>> {

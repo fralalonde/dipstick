@@ -3,18 +3,17 @@
 
 extern crate dipstick;
 
-use std::time::Duration;
 use dipstick::*;
 use std::thread::sleep;
+use std::time::Duration;
 
-metrics!{
+metrics! {
     APP = "application" => {
         pub COUNTER: Counter = "counter";
     }
 }
 
 fn main() {
-
     let one_minute = AtomicBucket::new();
     one_minute.flush_every(Duration::from_secs(60));
 

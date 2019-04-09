@@ -1,11 +1,11 @@
 //! Dispatch metrics to multiple sinks.
 
-use core::Flush;
-use core::attributes::{Attributes, WithAttributes, Prefixed, OnFlush};
-use core::name::MetricName;
-use core::input::InputKind;
-use core::output::{Output, OutputMetric, OutputScope, OutputDyn};
+use core::attributes::{Attributes, OnFlush, Prefixed, WithAttributes};
 use core::error;
+use core::input::InputKind;
+use core::name::MetricName;
+use core::output::{Output, OutputDyn, OutputMetric, OutputScope};
+use core::Flush;
 
 use std::rc::Rc;
 use std::sync::Arc;
@@ -31,7 +31,7 @@ impl Output for MultiOutput {
 
 impl MultiOutput {
     /// Create a new multi-output dispatcher.
-    #[deprecated(since="0.7.2", note="Use new()")]
+    #[deprecated(since = "0.7.2", note = "Use new()")]
     pub fn output() -> Self {
         Self::new()
     }
@@ -51,12 +51,15 @@ impl MultiOutput {
         cloned.outputs.push(Arc::new(out));
         cloned
     }
-
 }
 
 impl WithAttributes for MultiOutput {
-    fn get_attributes(&self) -> &Attributes { &self.attributes }
-    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
+    fn get_attributes(&self) -> &Attributes {
+        &self.attributes
+    }
+    fn mut_attributes(&mut self) -> &mut Attributes {
+        &mut self.attributes
+    }
 }
 
 /// Dispatch metric values to a list of scopes.
@@ -81,17 +84,20 @@ impl MultiOutputScope {
         cloned.scopes.push(Rc::new(scope));
         cloned
     }
-
 }
 
 impl OutputScope for MultiOutputScope {
     fn new_metric(&self, name: MetricName, kind: InputKind) -> OutputMetric {
         let name = &self.prefix_append(name);
-        let metrics: Vec<OutputMetric> = self.scopes.iter()
+        let metrics: Vec<OutputMetric> = self
+            .scopes
+            .iter()
             .map(move |scope| scope.new_metric(name.clone(), kind))
             .collect();
-        OutputMetric::new(move |value, labels| for metric in &metrics {
-            metric.write(value, labels.clone())
+        OutputMetric::new(move |value, labels| {
+            for metric in &metrics {
+                metric.write(value, labels.clone())
+            }
         })
     }
 }
@@ -107,6 +113,10 @@ impl Flush for MultiOutputScope {
 }
 
 impl WithAttributes for MultiOutputScope {
-    fn get_attributes(&self) -> &Attributes { &self.attributes }
-    fn mut_attributes(&mut self) -> &mut Attributes { &mut self.attributes }
+    fn get_attributes(&self) -> &Attributes {
+        &self.attributes
+    }
+    fn mut_attributes(&mut self) -> &mut Attributes {
+        &mut self.attributes
+    }
 }

@@ -6,11 +6,10 @@ use dipstick::*;
 use std::time::Duration;
 
 fn main() {
-    let metrics =
-        Graphite::send_to("localhost:2003")
-            .expect("Connected")
-            .named("my_app")
-            .metrics();
+    let metrics = Graphite::send_to("localhost:2003")
+        .expect("Connected")
+        .named("my_app")
+        .metrics();
 
     loop {
         metrics.counter("counter_a").count(123);

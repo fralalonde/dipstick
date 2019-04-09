@@ -2,13 +2,13 @@
 
 use core::input::InputScope;
 
-use std::time::{Duration, Instant};
-use std::sync::{Arc, Condvar, Mutex};
-use std::sync::atomic::{AtomicBool};
+use std::cmp::{max, Ordering};
+use std::collections::BinaryHeap;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::SeqCst;
-use std::collections::{BinaryHeap};
-use std::cmp::{Ordering, max};
-use std::thread::{self};
+use std::sync::{Arc, Condvar, Mutex};
+use std::thread;
+use std::time::{Duration, Instant};
 
 /// A handle to cancel a scheduled task if required.
 #[derive(Debug, Clone)]
@@ -89,7 +89,8 @@ pub static MIN_DELAY: Duration = Duration::from_millis(50);
 impl Scheduler {
     /// Launch a new scheduler thread.
     fn new() -> Self {
-        let sched: Arc<(Mutex<BinaryHeap<ScheduledTask>>, Condvar)> = Arc::new((Mutex::new(BinaryHeap::new()), Condvar::new()));
+        let sched: Arc<(Mutex<BinaryHeap<ScheduledTask>>, Condvar)> =
+            Arc::new((Mutex::new(BinaryHeap::new()), Condvar::new()));
         let sched1 = Arc::downgrade(&sched);
 
         thread::Builder::new()
@@ -106,31 +107,29 @@ impl Scheduler {
                             Some(task) if task.next_time > now => {
                                 // next task is not ready yet, update schedule
                                 wait_for = max(MIN_DELAY, task.next_time - now);
-                                break 'work
+                                break 'work;
                             }
                             None => {
                                 // TODO no tasks left. exit thread?
-                                break 'work
-                            },
+                                break 'work;
+                            }
                             _ => {}
                         }
                         if let Some(mut task) = tasks.pop() {
                             if task.handle.is_cancelled() {
                                 // do not execute, do not reinsert
-                                continue
+                                continue;
                             }
                             (task.operation)();
                             task.next_time = now + task.period;
                             tasks.push(task);
                         }
-                    };
+                    }
                 }
             })
             .unwrap();
 
-        Scheduler {
-            next_tasks: sched
-        }
+        Scheduler { next_tasks: sched }
     }
 
     #[cfg(test)]
@@ -140,7 +139,9 @@ impl Scheduler {
 
     /// Schedule a task to run periodically.
     pub fn schedule<F>(&self, period: Duration, operation: F) -> CancelHandle
-        where F: Fn() -> () + Send + Sync + 'static {
+    where
+        F: Fn() -> () + Send + Sync + 'static,
+    {
         let handle = CancelHandle::new();
         let new_task = ScheduledTask {
             next_time: Instant::now() + period,
@@ -157,7 +158,7 @@ impl Scheduler {
 #[cfg(test)]
 pub mod test {
     use super::*;
-    use std::sync::atomic::{AtomicUsize};
+    use std::sync::atomic::AtomicUsize;
 
     #[test]
     fn schedule_one_and_cancel() {
@@ -166,7 +167,9 @@ pub mod test {
 
         let sched = Scheduler::new();
 
-        let handle1 = sched.schedule(Duration::from_millis(50), move || {trig1b.fetch_add(1, SeqCst);});
+        let handle1 = sched.schedule(Duration::from_millis(50), move || {
+            trig1b.fetch_add(1, SeqCst);
+        });
         assert_eq!(sched.task_count(), 1);
         thread::sleep(Duration::from_millis(170));
         assert_eq!(3, trig1a.load(SeqCst));
@@ -241,4 +244,3 @@ pub mod test {
         handle2.cancel();
     }
 }
-

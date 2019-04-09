@@ -1,7 +1,7 @@
-use core::name::MetricName;
-use core::input::InputKind;
-use core::MetricValue;
 use self::LineOp::*;
+use core::input::InputKind;
+use core::name::MetricName;
+use core::MetricValue;
 
 use std::io;
 use std::sync::Arc;
@@ -32,7 +32,7 @@ pub enum LabelOp {
 
 /// An sequence of print commands, embodying an output strategy for a single metric.
 pub struct LineTemplate {
-    ops: Vec<LineOp>
+    ops: Vec<LineOp>,
 }
 
 impl From<Vec<LineOp>> for LineTemplate {
@@ -43,8 +43,14 @@ impl From<Vec<LineOp>> for LineTemplate {
 
 impl LineTemplate {
     /// Template execution applies commands in turn, writing to the output.
-    pub fn print<L>(&self, output: &mut io::Write, value: MetricValue, lookup: L) -> Result<(), io::Error>
-    where L: Fn(&str) -> Option<Arc<String>>
+    pub fn print<L>(
+        &self,
+        output: &mut io::Write,
+        value: MetricValue,
+        lookup: L,
+    ) -> Result<(), io::Error>
+    where
+        L: Fn(&str) -> Option<Arc<String>>,
     {
         for cmd in &self.ops {
             match cmd {
@@ -53,22 +59,19 @@ impl LineTemplate {
                 ScaledValueAsText(scale) => {
                     let scaled = value as f64 / scale;
                     output.write_all(format!("{}", scaled).as_ref())?
-                },
+                }
                 NewLine => writeln!(output)?,
                 LabelExists(label_key, print_label) => {
                     if let Some(label_value) = lookup(label_key.as_ref()) {
                         for label_cmd in print_label {
                             match label_cmd {
-                                LabelOp::LabelValue =>
-                                    output.write_all(label_value.as_bytes())?,
-                                LabelOp::LabelKey =>
-                                    output.write_all(label_key.as_bytes())?,
-                                LabelOp::Literal(src) =>
-                                    output.write_all(src.as_ref())?,
+                                LabelOp::LabelValue => output.write_all(label_value.as_bytes())?,
+                                LabelOp::LabelKey => output.write_all(label_key.as_bytes())?,
+                                LabelOp::Literal(src) => output.write_all(src.as_ref())?,
                             }
                         }
                     }
-                },
+                }
             };
         }
         Ok(())
@@ -83,7 +86,6 @@ pub trait Formatting {
 
 /// Forges metric-specific printers
 pub trait LineFormat: Send + Sync {
-
     /// Prepare a template for output of metric values.
     fn template(&self, name: &MetricName, kind: InputKind) -> LineTemplate;
 }
@@ -100,11 +102,7 @@ impl LineFormat for SimpleFormat {
         let mut header = name.join(".");
         header.push(' ');
         LineTemplate {
-            ops: vec![
-                Literal(header.into_bytes()),
-                ValueAsText,
-                NewLine,
-            ]
+            ops: vec![Literal(header.into_bytes()), ValueAsText, NewLine],
         }
     }
 }
@@ -129,12 +127,16 @@ pub mod test {
                     Literal(" ".into()),
                     ScaledValueAsText(1000.0),
                     Literal(" ".into()),
-                    LabelExists("test_key".into(), vec![
-                        LabelOp::LabelKey,
-                        LabelOp::Literal("=".into()),
-                        LabelOp::LabelValue]),
+                    LabelExists(
+                        "test_key".into(),
+                        vec![
+                            LabelOp::LabelKey,
+                            LabelOp::Literal("=".into()),
+                            LabelOp::LabelValue,
+                        ],
+                    ),
                     NewLine,
-                ]
+                ],
             }
         }
     }
@@ -147,8 +149,13 @@ pub mod test {
         name = name.prepend("xyz");
         let template = format.template(&name, InputKind::Counter);
         let mut out = vec![];
-        template.print(&mut out, 123000, |key| labels.lookup(key)).unwrap();
-        assert_eq!("Counter/xyz.abc 123000 123 test_key=456\n", String::from_utf8(out).unwrap());
+        template
+            .print(&mut out, 123000, |key| labels.lookup(key))
+            .unwrap();
+        assert_eq!(
+            "Counter/xyz.abc 123000 123 test_key=456\n",
+            String::from_utf8(out).unwrap()
+        );
     }
 
     #[test]
@@ -159,6 +166,9 @@ pub mod test {
         let template = format.template(&name, InputKind::Counter);
         let mut out = vec![];
         template.print(&mut out, 123000, |_key| None).unwrap();
-        assert_eq!("Counter/xyz.abc 123000 123 \n", String::from_utf8(out).unwrap());
+        assert_eq!(
+            "Counter/xyz.abc 123000 123 \n",
+            String::from_utf8(out).unwrap()
+        );
     }
 }
