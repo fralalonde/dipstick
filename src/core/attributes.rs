@@ -113,7 +113,7 @@ where
 }
 
 pub struct ObserveWhen<'a, T, F> {
-    target: &'a mut T,
+    target: &'a T,
     gauge: Gauge,
     operation: Arc<F>,
 }
@@ -123,34 +123,35 @@ where
     F: Fn() -> MetricValue + Send + Sync + 'static,
     T: InputScope + WithAttributes + Send + Sync,
 {
+    /// Observe the metric's value upon flushing the scope.
     pub fn on_flush(self) {
         let gauge = self.gauge;
         let op = self.operation;
-        write_lock!(self.target.mut_attributes().flush_listeners)
+        write_lock!(self.target.get_attributes().flush_listeners)
             .push(Arc::new(move || gauge.value(op())));
     }
 
+    /// Observe the metric's value periodically.
     pub fn every(self, period: Duration) -> CancelHandle {
         let gauge = self.gauge;
         let op = self.operation;
         let handle = SCHEDULER.schedule(period, move || gauge.value(op()));
-        write_lock!(self.target.mut_attributes().tasks).push(handle.clone());
+        write_lock!(self.target.get_attributes().tasks).push(handle.clone());
         handle
     }
 }
 
 /// Schedule a recurring task
 pub trait Observe {
-    /// Schedule a recurring task.
-    /// The returned handle can be used to cancel the task.
-    fn observe<F>(&mut self, gauge: Gauge, operation: F) -> ObserveWhen<Self, F>
+    /// Provide a source for a metric's values.
+    fn observe<F>(&self, gauge: Gauge, operation: F) -> ObserveWhen<Self, F>
     where
         F: Fn() -> MetricValue + Send + Sync + 'static,
         Self: Sized;
 }
 
 impl<T: InputScope + WithAttributes> Observe for T {
-    fn observe<F>(&mut self, gauge: Gauge, operation: F) -> ObserveWhen<Self, F>
+    fn observe<F>(&self, gauge: Gauge, operation: F) -> ObserveWhen<Self, F>
     where
         F: Fn() -> MetricValue + Send + Sync + 'static,
         Self: Sized,
@@ -284,7 +285,7 @@ mod test {
 
     #[test]
     fn on_flush() {
-        let mut metrics: StatsMapScope = StatsMap::default().metrics();
+        let metrics: StatsMapScope = StatsMap::default().metrics();
         let gauge = metrics.gauge("my_gauge");
         metrics.observe(gauge, || 4).on_flush();
         metrics.flush().unwrap();

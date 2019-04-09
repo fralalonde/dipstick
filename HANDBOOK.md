@@ -57,47 +57,93 @@ Timer's internal precision is microseconds but can be scaled down on output.
 extern crate dipstick;
 use dipstick::*;
 fn main() {
-    let app_metrics = Stream::to_stdout().metrics();
-    let timer =  app_metrics.timer("my_timer");
-    time!(timer, {/* slow code here */} );
-    timer.time(|| {/* slow code here */} );
+    let metrics = Stream::to_stdout().metrics();
+    let timer =  metrics.timer("my_timer");
     
-    let start = timer.start();
-    /* slow code here */
-    timer.stop(start);
+    // using macro
+    time!(timer, {/* timed code here ... */} );
     
+    // using closure
+    timer.time(|| {/* timed code here ... */} );
+    
+    // using start/stop
+    let handle = timer.start();
+    /* timed code here ... */
+    timer.stop(handle);
+
+    // directly reporting microseconds
     timer.interval_us(123_456);
 }
 ```
 
 ### Level
-Relative quantity counter. Accepts positive and negative cumulative values.
-If aggregated, observed minimum and maximum track the sum of values rather than individual values as for `Counter`. 
+A relative, cumulative quantity counter. Accepts positive and negative values.
+If aggregated, observed minimum and maximum track the _sum_ of values (as opposed to `Counter` min and max _individual_ values). 
  
 ### Gauge
 An instant observation of a resource's value (positive or negative, but non-cumulative).
-The observation of Gauges is not automatic and must be performed programmatically as with other metric types.
+The observation of Gauges can be performed programmatically as with other metric types or 
+it can be triggered automatically, either on schedule or upon flushing the scope:
+
+````rust
+extern crate dipstick;
+use dipstick::*;
+use std::time::Duration;
+
+fn main() {
+    let metrics = Stream::to_stdout().metrics();
+    let uptime = metrics.gauge("uptime");
+    
+    // report gauge value programmatically
+    uptime.value(2);
+    
+    // observe a constant value before each flush     
+    let uptime = metrics.gauge("uptime");
+    metrics.observe(uptime, || 6).on_flush();
+
+    // observe a function-provided value periodically     
+    metrics
+        .observe(metrics.gauge("threads"), thread_count)
+        .every(Duration::from_secs(1));       
+}
+
+fn thread_count() -> MetricValue {
+    6
+}
+````
 
 ### Names
 Each metric must be given a name upon creation.
 Names are opaque to the application and are used only to identify the metrics upon output.
 
-Names may be prepended with a namespace by each configured backend.
-Aggregated statistics may also append identifiers to the metric's name.
-
-Names should exclude characters that can interfere with namespaces, separator and output protocols.
-A good convention is to stick with lowercase alphanumeric identifiers of less than 12 characters.
+Names may be prepended with a application-namespace shared across all backends.
 
 ```rust
 extern crate dipstick;
 use dipstick::*;
 fn main() {   
-    let app_metrics = Stream::to_stdout().metrics();
-    let db_metrics = app_metrics.named("database");
-    let _db_timer = db_metrics.timer("db_timer");
-    let _db_counter = db_metrics.counter("db_counter");
+    let metrics = Stream::to_stdout().metrics();
+    
+    // plainly name "timer"
+    let _timer = metrics.timer("timer");
+    
+    // prepend namespace
+    let db_metrics = metrics.named("database");
+    
+    // qualified name will be "database.counter"
+    let _db_counter = db_metrics.counter("counter");
 }
 ```
+
+Names may be prepended with a namespace by each configured backend.
+For example, the same metric `request.success` could appear under different qualified names: 
+- logging as `app_module.request.success`
+- statsd as `environment.hostname.pid.module.request.success`
+
+Aggregation statistics may also append identifiers to the metric's name, such as `counter_mean` or `marker_rate`.
+
+Names should exclude characters that can interfere with namespaces, separator and output protocols.
+A good convention is to stick with lowercase alphanumeric identifiers of less than 12 characters.
 
 
 ### Labels
