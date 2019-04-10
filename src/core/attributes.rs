@@ -6,15 +6,16 @@ use core::name::{MetricName, NameParts};
 use core::scheduler::SCHEDULER;
 use std::fmt;
 use std::time::Duration;
-use MetricValue;
-use {CancelHandle, Flush};
-use {Gauge, InputScope};
+use {CancelHandle, Flush, InputScope, MetricValue, InputMetric};
+
 
 #[cfg(not(feature = "parking_lot"))]
 use std::sync::RwLock;
 
 #[cfg(feature = "parking_lot")]
 use parking_lot::RwLock;
+use std::ops::Deref;
+use Labels;
 
 /// The actual distribution (random, fixed-cycled, etc) depends on selected sampling method.
 #[derive(Debug, Clone, Copy)]
@@ -114,7 +115,7 @@ where
 
 pub struct ObserveWhen<'a, T, F> {
     target: &'a T,
-    gauge: Gauge,
+    metric: InputMetric,
     operation: Arc<F>,
 }
 
@@ -125,17 +126,17 @@ where
 {
     /// Observe the metric's value upon flushing the scope.
     pub fn on_flush(self) {
-        let gauge = self.gauge;
+        let gauge = self.metric;
         let op = self.operation;
         write_lock!(self.target.get_attributes().flush_listeners)
-            .push(Arc::new(move || gauge.value(op())));
+            .push(Arc::new(move || gauge.write(op(), Labels::default())));
     }
 
     /// Observe the metric's value periodically.
     pub fn every(self, period: Duration) -> CancelHandle {
-        let gauge = self.gauge;
+        let gauge = self.metric;
         let op = self.operation;
-        let handle = SCHEDULER.schedule(period, move || gauge.value(op()));
+        let handle = SCHEDULER.schedule(period, move || gauge.write(op(), Labels::default()));
         write_lock!(self.target.get_attributes().tasks).push(handle.clone());
         handle
     }
@@ -144,21 +145,21 @@ where
 /// Schedule a recurring task
 pub trait Observe {
     /// Provide a source for a metric's values.
-    fn observe<F>(&self, gauge: Gauge, operation: F) -> ObserveWhen<Self, F>
+    fn observe<F>(&self, metric: impl Deref<Target=InputMetric>, operation: F) -> ObserveWhen<Self, F>
     where
         F: Fn() -> MetricValue + Send + Sync + 'static,
         Self: Sized;
 }
 
 impl<T: InputScope + WithAttributes> Observe for T {
-    fn observe<F>(&self, gauge: Gauge, operation: F) -> ObserveWhen<Self, F>
+    fn observe<F>(&self, metric: impl Deref<Target=InputMetric>, operation: F) -> ObserveWhen<Self, F>
     where
         F: Fn() -> MetricValue + Send + Sync + 'static,
         Self: Sized,
     {
         ObserveWhen {
             target: self,
-            gauge,
+            metric: (*metric).clone(),
             operation: Arc::new(operation),
         }
     }

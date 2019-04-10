@@ -24,12 +24,19 @@ fn main() {
     metrics.drain(Stream::to_stdout());
     metrics.flush_every(Duration::from_secs(3));
 
+
     let uptime = metrics.gauge("uptime");
     metrics.observe(uptime, || 6).on_flush();
 
+    // record number of threads in pool every second
     metrics
         .observe(metrics.gauge("threads"), thread_count)
         .every(Duration::from_secs(1));
+
+    // "heartbeat" metric
+    metrics
+        .observe(metrics.marker("heartbeat"), || 1)
+        .on_flush();
 
     loop {
         std::thread::sleep(Duration::from_millis(40));

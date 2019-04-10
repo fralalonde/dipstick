@@ -9,6 +9,7 @@ use std::sync::Arc;
 // TODO maybe define an 'AsValue' trait + impl for supported number types, then drop 'num' crate
 pub use num::integer;
 pub use num::ToPrimitive;
+use std::ops::Deref;
 
 /// A function trait that opens a new metric capture scope.
 pub trait Input: Send + Sync + 'static + InputDyn {
@@ -101,15 +102,15 @@ impl InputMetric {
 /// Used to differentiate between metric kinds in the backend.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum InputKind {
-    /// Handling one item at a time.
+    /// Monotonic counter
     Marker,
-    /// Handling cumulative observed quantities.
+    /// Strictly positive quantity accumulation
     Counter,
-    /// Handling quantity fluctuations.
+    /// Cumulative quantity fluctuation
     Level,
-    /// Reporting instant measurement of a resource at a point in time (non-cumulative).
+    /// Instant measurement of a resource at a point in time (non-cumulative)
     Gauge,
-    /// Measuring a time interval, internal to the app or provided by an external source.
+    /// Time interval, internal to the app or provided by an external source
     Timer,
 }
 
@@ -265,5 +266,45 @@ impl From<InputMetric> for Marker {
 impl From<InputMetric> for Level {
     fn from(metric: InputMetric) -> Level {
         Level { inner: metric }
+    }
+}
+
+impl Deref for Counter {
+    type Target = InputMetric;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl Deref for Marker {
+    type Target = InputMetric;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl Deref for Timer {
+    type Target = InputMetric;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl Deref for Gauge {
+    type Target = InputMetric;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl Deref for Level {
+    type Target = InputMetric;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
     }
 }
