@@ -15,7 +15,7 @@
 
 extern crate dipstick;
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use dipstick::*;
 
@@ -26,7 +26,7 @@ fn main() {
 
 
     let uptime = metrics.gauge("uptime");
-    metrics.observe(uptime, || 6).on_flush();
+    metrics.observe(uptime, |_| 6).on_flush();
 
     // record number of threads in pool every second
     metrics
@@ -35,7 +35,7 @@ fn main() {
 
     // "heartbeat" metric
     metrics
-        .observe(metrics.marker("heartbeat"), || 1)
+        .observe(metrics.marker("heartbeat"), |_| 1)
         .on_flush();
 
     loop {
@@ -44,6 +44,6 @@ fn main() {
 }
 
 /// Query number of running threads in this process using Linux's /proc filesystem.
-fn thread_count() -> MetricValue {
+fn thread_count(_now: Instant) -> MetricValue {
     4
 }

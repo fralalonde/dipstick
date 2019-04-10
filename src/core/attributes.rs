@@ -5,7 +5,7 @@ use std::sync::Arc;
 use core::name::{MetricName, NameParts};
 use core::scheduler::SCHEDULER;
 use std::fmt;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use {CancelHandle, Flush, InputScope, MetricValue, InputMetric};
 
 
@@ -67,7 +67,7 @@ pub struct Attributes {
     naming: NameParts,
     sampling: Sampling,
     buffering: Buffering,
-    flush_listeners: Shared<Vec<Arc<Fn() -> () + Send + Sync + 'static>>>,
+    flush_listeners: Shared<Vec<Arc<Fn(Instant) -> () + Send + Sync + 'static>>>,
     tasks: Shared<Vec<CancelHandle>>,
 }
 
@@ -107,8 +107,9 @@ where
     T: Flush + WithAttributes,
 {
     fn notify_flush_listeners(&self) {
+        let now = Instant::now();
         for listener in read_lock!(self.get_attributes().flush_listeners).iter() {
-            (listener)()
+            (listener)(now)
         }
     }
 }
@@ -121,7 +122,7 @@ pub struct ObserveWhen<'a, T, F> {
 
 impl<'a, T, F> ObserveWhen<'a, T, F>
 where
-    F: Fn() -> MetricValue + Send + Sync + 'static,
+    F: Fn(Instant) -> MetricValue + Send + Sync + 'static,
     T: InputScope + WithAttributes + Send + Sync,
 {
     /// Observe the metric's value upon flushing the scope.
@@ -129,14 +130,14 @@ where
         let gauge = self.metric;
         let op = self.operation;
         write_lock!(self.target.get_attributes().flush_listeners)
-            .push(Arc::new(move || gauge.write(op(), Labels::default())));
+            .push(Arc::new(move |now| gauge.write(op(now), Labels::default())));
     }
 
     /// Observe the metric's value periodically.
     pub fn every(self, period: Duration) -> CancelHandle {
         let gauge = self.metric;
         let op = self.operation;
-        let handle = SCHEDULER.schedule(period, move || gauge.write(op(), Labels::default()));
+        let handle = SCHEDULER.schedule(period, move |now| gauge.write(op(now), Labels::default()));
         write_lock!(self.target.get_attributes().tasks).push(handle.clone());
         handle
     }
@@ -147,14 +148,14 @@ pub trait Observe {
     /// Provide a source for a metric's values.
     fn observe<F>(&self, metric: impl Deref<Target=InputMetric>, operation: F) -> ObserveWhen<Self, F>
     where
-        F: Fn() -> MetricValue + Send + Sync + 'static,
+        F: Fn(Instant) -> MetricValue + Send + Sync + 'static,
         Self: Sized;
 }
 
 impl<T: InputScope + WithAttributes> Observe for T {
     fn observe<F>(&self, metric: impl Deref<Target=InputMetric>, operation: F) -> ObserveWhen<Self, F>
     where
-        F: Fn() -> MetricValue + Send + Sync + 'static,
+        F: Fn(Instant) -> MetricValue + Send + Sync + 'static,
         Self: Sized,
     {
         ObserveWhen {
@@ -288,7 +289,7 @@ mod test {
     fn on_flush() {
         let metrics: StatsMapScope = StatsMap::default().metrics();
         let gauge = metrics.gauge("my_gauge");
-        metrics.observe(gauge, || 4).on_flush();
+        metrics.observe(gauge, |_| 4).on_flush();
         metrics.flush().unwrap();
         assert_eq!(Some(&4), metrics.into_map().get("my_gauge"))
     }

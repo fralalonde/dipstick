@@ -41,7 +41,7 @@ impl<T: InputScope + Send + Sync + Clone + 'static> ScheduleFlush for T {
     /// Flush this scope at regular intervals.
     fn flush_every(&self, period: Duration) -> CancelHandle {
         let scope = self.clone();
-        SCHEDULER.schedule(period, move || {
+        SCHEDULER.schedule(period, move |_| {
             if let Err(err) = scope.flush() {
                 error!("Could not flush metrics: {}", err);
             }
@@ -57,7 +57,7 @@ struct ScheduledTask {
     next_time: Instant,
     period: Duration,
     handle: CancelHandle,
-    operation: Arc<Fn() -> () + Send + Sync + 'static>,
+    operation: Arc<Fn(Instant) -> () + Send + Sync + 'static>,
 }
 
 impl Ord for ScheduledTask {
@@ -120,7 +120,7 @@ impl Scheduler {
                                 // do not execute, do not reinsert
                                 continue;
                             }
-                            (task.operation)();
+                            (task.operation)(now);
                             task.next_time = now + task.period;
                             tasks.push(task);
                         }
@@ -140,7 +140,7 @@ impl Scheduler {
     /// Schedule a task to run periodically.
     pub fn schedule<F>(&self, period: Duration, operation: F) -> CancelHandle
     where
-        F: Fn() -> () + Send + Sync + 'static,
+        F: Fn(Instant) -> () + Send + Sync + 'static,
     {
         let handle = CancelHandle::new();
         let new_task = ScheduledTask {
@@ -167,7 +167,7 @@ pub mod test {
 
         let sched = Scheduler::new();
 
-        let handle1 = sched.schedule(Duration::from_millis(50), move || {
+        let handle1 = sched.schedule(Duration::from_millis(50), move |_| {
             trig1b.fetch_add(1, SeqCst);
         });
         assert_eq!(sched.task_count(), 1);
@@ -190,12 +190,12 @@ pub mod test {
 
         let sched = Scheduler::new();
 
-        let handle1 = sched.schedule(Duration::from_millis(50), move || {
+        let handle1 = sched.schedule(Duration::from_millis(50), move |_| {
             trig1b.fetch_add(1, SeqCst);
             println!("ran 1");
         });
 
-        let handle2 = sched.schedule(Duration::from_millis(100), move || {
+        let handle2 = sched.schedule(Duration::from_millis(100), move |_| {
             trig2b.fetch_add(1, SeqCst);
             println!("ran 2");
         });
@@ -222,7 +222,7 @@ pub mod test {
 
         let sched = Scheduler::new();
 
-        let handle1 = sched.schedule(Duration::from_millis(100), move || {
+        let handle1 = sched.schedule(Duration::from_millis(100), move |_| {
             trig1b.fetch_add(1, SeqCst);
         });
 
@@ -232,7 +232,7 @@ pub mod test {
         let trig2a = Arc::new(AtomicUsize::new(0));
         let trig2b = trig2a.clone();
 
-        let handle2 = sched.schedule(Duration::from_millis(50), move || {
+        let handle2 = sched.schedule(Duration::from_millis(50), move |_| {
             trig2b.fetch_add(1, SeqCst);
         });
 

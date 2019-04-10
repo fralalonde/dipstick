@@ -82,35 +82,64 @@ If aggregated, observed minimum and maximum track the _sum_ of values (as oppose
  
 ### Gauge
 An instant observation of a resource's value (positive or negative, but non-cumulative).
-The observation of Gauges can be performed programmatically as with other metric types or 
-it can be triggered automatically, either on schedule or upon flushing the scope:
 
-````rust
+```rust
 extern crate dipstick;
 use dipstick::*;
-use std::time::Duration;
 
 fn main() {
     let metrics = Stream::to_stdout().metrics();
     let uptime = metrics.gauge("uptime");
     
-    // report gauge value programmatically
-    uptime.value(2);
+    uptime.value(2);    
+}
+```
+
+### Observer
+The observation of any metric can be triggered on schedule or upon flushing the scope.
+
+This can be used for automatic reporting of gauge values:
+```rust
+extern crate dipstick;
+use dipstick::*;
+use std::time::{Duration, Instant};
+
+fn main() {
+    let metrics = Stream::to_stdout().metrics();
+    let uptime = metrics.gauge("uptime");
     
     // observe a constant value before each flush     
     let uptime = metrics.gauge("uptime");
-    metrics.observe(uptime, || 6).on_flush();
+    metrics.observe(uptime, |_| 6).on_flush();
 
     // observe a function-provided value periodically     
-    metrics
+    let _handle = metrics
         .observe(metrics.gauge("threads"), thread_count)
         .every(Duration::from_secs(1));       
 }
 
-fn thread_count() -> MetricValue {
+fn thread_count(_now: Instant) -> MetricValue {
     6
 }
-````
+```
+
+It can also be used to setup a "heartbeat" metric:
+```rust
+extern crate dipstick;
+use dipstick::*;
+use std::time::{Duration};
+
+fn main() {
+    let metrics = Graphite::send_to("localhost:2003")
+        .expect("Connected")
+        .metrics();
+    let heartbeat = metrics.marker("heartbeat");
+    // update a metric with a constant value every 5 sec
+    let _handle = metrics.observe(heartbeat, |_| 1)
+        .every(Duration::from_secs(5));
+}
+```
+
 
 ### Names
 Each metric must be given a name upon creation.
