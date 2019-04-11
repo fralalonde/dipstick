@@ -1,11 +1,11 @@
 [package]
 name = "dipstick"
-version = "0.7.2-alpha.0"
+version = "0.7.2"
 authors = ["Francis Lalonde <fralalonde@gmail.com>"]
 
-description = """A fast and modular metrics library decoupling app instrumentation from reporting backend.
- Similar to popular logging frameworks, but with counters and timers.
- Can be configured for combined outputs (log + statsd), random sampling, local aggregation of metrics, recurrent background publication, etc."""
+description = """A featureful, fast and fun metrics library decoupling app instrumentation from reporting backends.
+ Similar to popular logging frameworks, but with counters, timers and gauges.
+ Lots of features like combined outputs (e.g. log + graphite), sampling, aggregation, periodical publication, etc."""
 
 documentation = "https://docs.rs/dipstick"
 homepage = "https://github.com/fralalonde/dipstick"
