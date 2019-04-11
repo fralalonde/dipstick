@@ -35,24 +35,24 @@ For more details, consult the [docs](https://docs.rs/dipstick/).
 ## Metrics Input
 A metrics library first job is to help a program collect measurements about its operations.
 
-Dipstick provides a restricted but robust set of _four_ instrument types, taking a stance against 
+Dipstick provides a restricted but robust set of _five_ instrument types, taking a stance against 
 an application's functional code having to pick what statistics should be tracked for each defined metric.
 This helps to enforce contracts with downstream metrics systems and keeps code free of configuration elements.
   
-#### Counter
-Count number of elements processed, e.g. number of bytes received. Only accepts positive amounts.
+### Counters
+Counters a quantity of elements processed, for example, the number of bytes received in a read operation. 
+Counters only accepts positive values.
 
-#### Marker 
-A monotonic counter. e.g. to record the processing of individual events.
-Default aggregated statistics for markers are not the same as those for counters.
-Value-less metric also makes for a safer API, preventing values other than 1 from being passed.  
+### Markers
+Markers counters that can only be incremented by one (i.e. they are _monotonic_ counters). 
+Markers are useful to count the processing of individual events, or the occurrence of errors.
+The default statistics for markers are not the same as those for counters.
+Markers offer a safer API than counters, preventing values other than "1" from being passed.  
 
-#### Timer
-Measure an operation's duration.
-Usable either through the time! macro, the closure form or explicit calls to start() and stop().
-While timers internal precision are in nanoseconds, their accuracy depends on platform OS and hardware. 
-Timer's internal precision is microseconds but can be scaled down on output.
- 
+### Timers
+Timers measure an operation's duration.
+Timers can be used in code with the `time!` macro,  wrap around a closure or with explicit calls to `start()` and `stop()`.
+
 ```rust
 extern crate dipstick;
 use dipstick::*;
@@ -76,12 +76,39 @@ fn main() {
 }
 ```
 
-### Level
-A relative, cumulative quantity counter. Accepts positive and negative values.
-If aggregated, observed minimum and maximum track the _sum_ of values (as opposed to `Counter` min and max _individual_ values). 
+Time intervals are measured in microseconds, and can be scaled down (milliseconds, seconds...) on output.
+Internally, timers use nanoseconds precision but their actual accuracy will depend on the platform's OS and hardware.
+
+Note that Dipstick's embedded and always-on nature make its time measurement goals different from those of a full-fledged profiler.
+Simplicity, flexibility and low impact on application performance take precedence over accuracy.
+Timers should still offer more than reasonable performance for most I/O and high-level CPU operations.   
  
-### Gauge
-An instant observation of a resource's value (positive or negative, but non-cumulative).
+### Levels
+Levels are relative, cumulative counters.
+Compared to counters:
+ - Levels accepts positive and negative values.
+ - Level's aggregation statistics will track the minimum and maximum _sum_ of values at any point, 
+   rather than min/max observed individual values. 
+   
+```rust
+extern crate dipstick;
+use dipstick::*;
+
+fn main() {
+    let metrics = Stream::to_stdout().metrics();
+    let queue_length = metrics.level("queue_length");    
+    queue_length.adjust(-2);    
+    queue_length.adjust(4);
+}
+```   
+
+Levels are halfway between counters and gauges and may be preferred to either in some situations.
+ 
+### Gauges
+Gauges are use to record instant observation of a resource's value.
+Gauges values can be positive or negative, but are non-cumulative.
+As such, a gauge's aggregated statistics are simply the mean, max and min values.
+Values can be observed for gauges at any moment, like any other metric.    
 
 ```rust
 extern crate dipstick;
@@ -89,16 +116,15 @@ use dipstick::*;
 
 fn main() {
     let metrics = Stream::to_stdout().metrics();
-    let uptime = metrics.gauge("uptime");
-    
+    let uptime = metrics.gauge("uptime");    
     uptime.value(2);    
 }
 ```
 
-### Observer
-The observation of any metric can be triggered on schedule or upon flushing the scope.
+### Observers
+The observation of values for any metric can be triggered on schedule or upon publication.
 
-This can be used for automatic reporting of gauge values:
+This mechanism can be used for automatic reporting of gauge values:
 ```rust
 extern crate dipstick;
 use dipstick::*;
@@ -106,7 +132,6 @@ use std::time::{Duration, Instant};
 
 fn main() {
     let metrics = Stream::to_stdout().metrics();
-    let uptime = metrics.gauge("uptime");
     
     // observe a constant value before each flush     
     let uptime = metrics.gauge("uptime");
@@ -123,7 +148,9 @@ fn thread_count(_now: Instant) -> MetricValue {
 }
 ```
 
-It can also be used to setup a "heartbeat" metric:
+Observations triggered `on_flush` take place _before_  metrics are published, allowing last-moment insertion of metric values.
+
+Scheduling could also be used to setup a "heartbeat" metric:
 ```rust
 extern crate dipstick;
 use dipstick::*;
@@ -140,9 +167,17 @@ fn main() {
 }
 ```
 
+Scheduled operations can be cancelled at any time using the returned `CancelHandle`. 
+Also, scheduled operations are canceled automatically when the metrics input scope they were attached to is `Drop`ped, 
+making them more useful with persistent, statically declared `metrics!()`. 
+
+Observation scheduling is done on a best-effort basis by a simple but efficient internal single-thread scheduler.   
+Be mindful of measurement callback performance to prevent slippage of following observation tasks.
+The scheduler only runs if scheduling is used. 
+Once started, the scheduler thread will run a low-overhead wait loop until the application is terminated.    
 
 ### Names
-Each metric must be given a name upon creation.
+Each metric is given a simple name upon instantiation.
 Names are opaque to the application and are used only to identify the metrics upon output.
 
 Names may be prepended with a application-namespace shared across all backends.
@@ -151,12 +186,14 @@ Names may be prepended with a application-namespace shared across all backends.
 extern crate dipstick;
 use dipstick::*;
 fn main() {   
-    let metrics = Stream::to_stdout().metrics();
+    let stdout = Stream::to_stdout();
+    
+    let metrics = stdout.metrics();
     
     // plainly name "timer"
     let _timer = metrics.timer("timer");
     
-    // prepend namespace
+    // prepend metrics namespace
     let db_metrics = metrics.named("database");
     
     // qualified name will be "database.counter"
@@ -164,8 +201,8 @@ fn main() {
 }
 ```
 
-Names may be prepended with a namespace by each configured backend.
-For example, the same metric `request.success` could appear under different qualified names: 
+Names may also be prepended with a namespace by each configured backend.
+For example, the metric named `success`, declared under the namespace `request` could appear under different qualified names: 
 - logging as `app_module.request.success`
 - statsd as `environment.hostname.pid.module.request.success`
 
@@ -174,6 +211,7 @@ Aggregation statistics may also append identifiers to the metric's name, such as
 Names should exclude characters that can interfere with namespaces, separator and output protocols.
 A good convention is to stick with lowercase alphanumeric identifiers of less than 12 characters.
 
+Note that highly dynamic elements in metric names are usually better handled using `Labels`.
 
 ### Labels
 
@@ -216,7 +254,6 @@ The static metric definition macro is just `lazy_static!` wrapper.
 If necessary, metrics can also be defined "dynamically". 
 This is more flexible but has a higher runtime cost, which may be alleviated with the optional caching mechanism.
 
-<<<<<<< HEAD
 ```rust
 extern crate dipstick;
 use dipstick::*;
@@ -299,11 +336,34 @@ allowing redirection to the effective output after it has been set up.
 
 
 ### Bucket
-Another intermediate output is the Bucket, which can be used to aggregate metric values. 
-Bucket-aggregated values can be used to infer statistics which will be flushed out to
-
+The `AtomicBucket` can be used to aggregate metric values. 
 Bucket aggregation is performed locklessly and is very fast.
-Count, Sum, Min, Max and Mean are tracked where they make sense, depending on the metric type.
+The tracked statistics vary across metric types:
+
+|       |Counter|Marker | Level | Gauge | Timer |
+|-------|-------|---	|---	|---	|---	|
+| count |   x	|   x	|   x	|   	|   x	|
+| sum  	|   x	|   	|   	|   	|   x	|
+| min  	|   x	|   	|   s	|   x	|   x	|
+| max  	|   x	|   	|   s	|   x	|   x	|
+| rate	|   	|   x	|   	|   	|   x	|
+| mean 	|   x	|   	|   x	|   x	|   x	|
+
+Some notes on statistics:
+
+- The count is the "hit count" - the number of times values were recorded.
+  If no values were recorded, no statistics are emitted for this metric.
+
+- Markers have no `sum` as it would always be equal to the `count`.
+   
+- The mean is derived from the sum divided by the count of values. 
+  Because count and sum are read sequentially but not atomically, there is _very small_ chance that the 
+  calculation could be off in scenarios of high concurrency. It is assumed that the amount of data collected
+  in such situations will make up for the slight error.
+
+- Min and max are for individual values except for level where the sum of values is tracked instead.
+
+- The Rate is derived from the sum of values divided by the duration of the aggregation.
 
 #### Preset bucket statistics
 Published statistics can be selected with presets such as `all_stats`, `summary`, `average`.
