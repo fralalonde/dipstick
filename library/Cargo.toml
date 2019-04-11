@@ -1,0 +1,51 @@
+[package]
+name = "dipstick"
+version = "0.7.3-alpha.0"
+authors = ["Francis Lalonde <fralalonde@gmail.com>"]
+
+description = """A featureful, fast and fun metrics library decoupling app instrumentation from reporting backends.
+ Similar to popular logging frameworks, but with counters, timers and gauges.
+ Lots of features like combined outputs (e.g. log + graphite), sampling, aggregation, periodical publication, etc."""
+
+documentation = "https://docs.rs/dipstick"
+homepage = "https://github.com/fralalonde/dipstick"
+repository = "https://github.com/fralalonde/dipstick"
+readme = "README.md"
+keywords = ["metrics", "statsd", "graphite", "timer", "prometheus"]
+license = "MIT/Apache-2.0"
+
+[badges]
+travis-ci = { repository = "fralalonde/dipstick", branch = "master" }
+
+[dependencies]
+log = "0.4"
+lazy_static = "1"
+atomic_refcell = "0.1"
+skeptic = { version = "0.13", optional = true }
+num = { version = "0.2", default-features = false }
+crossbeam-channel = { version = "0.3", optional = true }
+parking_lot = { version = "0.7", optional = true }
+
+# FIXME required only for random seed for sampling
+time = "0.1"
+
+minreq = { version = "1.0.0" }
+
+# optional dep for standalone http pull metrics
+tiny_http = { version = "0.6", optional = true }
+
+[build-dependencies]
+skeptic = { version = "0.13", optional = true }
+
+[features]
+default = [ "self_metrics", "crossbeam-channel", "parking_lot" ]
+bench = []
+self_metrics = []
+tokio = []
+
+[package.metadata.release]
+#sign-commit = true
+#upload-handbook = true
+pre-release-replacements = [
+  {file="README.md", search="dipstick = \"[a-z0-9\\.-]+\"", replace="dipstick = \"{{version}}\""}
+  ]
