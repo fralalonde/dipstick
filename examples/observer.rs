@@ -24,7 +24,6 @@ fn main() {
     metrics.drain(Stream::to_stdout());
     metrics.flush_every(Duration::from_secs(3));
 
-
     let uptime = metrics.gauge("uptime");
     metrics.observe(uptime, |_| 6).on_flush();
 

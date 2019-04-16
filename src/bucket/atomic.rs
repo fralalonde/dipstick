@@ -28,7 +28,7 @@ use std::fmt;
 
 /// A function type to transform aggregated scores into publishable statistics.
 pub type Stat = Option<(InputKind, MetricName, MetricValue)>;
-pub type StatsFn = Fn(InputKind, MetricName, ScoreType) ->  Stat + Send + Sync + 'static;
+pub type StatsFn = Fn(InputKind, MetricName, ScoreType) -> Stat + Send + Sync + 'static;
 
 fn initial_stats() -> &'static StatsFn {
     &stats_summary

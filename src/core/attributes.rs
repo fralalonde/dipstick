@@ -6,8 +6,7 @@ use core::name::{MetricName, NameParts};
 use core::scheduler::SCHEDULER;
 use std::fmt;
 use std::time::{Duration, Instant};
-use {CancelHandle, Flush, InputScope, MetricValue, InputMetric};
-
+use {CancelHandle, Flush, InputMetric, InputScope, MetricValue};
 
 #[cfg(not(feature = "parking_lot"))]
 use std::sync::RwLock;
@@ -147,14 +146,22 @@ where
 /// Schedule a recurring task
 pub trait Observe {
     /// Provide a source for a metric's values.
-    fn observe<F>(&self, metric: impl Deref<Target=InputMetric>, operation: F) -> ObserveWhen<Self, F>
+    fn observe<F>(
+        &self,
+        metric: impl Deref<Target = InputMetric>,
+        operation: F,
+    ) -> ObserveWhen<Self, F>
     where
         F: Fn(Instant) -> MetricValue + Send + Sync + 'static,
         Self: Sized;
 }
 
 impl<T: InputScope + WithAttributes> Observe for T {
-    fn observe<F>(&self, metric: impl Deref<Target=InputMetric>, operation: F) -> ObserveWhen<Self, F>
+    fn observe<F>(
+        &self,
+        metric: impl Deref<Target = InputMetric>,
+        operation: F,
+    ) -> ObserveWhen<Self, F>
     where
         F: Fn(Instant) -> MetricValue + Send + Sync + 'static,
         Self: Sized,

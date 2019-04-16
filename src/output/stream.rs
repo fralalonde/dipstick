@@ -57,7 +57,6 @@ impl<W: Write + Send + Sync + 'static> Stream<W> {
 }
 
 impl Stream<File> {
-
     /// Write metric values to a file.
     #[allow(clippy::wrong_self_convention)]
     pub fn to_file<P: AsRef<Path>>(file: P) -> error::Result<Stream<File>> {
