@@ -3,12 +3,10 @@
 [![Build Status](https://travis-ci.org/fralalonde/dipstick.svg?branch=master)](https://travis-ci.org/fralalonde/dipstick)
 
 # dipstick ![a dipstick picture](https://raw.githubusercontent.com/fralalonde/dipstick/master/assets/dipstick_single_ok_horiz_transparent_small.png)
-
 A one-stop shop metrics library for Rust applications with lots of features,  
 minimal impact on applications and a choice of output to downstream systems.
 
 ## Features
-
 Dipstick is a toolkit to help all sorts of application collect and send out metrics.
 As such, it needs a bit of set up to suit one's needs.
 Skimming through the [handbook](https://github.com/fralalonde/dipstick/tree/master/HANDBOOK.md)
@@ -31,7 +29,6 @@ For convenience, dipstick builds on stable Rust with minimal, feature-gated depe
 Performance, safety and ergonomy are also prime concerns.
 
 ### Non-goals
-
 Dipstick's focus is on metrics collection (input) and forwarding (output).
 Although it will happily aggregate base statistics, for the sake of simplicity and performance Dipstick will not
 - plot graphs
@@ -41,7 +38,6 @@ Although it will happily aggregate base statistics, for the sake of simplicity a
 These are all best done by downstream timeseries visualization and monitoring tools.
 
 ## Show me the code!
-
 Here's a basic aggregating & auto-publish counter metric:
 
 ```rust
@@ -84,14 +80,17 @@ in the `[dependencies]` section:
 dipstick = "0.7.3"
 ```
 
-## TODO / Missing / Weak points
+## Building
+When building the crate prior to PR or release, just run plain old `make`. 
+This will in turn run `cargo` a few times to run tests, benchmarks, lints, etc.
+Unfortunately, nightly Rust is still required to run `bench` and `clippy`.    
 
+## TODO / Missing / Weak points
 - Prometheus support is still primitive (read untested). Only the push gateway approach is supported for now. 
 - No backend for "pull" metrics yet. Should at least provide tiny-http listener capability.  
 - No quick integration feature with common frameworks (Actix, etc.) is provided yet.
 - Thread Local buckets could be nice.
-- "Rolling" aggregators would be nice for pull metrics. Current bucket impl resets after flush.   
+- "Rolling" aggregators would be nice for pull metrics. Current bucket impl resets after flush.
 
 ## License
-
 Dipstick is licensed under the terms of the Apache 2.0 and MIT license.

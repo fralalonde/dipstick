@@ -39,10 +39,7 @@ impl MultiOutput {
 
     /// Create a new multi-output dispatcher.
     pub fn new() -> Self {
-        MultiOutput {
-            attributes: Attributes::default(),
-            outputs: vec![],
-        }
+        Self::default()
     }
 
     /// Add a target to the dispatch list.

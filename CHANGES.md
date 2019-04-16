@@ -1,6 +1,10 @@
 # Latest changes + history
 
 ## version 0.7.3
+- Fixed / shushed a bunch of `clippy` warnings 
+- Made `clippy` part of `make` checks
+
+## version 0.7.2
 
 ### features
 - Observe gauge On Flush

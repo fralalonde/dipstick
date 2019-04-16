@@ -37,10 +37,7 @@ impl MultiInput {
 
     /// Create a new multi-input dispatcher.
     pub fn new() -> Self {
-        MultiInput {
-            attributes: Attributes::default(),
-            inputs: vec![],
-        }
+        Self::default()
     }
 
     /// Returns a clone of the dispatch with the new target added to the list.
