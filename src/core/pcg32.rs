@@ -2,6 +2,7 @@
 //! Kept here for low dependency count.
 
 #![cfg_attr(feature = "tool_lints", allow(clippy::unreadable_literal))]
+#![allow(clippy::unreadable_literal)]
 
 use std::cell::RefCell;
 use time;
@@ -40,7 +41,7 @@ fn pcg32_random() -> u32 {
 /// none | 0.0        | 0xFFFFFFFF | 0%
 pub fn to_int_rate(float_rate: f64) -> u32 {
     assert!(float_rate <= 1.0 && float_rate >= 0.0);
-    ((1.0 - float_rate) * ::std::u32::MAX as f64) as u32
+    ((1.0 - float_rate) * f64::from(::std::u32::MAX)) as u32
 }
 
 /// randomly select samples based on an int rate

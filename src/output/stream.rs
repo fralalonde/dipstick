@@ -57,7 +57,9 @@ impl<W: Write + Send + Sync + 'static> Stream<W> {
 }
 
 impl Stream<File> {
+
     /// Write metric values to a file.
+    #[allow(clippy::wrong_self_convention)]
     pub fn to_file<P: AsRef<Path>>(file: P) -> error::Result<Stream<File>> {
         let file = OpenOptions::new()
             .write(true)
@@ -71,6 +73,7 @@ impl Stream<File> {
     ///
     /// Creates a new file to dump data into. If `clobber` is set to true, it allows overwriting
     /// existing file, if false, the attempt will result in an error.
+    #[allow(clippy::wrong_self_convention)]
     pub fn to_new_file<P: AsRef<Path>>(file: P, clobber: bool) -> error::Result<Stream<File>> {
         let file = OpenOptions::new()
             .write(true)

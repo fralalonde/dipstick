@@ -15,7 +15,7 @@ lazy_static! {
 }
 
 /// Discard metrics output.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Void {}
 
 /// Discard metrics output.

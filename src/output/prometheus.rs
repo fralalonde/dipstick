@@ -135,11 +135,9 @@ impl PrometheusScope {
                 BUFFER_FLUSH_THRESHOLD
             );
             let _ = self.flush_inner(buffer);
-        } else {
-            if !self.is_buffered() {
-                if let Err(e) = self.flush_inner(buffer) {
-                    debug!("Could not send to Prometheus {}", e)
-                }
+        } else if !self.is_buffered() {
+            if let Err(e) = self.flush_inner(buffer) {
+                debug!("Could not send to Prometheus {}", e)
             }
         }
     }

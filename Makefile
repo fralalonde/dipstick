@@ -28,12 +28,12 @@ bench:
 	$(CARGO_CMD) +nightly bench --features="bench"
 
 lint:
-	$(CARGO_CMD) clippy
+	$(CARGO_CMD) +nightly clippy
 
 clean:
 	$(CARGO_CMD) clean
 
-publish: test examples bench
+publish: test examples bench lint
 	cargo publish
 
 .PHONY: all build clean test examples bench publish

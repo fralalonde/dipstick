@@ -27,11 +27,8 @@ use std::borrow::Borrow;
 use std::fmt;
 
 /// A function type to transform aggregated scores into publishable statistics.
-pub type StatsFn =
-    Fn(InputKind, MetricName, ScoreType) -> Option<(InputKind, MetricName, MetricValue)>
-        + Send
-        + Sync
-        + 'static;
+pub type Stat = Option<(InputKind, MetricName, MetricValue)>;
+pub type StatsFn = Fn(InputKind, MetricName, ScoreType) ->  Stat + Send + Sync + 'static;
 
 fn initial_stats() -> &'static StatsFn {
     &stats_summary
@@ -50,23 +47,17 @@ lazy_static! {
 
 /// Central aggregation structure.
 /// Maintains a list of metrics for enumeration when used as source.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct AtomicBucket {
     attributes: Attributes,
     inner: Arc<RwLock<InnerAtomicBucket>>,
 }
 
+#[derive(Default)]
 struct InnerAtomicBucket {
     metrics: BTreeMap<MetricName, Arc<AtomicScores>>,
     period_start: TimeHandle,
-    stats: Option<
-        Arc<
-            Fn(InputKind, MetricName, ScoreType) -> Option<(InputKind, MetricName, MetricValue)>
-                + Send
-                + Sync
-                + 'static,
-        >,
-    >,
+    stats: Option<Arc<StatsFn>>,
     drain: Option<Arc<OutputDyn + Send + Sync + 'static>>,
     publish_metadata: bool,
 }
@@ -234,7 +225,7 @@ impl AtomicBucket {
     }
 
     /// Revert this bucket's statistics generator to the default stats.
-    pub fn unset_stats<F>(&self) {
+    pub fn unset_stats(&self) {
         write_lock!(self.inner).stats = None
     }
 
@@ -328,7 +319,7 @@ impl AtomicScores {
     }
 
     /// Update scores with new value
-    pub fn update(&self, value: MetricValue) -> () {
+    pub fn update(&self, value: MetricValue) {
         // TODO detect & report any concurrent updates / resets for measurement of contention
         // Count is tracked for all metrics
         self.scores[HIT].fetch_add(1, Relaxed);

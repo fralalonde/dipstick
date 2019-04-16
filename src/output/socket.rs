@@ -100,6 +100,6 @@ impl Write for RetrySocket {
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        self.with_socket(|sock| sock.flush())
+        self.with_socket(TcpStream::flush)
     }
 }

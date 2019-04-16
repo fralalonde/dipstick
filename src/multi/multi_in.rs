@@ -9,17 +9,18 @@ use core::Flush;
 use std::sync::Arc;
 
 /// Opens multiple scopes at a time from just as many outputs.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct MultiInput {
     attributes: Attributes,
-    outputs: Vec<Arc<InputDyn + Send + Sync>>,
+    inputs: Vec<Arc<InputDyn + Send + Sync>>,
 }
 
 impl Input for MultiInput {
     type SCOPE = MultiInputScope;
 
     fn metrics(&self) -> Self::SCOPE {
-        let scopes = self.outputs.iter().map(|out| out.input_dyn()).collect();
+        #[allow(clippy::redundant_closure)]
+        let scopes = self.inputs.iter().map(|input| input.input_dyn()).collect();
         MultiInputScope {
             attributes: self.attributes.clone(),
             scopes,
@@ -38,14 +39,14 @@ impl MultiInput {
     pub fn new() -> Self {
         MultiInput {
             attributes: Attributes::default(),
-            outputs: vec![],
+            inputs: vec![],
         }
     }
 
     /// Returns a clone of the dispatch with the new target added to the list.
     pub fn add_target<OUT: Input + Send + Sync + 'static>(&self, out: OUT) -> Self {
         let mut cloned = self.clone();
-        cloned.outputs.push(Arc::new(out));
+        cloned.inputs.push(Arc::new(out));
         cloned
     }
 }

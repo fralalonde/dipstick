@@ -35,6 +35,7 @@ impl<K: Clone + Hash + Eq, V> LRUCache<K, V> {
 
     /// Inserts a key-value pair into the cache and returns the previous value, if any.
     /// If there is no room in the cache the oldest item will be removed.
+    #[allow(clippy::map_entry)]
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
         if self.table.contains_key(&key) {
             self.access(&key);

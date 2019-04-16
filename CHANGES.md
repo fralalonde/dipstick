@@ -1,6 +1,6 @@
 # Latest changes + history
 
-## version 0.7.2
+## version 0.7.3
 
 ### features
 - Observe gauge On Flush

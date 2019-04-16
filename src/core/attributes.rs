@@ -59,6 +59,7 @@ impl Default for Buffering {
 }
 
 type Shared<T> = Arc<RwLock<T>>;
+type Listener = Arc<Fn(Instant) -> () + Send + Sync + 'static>;
 
 /// Attributes common to metric components.
 /// Not all attributes used by all components.
@@ -67,7 +68,7 @@ pub struct Attributes {
     naming: NameParts,
     sampling: Sampling,
     buffering: Buffering,
-    flush_listeners: Shared<Vec<Arc<Fn(Instant) -> () + Send + Sync + 'static>>>,
+    flush_listeners: Shared<Vec<Listener>>,
     tasks: Shared<Vec<CancelHandle>>,
 }
 

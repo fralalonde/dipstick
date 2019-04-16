@@ -11,7 +11,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 /// Opens multiple scopes at a time from just as many outputs.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct MultiOutput {
     attributes: Attributes,
     outputs: Vec<Arc<OutputDyn + Send + Sync + 'static>>,
@@ -21,6 +21,7 @@ impl Output for MultiOutput {
     type SCOPE = MultiOutputScope;
 
     fn new_scope(&self) -> Self::SCOPE {
+        #[allow(clippy::redundant_closure)]
         let scopes = self.outputs.iter().map(|out| out.output_dyn()).collect();
         MultiOutputScope {
             attributes: self.attributes.clone(),
