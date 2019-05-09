@@ -114,6 +114,7 @@ where
     }
 }
 
+/// When to observe a recurring task.
 pub struct ObserveWhen<'a, T, F> {
     target: &'a T,
     metric: InputMetric,

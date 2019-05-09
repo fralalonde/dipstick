@@ -63,7 +63,9 @@ macro_rules! read_lock {
 }
 
 mod core;
-pub use core::attributes::{Buffered, Buffering, Observe, OnFlush, Prefixed, Sampled, Sampling};
+pub use core::attributes::{
+    Buffered, Buffering, Observe, ObserveWhen, OnFlush, Prefixed, Sampled, Sampling,
+};
 pub use core::clock::TimeHandle;
 pub use core::error::Result;
 pub use core::input::{
