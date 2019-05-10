@@ -57,8 +57,9 @@ impl Default for Buffering {
     }
 }
 
-type Shared<T> = Arc<RwLock<T>>;
-type Listener = Arc<Fn(Instant) -> () + Send + Sync + 'static>;
+pub type MetricId = String;
+pub type Shared<T> = Arc<RwLock<T>>;
+pub type Listener = Arc<Fn(Instant) -> () + Send + Sync + 'static>;
 
 /// Attributes common to metric components.
 /// Not all attributes used by all components.
@@ -67,7 +68,7 @@ pub struct Attributes {
     naming: NameParts,
     sampling: Sampling,
     buffering: Buffering,
-    flush_listeners: Shared<Vec<Listener>>,
+    flush_listeners: Shared<HashMap<MetricId, Listener>>,
     tasks: Shared<Vec<CancelHandle>>,
 }
 
@@ -108,7 +109,7 @@ where
 {
     fn notify_flush_listeners(&self) {
         let now = Instant::now();
-        for listener in read_lock!(self.get_attributes().flush_listeners).iter() {
+        for listener in read_lock!(self.get_attributes().flush_listeners).values() {
             (listener)(now)
         }
     }
@@ -130,8 +131,10 @@ where
     pub fn on_flush(self) {
         let gauge = self.metric;
         let op = self.operation;
-        write_lock!(self.target.get_attributes().flush_listeners)
-            .push(Arc::new(move |now| gauge.write(op(now), Labels::default())));
+        let mut listeners = write_lock!(self.target.get_attributes().flush_listeners);
+        if !listeners.contains_key(gauge.metric_id()) {
+            listeners.insert(gauge.metric_id().clone(), Arc::new(move |now| gauge.write(op(now), Labels::default())));
+        }
     }
 
     /// Observe the metric's value periodically.

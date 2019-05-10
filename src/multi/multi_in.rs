@@ -90,7 +90,7 @@ impl InputScope for MultiInputScope {
             .iter()
             .map(move |scope| scope.new_metric(name.clone(), kind))
             .collect();
-        InputMetric::new(move |value, labels| {
+        InputMetric::new(name.join("/"), move |value, labels| {
             for metric in &metrics {
                 metric.write(value, labels.clone())
             }

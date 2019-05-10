@@ -117,7 +117,7 @@ impl InputScope for LogScope {
 
         if self.is_buffered() {
             // buffered
-            InputMetric::new(move |value, labels| {
+            InputMetric::new(name.join("/"), move |value, labels| {
                 let mut buffer = Vec::with_capacity(32);
                 match template.print(&mut buffer, value, |key| labels.lookup(key)) {
                     Ok(()) => {
@@ -131,7 +131,7 @@ impl InputScope for LogScope {
             // unbuffered
             let level = self.log.level;
             let target = self.log.target.clone();
-            InputMetric::new(move |value, labels| {
+            InputMetric::new(name.join("/"), move |value, labels| {
                 let mut buffer = Vec::with_capacity(32);
                 match template.print(&mut buffer, value, |key| labels.lookup(key)) {
                     Ok(()) => {

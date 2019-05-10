@@ -145,7 +145,7 @@ impl InnerProxy {
                 break;
             }
 
-            if let Some(mut metric) = metric.upgrade() {
+            if let Some(metric) = metric.upgrade() {
                 // check if metric targeted by _lower_ namespace
                 if metric.target.borrow().1 > namespace.len() {
                     continue;
@@ -254,7 +254,7 @@ impl InputScope for Proxy {
                     proxy
                 }
             });
-        InputMetric::new(move |value, labels| proxy.target.borrow().0.write(value, labels))
+        InputMetric::new(name.join("/"), move |value, labels| proxy.target.borrow().0.write(value, labels))
     }
 }
 

@@ -257,10 +257,10 @@ impl InputScope for AtomicBucket {
     fn new_metric(&self, name: MetricName, kind: InputKind) -> InputMetric {
         let scores = write_lock!(self.inner)
             .metrics
-            .entry(self.prefix_append(name))
+            .entry(self.prefix_append(name.clone()))
             .or_insert_with(|| Arc::new(AtomicScores::new(kind)))
             .clone();
-        InputMetric::new(move |value, _labels| scores.update(value))
+        InputMetric::new(name.join("/"), move |value, _labels| scores.update(value))
     }
 }
 

@@ -174,9 +174,9 @@ impl WithAttributes for OutputQueueScope {
 impl InputScope for OutputQueueScope {
     fn new_metric(&self, name: MetricName, kind: InputKind) -> InputMetric {
         let name = self.prefix_append(name);
-        let target_metric = Arc::new(self.target.new_metric(name, kind));
+        let target_metric = Arc::new(self.target.new_metric(name.clone(), kind));
         let sender = self.sender.clone();
-        InputMetric::new(move |value, mut labels| {
+        InputMetric::new(name.join("/"), move |value, mut labels| {
             labels.save_context();
             if let Err(e) = sender.send(OutputQueueCmd::Write(target_metric.clone(), value, labels))
             {

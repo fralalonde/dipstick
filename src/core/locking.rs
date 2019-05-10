@@ -37,9 +37,9 @@ impl InputScope for LockingOutput {
             .inner
             .lock()
             .expect("LockingOutput")
-            .new_metric(name, kind);
+            .new_metric(name.clone(), kind);
         let mutex = self.inner.clone();
-        InputMetric::new(move |value, labels| {
+        InputMetric::new(name.join("/"), move |value, labels| {
             // lock when collecting values
             let _guard = mutex.lock().expect("LockingOutput");
             raw_metric.write(value, labels)
