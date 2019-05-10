@@ -146,18 +146,24 @@ where
 
 /// Schedule a recurring task
 pub trait Observe {
+    /// The inner type for the [`ObserveWhen`].
+    ///
+    /// The observe can be delegated to a different type then `Self`, however the latter is more
+    /// common.
+    type Inner;
     /// Provide a source for a metric's values.
     fn observe<F>(
         &self,
         metric: impl Deref<Target = InputMetric>,
         operation: F,
-    ) -> ObserveWhen<Self, F>
+    ) -> ObserveWhen<Self::Inner, F>
     where
         F: Fn(Instant) -> MetricValue + Send + Sync + 'static,
         Self: Sized;
 }
 
 impl<T: InputScope + WithAttributes> Observe for T {
+    type Inner = Self;
     fn observe<F>(
         &self,
         metric: impl Deref<Target = InputMetric>,
