@@ -3,7 +3,7 @@ use std::default::Default;
 use std::sync::Arc;
 
 use core::name::{MetricName, NameParts};
-use core::scheduler::SCHEDULER;
+use core::scheduler::{SCHEDULER, Cancel};
 use std::fmt;
 use std::time::{Duration, Instant};
 use {CancelHandle, Flush, InputMetric, InputScope, MetricValue};
@@ -57,7 +57,16 @@ impl Default for Buffering {
     }
 }
 
-pub type MetricId = String;
+#[derive(Clone, Debug, Hash, Eq, PartialOrd, PartialEq)]
+pub struct MetricId (String);
+
+impl MetricId {
+    pub fn forge(out_type: &str, name: MetricName) -> Self {
+        let id: String = name.join("/");
+        MetricId(format!("{}:{}", out_type, id))
+    }
+}
+
 pub type Shared<T> = Arc<RwLock<T>>;
 pub type Listener = Arc<Fn(Instant) -> () + Send + Sync + 'static>;
 
@@ -122,19 +131,31 @@ pub struct ObserveWhen<'a, T, F> {
     operation: Arc<F>,
 }
 
+pub struct OnFlushCancel (Arc<Fn()>);
+
+impl Cancel for OnFlushCancel {
+    fn cancel(&self) {
+        (self.0)()
+    }
+}
+
 impl<'a, T, F> ObserveWhen<'a, T, F>
 where
     F: Fn(Instant) -> MetricValue + Send + Sync + 'static,
     T: InputScope + WithAttributes + Send + Sync,
 {
     /// Observe the metric's value upon flushing the scope.
-    pub fn on_flush(self) {
+    pub fn on_flush(self) -> OnFlushCancel {
         let gauge = self.metric;
+        let metric_id = gauge.metric_id().clone();
         let op = self.operation;
-        let mut listeners = write_lock!(self.target.get_attributes().flush_listeners);
-        if !listeners.contains_key(gauge.metric_id()) {
-            listeners.insert(gauge.metric_id().clone(), Arc::new(move |now| gauge.write(op(now), Labels::default())));
-        }
+        write_lock!(self.target.get_attributes().flush_listeners)
+            .insert(metric_id.clone(),
+                    Arc::new(move |now| gauge.write(op(now), Labels::default())));
+        let flush_listeners = self.target.get_attributes().flush_listeners.clone();
+        OnFlushCancel(Arc::new(move || {
+            write_lock!(flush_listeners).remove(&metric_id);
+        }))
     }
 
     /// Observe the metric's value periodically.

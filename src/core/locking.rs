@@ -2,7 +2,7 @@
 //! This makes all outputs also immediately usable as inputs.
 //! The alternatives are queuing or thread local.
 
-use core::attributes::{Attributes, OnFlush, Prefixed, WithAttributes};
+use core::attributes::{Attributes, OnFlush, Prefixed, WithAttributes, MetricId};
 use core::error;
 use core::input::{Input, InputKind, InputMetric, InputScope};
 use core::name::MetricName;
@@ -39,7 +39,7 @@ impl InputScope for LockingOutput {
             .expect("LockingOutput")
             .new_metric(name.clone(), kind);
         let mutex = self.inner.clone();
-        InputMetric::new(name.join("/"), move |value, labels| {
+        InputMetric::new(MetricId::forge("locking", name), move |value, labels| {
             // lock when collecting values
             let _guard = mutex.lock().expect("LockingOutput");
             raw_metric.write(value, labels)

@@ -3,7 +3,7 @@
 //! If queue size is exceeded, calling code reverts to blocking.
 
 use cache::cache_in;
-use core::attributes::{Attributes, OnFlush, Prefixed, WithAttributes};
+use core::attributes::{Attributes, OnFlush, Prefixed, WithAttributes, MetricId};
 use core::error;
 use core::input::{Input, InputKind, InputMetric, InputScope};
 use core::label::Labels;
@@ -176,7 +176,7 @@ impl InputScope for OutputQueueScope {
         let name = self.prefix_append(name);
         let target_metric = Arc::new(self.target.new_metric(name.clone(), kind));
         let sender = self.sender.clone();
-        InputMetric::new(name.join("/"), move |value, mut labels| {
+        InputMetric::new(MetricId::forge("queue", name), move |value, mut labels| {
             labels.save_context();
             if let Err(e) = sender.send(OutputQueueCmd::Write(target_metric.clone(), value, labels))
             {

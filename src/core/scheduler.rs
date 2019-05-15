@@ -10,6 +10,12 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
+/// A deferred, repeatable, background action that can be cancelled.
+pub trait Cancel {
+    /// Cancel the action.
+    fn cancel(&self);
+}
+
 /// A handle to cancel a scheduled task if required.
 #[derive(Debug, Clone)]
 pub struct CancelHandle(Arc<AtomicBool>);
@@ -19,15 +25,17 @@ impl CancelHandle {
         CancelHandle(Arc::new(AtomicBool::new(false)))
     }
 
+    fn is_cancelled(&self) -> bool {
+        self.0.load(SeqCst)
+    }
+}
+
+impl Cancel for CancelHandle {
     /// Signals the task to stop.
-    pub fn cancel(&self) {
+    fn cancel(&self) {
         if self.0.swap(true, SeqCst) {
             warn!("Scheduled task was already cancelled.")
         }
-    }
-
-    fn is_cancelled(&self) -> bool {
-        self.0.load(SeqCst)
     }
 }
 

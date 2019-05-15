@@ -2,7 +2,7 @@
 
 use bucket::ScoreType::*;
 use bucket::{stats_summary, ScoreType};
-use core::attributes::{Attributes, OnFlush, Prefixed, WithAttributes};
+use core::attributes::{Attributes, OnFlush, Prefixed, WithAttributes, MetricId};
 use core::clock::TimeHandle;
 use core::error;
 use core::input::{InputKind, InputMetric, InputScope};
@@ -260,7 +260,7 @@ impl InputScope for AtomicBucket {
             .entry(self.prefix_append(name.clone()))
             .or_insert_with(|| Arc::new(AtomicScores::new(kind)))
             .clone();
-        InputMetric::new(name.join("/"), move |value, _labels| scores.update(value))
+        InputMetric::new(MetricId::forge("bucket", name), move |value, _labels| scores.update(value))
     }
 }
 
