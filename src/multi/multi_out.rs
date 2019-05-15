@@ -86,7 +86,7 @@ impl MultiOutputScope {
 
 impl OutputScope for MultiOutputScope {
     fn new_metric(&self, name: MetricName, kind: InputKind) -> OutputMetric {
-        let name = &self.prefix_append(name);
+        let name = self.prefix_append(name);
         let metrics: Vec<OutputMetric> = self
             .scopes
             .iter()

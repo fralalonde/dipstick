@@ -1,4 +1,4 @@
-use core::attributes::{Attributes, OnFlush, Prefixed, WithAttributes};
+use core::attributes::{Attributes, OnFlush, Prefixed, WithAttributes, MetricId};
 use core::input::InputKind;
 use core::input::{Input, InputMetric, InputScope};
 use core::name::MetricName;
@@ -58,9 +58,9 @@ impl InputScope for StatsMapScope {
     fn new_metric(&self, name: MetricName, _kind: InputKind) -> InputMetric {
         let name = self.prefix_append(name);
         let write_to = self.inner.clone();
-        let name: String = name.join(".");
-        InputMetric::new(move |value, _labels| {
-            let _previous = write_to.write().expect("Lock").insert(name.clone(), value);
+        let key: String = name.join(".");
+        InputMetric::new(MetricId::forge("map", name), move |value, _labels| {
+            let _previous = write_to.write().expect("Lock").insert(key.clone(), value);
         })
     }
 }

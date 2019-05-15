@@ -2,6 +2,7 @@ use core::clock::TimeHandle;
 use core::label::Labels;
 use core::name::MetricName;
 use core::{Flush, MetricValue};
+use core::attributes::MetricId;
 
 use std::fmt;
 use std::sync::Arc;
@@ -75,6 +76,7 @@ pub trait InputScope: Flush {
 /// A metric is actually a function that knows to write a metric value to a metric output.
 #[derive(Clone)]
 pub struct InputMetric {
+    identifier: MetricId,
     inner: Arc<Fn(MetricValue, Labels) + Send + Sync>,
 }
 
@@ -86,8 +88,9 @@ impl fmt::Debug for InputMetric {
 
 impl InputMetric {
     /// Utility constructor
-    pub fn new<F: Fn(MetricValue, Labels) + Send + Sync + 'static>(metric: F) -> InputMetric {
+    pub fn new<F: Fn(MetricValue, Labels) + Send + Sync + 'static>(identifier: MetricId, metric: F) -> InputMetric {
         InputMetric {
+            identifier,
             inner: Arc::new(metric),
         }
     }
@@ -96,6 +99,11 @@ impl InputMetric {
     #[inline]
     pub fn write(&self, value: MetricValue, labels: Labels) {
         (self.inner)(value, labels)
+    }
+
+    /// Returns the unique identifier of this metric.
+    pub fn metric_id(&self) -> &MetricId {
+        &self.identifier
     }
 }
 

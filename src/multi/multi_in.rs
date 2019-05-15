@@ -1,6 +1,6 @@
 //! Dispatch metrics to multiple sinks.
 
-use core::attributes::{Attributes, OnFlush, Prefixed, WithAttributes};
+use core::attributes::{Attributes, OnFlush, Prefixed, WithAttributes, MetricId};
 use core::error;
 use core::input::{Input, InputDyn, InputKind, InputMetric, InputScope};
 use core::name::MetricName;
@@ -90,7 +90,7 @@ impl InputScope for MultiInputScope {
             .iter()
             .map(move |scope| scope.new_metric(name.clone(), kind))
             .collect();
-        InputMetric::new(move |value, labels| {
+        InputMetric::new(MetricId::forge("multi", name.clone()), move |value, labels| {
             for metric in &metrics {
                 metric.write(value, labels.clone())
             }

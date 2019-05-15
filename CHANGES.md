@@ -1,5 +1,12 @@
 # Latest changes + history
 
+## version 0.7.5
+- Fix leak on observers when registering same metric twice.
+- Add `metric_id()` on `InputMetric`
+
+## version 0.7.4
+- Reexport `ObserveWhen` to make it public 
+
 ## version 0.7.3
 - Fixed / shushed a bunch of `clippy` warnings 
 - Made `clippy` part of `make` checks

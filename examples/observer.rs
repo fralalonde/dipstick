@@ -28,18 +28,21 @@ fn main() {
     metrics.observe(uptime, |_| 6).on_flush();
 
     // record number of threads in pool every second
-    metrics
+    let scheduled = metrics
         .observe(metrics.gauge("threads"), thread_count)
         .every(Duration::from_secs(1));
 
     // "heartbeat" metric
-    metrics
+    let on_flush = metrics
         .observe(metrics.marker("heartbeat"), |_| 1)
         .on_flush();
 
-    loop {
+    for _ in 0..1000 {
         std::thread::sleep(Duration::from_millis(40));
     }
+
+    on_flush.cancel();
+    scheduled.cancel();
 }
 
 /// Query number of running threads in this process using Linux's /proc filesystem.

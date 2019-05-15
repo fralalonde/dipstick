@@ -75,7 +75,7 @@ pub use core::label::{AppLabel, Labels, ThreadLabel};
 pub use core::locking::LockingOutput;
 pub use core::name::{MetricName, NameParts};
 pub use core::output::{Output, OutputDyn, OutputMetric, OutputScope};
-pub use core::scheduler::{CancelHandle, ScheduleFlush};
+pub use core::scheduler::{CancelHandle, ScheduleFlush, Cancel};
 pub use core::void::Void;
 pub use core::{Flush, MetricValue};
 

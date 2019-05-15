@@ -80,6 +80,11 @@ in the `[dependencies]` section:
 dipstick = "0.7.4"
 ```
 
+## External features
+
+Configuring dipstick from a text file is possible using 
+the [spirit-dipstick](https://crates.io/crates/spirit-dipstick) crate.  
+
 ## Building
 When building the crate prior to PR or release, just run plain old `make`. 
 This will in turn run `cargo` a few times to run tests, benchmarks, lints, etc.
