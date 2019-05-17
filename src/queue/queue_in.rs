@@ -3,7 +3,7 @@
 //! If queue size is exceeded, calling code reverts to blocking.
 
 use cache::cache_in::CachedInput;
-use core::attributes::{Attributes, OnFlush, Prefixed, WithAttributes, MetricId};
+use core::attributes::{Attributes, MetricId, OnFlush, Prefixed, WithAttributes};
 use core::error;
 use core::input::{Input, InputDyn, InputKind, InputMetric, InputScope};
 use core::label::Labels;

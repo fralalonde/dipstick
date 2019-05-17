@@ -1,5 +1,5 @@
 use cache::cache_in;
-use core::attributes::{Attributes, Buffered, OnFlush, Prefixed, WithAttributes, MetricId};
+use core::attributes::{Attributes, Buffered, MetricId, OnFlush, Prefixed, WithAttributes};
 use core::error;
 use core::input::{Input, InputKind, InputMetric, InputScope};
 use core::name::MetricName;

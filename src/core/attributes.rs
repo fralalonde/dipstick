@@ -1,9 +1,11 @@
 use std::collections::HashMap;
 use std::default::Default;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use core::name::{MetricName, NameParts};
-use core::scheduler::{SCHEDULER, Cancel};
+use core::scheduler::{Cancel, SCHEDULER};
 use std::fmt;
 use std::time::{Duration, Instant};
 use {CancelHandle, Flush, InputMetric, InputScope, MetricValue};
@@ -58,7 +60,7 @@ impl Default for Buffering {
 }
 
 #[derive(Clone, Debug, Hash, Eq, PartialOrd, PartialEq)]
-pub struct MetricId (String);
+pub struct MetricId(String);
 
 impl MetricId {
     pub fn forge(out_type: &str, name: MetricName) -> Self {
@@ -68,7 +70,11 @@ impl MetricId {
 }
 
 pub type Shared<T> = Arc<RwLock<T>>;
-pub type Listener = Arc<Fn(Instant) -> () + Send + Sync + 'static>;
+
+pub struct Listener {
+    listener_id: usize,
+    listener_fn: Arc<Fn(Instant) -> () + Send + Sync + 'static>,
+}
 
 /// Attributes common to metric components.
 /// Not all attributes used by all components.
@@ -119,7 +125,7 @@ where
     fn notify_flush_listeners(&self) {
         let now = Instant::now();
         for listener in read_lock!(self.get_attributes().flush_listeners).values() {
-            (listener)(now)
+            (listener.listener_fn)(now)
         }
     }
 }
@@ -131,7 +137,9 @@ pub struct ObserveWhen<'a, T, F> {
     operation: Arc<F>,
 }
 
-pub struct OnFlushCancel (Arc<Fn()>);
+const ID_GENERATOR: AtomicUsize = AtomicUsize::new(0);
+
+pub struct OnFlushCancel(Arc<Fn()>);
 
 impl Cancel for OnFlushCancel {
     fn cancel(&self) {
@@ -149,12 +157,25 @@ where
         let gauge = self.metric;
         let metric_id = gauge.metric_id().clone();
         let op = self.operation;
-        write_lock!(self.target.get_attributes().flush_listeners)
-            .insert(metric_id.clone(),
-                    Arc::new(move |now| gauge.write(op(now), Labels::default())));
+        let listener_id = ID_GENERATOR.fetch_add(1, Ordering::Relaxed);
+
+        write_lock!(self.target.get_attributes().flush_listeners).insert(
+            metric_id.clone(),
+            Listener {
+                listener_id,
+                listener_fn: Arc::new(move |now| gauge.write(op(now), Labels::default())),
+            },
+        );
+
         let flush_listeners = self.target.get_attributes().flush_listeners.clone();
         OnFlushCancel(Arc::new(move || {
-            write_lock!(flush_listeners).remove(&metric_id);
+            let mut listeners = write_lock!(flush_listeners);
+            let installed_listener_id = listeners.get(&metric_id).map(|v| v.listener_id);
+            if let Some(id) = installed_listener_id {
+                if id == listener_id {
+                    listeners.remove(&metric_id);
+                }
+            }
         }))
     }
 
