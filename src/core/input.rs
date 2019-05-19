@@ -1,8 +1,8 @@
+use core::attributes::MetricId;
 use core::clock::TimeHandle;
 use core::label::Labels;
 use core::name::MetricName;
 use core::{Flush, MetricValue};
-use core::attributes::MetricId;
 
 use std::fmt;
 use std::sync::Arc;
@@ -88,7 +88,10 @@ impl fmt::Debug for InputMetric {
 
 impl InputMetric {
     /// Utility constructor
-    pub fn new<F: Fn(MetricValue, Labels) + Send + Sync + 'static>(identifier: MetricId, metric: F) -> InputMetric {
+    pub fn new<F: Fn(MetricValue, Labels) + Send + Sync + 'static>(
+        identifier: MetricId,
+        metric: F,
+    ) -> InputMetric {
         InputMetric {
             identifier,
             inner: Arc::new(metric),

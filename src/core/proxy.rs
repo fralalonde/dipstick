@@ -1,6 +1,6 @@
 //! Decouple metric definition from configuration with trait objects.
 
-use core::attributes::{Attributes, OnFlush, Prefixed, WithAttributes, MetricId};
+use core::attributes::{Attributes, MetricId, OnFlush, Prefixed, WithAttributes};
 use core::error;
 use core::input::{InputKind, InputMetric, InputScope};
 use core::name::{MetricName, NameParts};
@@ -254,7 +254,9 @@ impl InputScope for Proxy {
                     proxy
                 }
             });
-        InputMetric::new(MetricId::forge("proxy", name), move |value, labels| proxy.target.borrow().0.write(value, labels))
+        InputMetric::new(MetricId::forge("proxy", name), move |value, labels| {
+            proxy.target.borrow().0.write(value, labels)
+        })
     }
 }
 

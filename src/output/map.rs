@@ -1,4 +1,4 @@
-use core::attributes::{Attributes, OnFlush, Prefixed, WithAttributes, MetricId};
+use core::attributes::{Attributes, MetricId, OnFlush, Prefixed, WithAttributes};
 use core::input::InputKind;
 use core::input::{Input, InputMetric, InputScope};
 use core::name::MetricName;

@@ -2,7 +2,7 @@
 //! This makes all outputs also immediately usable as inputs.
 //! The alternatives are queuing or thread local.
 
-use core::attributes::{Attributes, OnFlush, Prefixed, WithAttributes, MetricId};
+use core::attributes::{Attributes, MetricId, OnFlush, Prefixed, WithAttributes};
 use core::error;
 use core::input::{Input, InputKind, InputMetric, InputScope};
 use core::name::MetricName;
