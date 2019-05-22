@@ -137,7 +137,7 @@ pub struct ObserveWhen<'a, T, F> {
     operation: Arc<F>,
 }
 
-const ID_GENERATOR: AtomicUsize = AtomicUsize::new(0);
+static ID_GENERATOR: AtomicUsize = AtomicUsize::new(0);
 
 pub struct OnFlushCancel(Arc<Fn()>);
 

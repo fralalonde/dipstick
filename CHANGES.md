@@ -1,5 +1,9 @@
 # Latest changes + history
 
+- Move to Rust 2018 using cargo fix --edition and some manual help
+- Fix nightly's 'acceptable regression' https://github.com/rust-lang/rust/pull/59825
+- Give each flush listener a unique id
+
 ## version 0.7.5
 - Fix leak on observers when registering same metric twice.
 - Add `metric_id()` on `InputMetric`
