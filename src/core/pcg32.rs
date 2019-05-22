@@ -5,7 +5,6 @@
 #![allow(clippy::unreadable_literal)]
 
 use std::cell::RefCell;
-use time;
 
 fn seed() -> u64 {
     let seed = 5573589319906701683_u64;

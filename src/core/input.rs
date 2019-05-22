@@ -1,8 +1,8 @@
-use core::attributes::MetricId;
-use core::clock::TimeHandle;
-use core::label::Labels;
-use core::name::MetricName;
-use core::{Flush, MetricValue};
+use crate::core::attributes::MetricId;
+use crate::core::clock::TimeHandle;
+use crate::core::label::Labels;
+use crate::core::name::MetricName;
+use crate::core::{Flush, MetricValue};
 
 use std::fmt;
 use std::sync::Arc;

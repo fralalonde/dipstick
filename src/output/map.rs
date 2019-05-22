@@ -1,14 +1,14 @@
-use core::attributes::{Attributes, MetricId, OnFlush, Prefixed, WithAttributes};
-use core::input::InputKind;
-use core::input::{Input, InputMetric, InputScope};
-use core::name::MetricName;
-use core::{Flush, MetricValue};
+use crate::core::attributes::{Attributes, MetricId, OnFlush, Prefixed, WithAttributes};
+use crate::core::input::InputKind;
+use crate::core::input::{Input, InputMetric, InputScope};
+use crate::core::name::MetricName;
+use crate::core::{Flush, MetricValue};
 
 use std::collections::BTreeMap;
 use std::error::Error;
 
+use crate::{OutputMetric, OutputScope};
 use std::sync::{Arc, RwLock};
-use {OutputMetric, OutputScope};
 
 /// A BTreeMap wrapper to receive metrics or stats values.
 /// Every received value for a metric replaces the previous one (if any).

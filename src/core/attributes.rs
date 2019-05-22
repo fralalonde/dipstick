@@ -4,19 +4,19 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use core::name::{MetricName, NameParts};
-use core::scheduler::{Cancel, SCHEDULER};
+use crate::core::name::{MetricName, NameParts};
+use crate::core::scheduler::{Cancel, SCHEDULER};
+use crate::{CancelHandle, Flush, InputMetric, InputScope, MetricValue};
 use std::fmt;
 use std::time::{Duration, Instant};
-use {CancelHandle, Flush, InputMetric, InputScope, MetricValue};
 
 #[cfg(not(feature = "parking_lot"))]
 use std::sync::RwLock;
 
+use crate::Labels;
 #[cfg(feature = "parking_lot")]
 use parking_lot::RwLock;
 use std::ops::Deref;
-use Labels;
 
 /// The actual distribution (random, fixed-cycled, etc) depends on selected sampling method.
 #[derive(Debug, Clone, Copy)]
@@ -338,12 +338,12 @@ pub trait Buffered: WithAttributes {
 
 #[cfg(test)]
 mod test {
-    use core::attributes::*;
-    use core::input::Input;
-    use core::input::*;
-    use core::Flush;
-    use output::map::StatsMap;
-    use StatsMapScope;
+    use crate::core::attributes::*;
+    use crate::core::input::Input;
+    use crate::core::input::*;
+    use crate::core::Flush;
+    use crate::output::map::StatsMap;
+    use crate::StatsMapScope;
 
     #[test]
     fn on_flush() {

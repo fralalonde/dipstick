@@ -1,10 +1,10 @@
 //! Dispatch metrics to multiple sinks.
 
-use core::attributes::{Attributes, MetricId, OnFlush, Prefixed, WithAttributes};
-use core::error;
-use core::input::{Input, InputDyn, InputKind, InputMetric, InputScope};
-use core::name::MetricName;
-use core::Flush;
+use crate::core::attributes::{Attributes, MetricId, OnFlush, Prefixed, WithAttributes};
+use crate::core::error;
+use crate::core::input::{Input, InputDyn, InputKind, InputMetric, InputScope};
+use crate::core::name::MetricName;
+use crate::core::Flush;
 
 use std::sync::Arc;
 

@@ -2,14 +2,14 @@
 //! Metrics definitions are still synchronous.
 //! If queue size is exceeded, calling code reverts to blocking.
 
-use cache::cache_in::CachedInput;
-use core::attributes::{Attributes, MetricId, OnFlush, Prefixed, WithAttributes};
-use core::error;
-use core::input::{Input, InputDyn, InputKind, InputMetric, InputScope};
-use core::label::Labels;
-use core::metrics;
-use core::name::MetricName;
-use core::{Flush, MetricValue};
+use crate::cache::cache_in::CachedInput;
+use crate::core::attributes::{Attributes, MetricId, OnFlush, Prefixed, WithAttributes};
+use crate::core::error;
+use crate::core::input::{Input, InputDyn, InputKind, InputMetric, InputScope};
+use crate::core::label::Labels;
+use crate::core::metrics;
+use crate::core::name::MetricName;
+use crate::core::{Flush, MetricValue};
 
 #[cfg(not(feature = "crossbeam-channel"))]
 use std::sync::mpsc;

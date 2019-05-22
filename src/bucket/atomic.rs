@@ -1,14 +1,14 @@
 //! Maintain aggregated metrics for deferred reporting,
 
-use bucket::ScoreType::*;
-use bucket::{stats_summary, ScoreType};
-use core::attributes::{Attributes, MetricId, OnFlush, Prefixed, WithAttributes};
-use core::clock::TimeHandle;
-use core::error;
-use core::input::{InputKind, InputMetric, InputScope};
-use core::name::MetricName;
-use core::output::{output_none, Output, OutputDyn, OutputMetric, OutputScope};
-use core::{Flush, MetricValue};
+use crate::bucket::ScoreType::*;
+use crate::bucket::{stats_summary, ScoreType};
+use crate::core::attributes::{Attributes, MetricId, OnFlush, Prefixed, WithAttributes};
+use crate::core::clock::TimeHandle;
+use crate::core::error;
+use crate::core::input::{InputKind, InputMetric, InputScope};
+use crate::core::name::MetricName;
+use crate::core::output::{output_none, Output, OutputDyn, OutputMetric, OutputScope};
+use crate::core::{Flush, MetricValue};
 
 use std::collections::BTreeMap;
 use std::isize;
@@ -445,7 +445,6 @@ fn swap_if(counter: &AtomicIsize, new_value: isize, compare: fn(isize, isize) ->
 mod bench {
 
     use super::*;
-    use test;
 
     #[bench]
     fn update_marker(b: &mut test::Bencher) {
@@ -483,12 +482,12 @@ mod bench {
 }
 
 #[cfg(test)]
-mod test {
+mod mtest {
     use super::*;
-    use bucket::{stats_all, stats_average, stats_summary};
+    use crate::bucket::{stats_all, stats_average, stats_summary};
 
-    use core::clock::{mock_clock_advance, mock_clock_reset};
-    use output::map::StatsMapScope;
+    use crate::core::clock::{mock_clock_advance, mock_clock_reset};
+    use crate::output::map::StatsMapScope;
 
     use std::collections::BTreeMap;
     use std::time::Duration;

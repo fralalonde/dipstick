@@ -2,16 +2,16 @@
 
 // TODO parameterize templates
 
-use core::attributes::{Attributes, Buffered, OnFlush, Prefixed, WithAttributes};
-use core::error;
-use core::input::InputKind;
-use core::name::MetricName;
-use core::output::{Output, OutputMetric, OutputScope};
-use core::Flush;
+use crate::core::attributes::{Attributes, Buffered, OnFlush, Prefixed, WithAttributes};
+use crate::core::error;
+use crate::core::input::InputKind;
+use crate::core::name::MetricName;
+use crate::core::output::{Output, OutputMetric, OutputScope};
+use crate::core::Flush;
 
-use cache::cache_out;
-use output::format::{Formatting, LineFormat, SimpleFormat};
-use queue::queue_out;
+use crate::cache::cache_out;
+use crate::output::format::{Formatting, LineFormat, SimpleFormat};
+use crate::queue::queue_out;
 
 use std::cell::RefCell;
 use std::fs::{File, OpenOptions};
@@ -222,7 +222,7 @@ impl<W: Write + Send + Sync + 'static> Drop for TextScope<W> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use core::input::InputKind;
+    use crate::core::input::InputKind;
     use std::io;
 
     #[test]

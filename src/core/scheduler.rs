@@ -1,6 +1,6 @@
 //! Task scheduling facilities.
 
-use core::input::InputScope;
+use crate::core::input::InputScope;
 
 use std::cmp::{max, Ordering};
 use std::collections::BinaryHeap;

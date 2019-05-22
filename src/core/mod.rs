@@ -40,7 +40,6 @@ pub mod bench {
     use super::super::bucket::atomic::*;
     use super::clock::*;
     use super::input::*;
-    use test;
 
     #[bench]
     fn get_instant(b: &mut test::Bencher) {

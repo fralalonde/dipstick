@@ -1,11 +1,11 @@
 //! Metric input scope caching.
 
-use cache::lru_cache as lru;
-use core::attributes::{Attributes, OnFlush, Prefixed, WithAttributes};
-use core::error;
-use core::input::{Input, InputDyn, InputKind, InputMetric, InputScope};
-use core::name::MetricName;
-use core::Flush;
+use crate::cache::lru_cache as lru;
+use crate::core::attributes::{Attributes, OnFlush, Prefixed, WithAttributes};
+use crate::core::error;
+use crate::core::input::{Input, InputDyn, InputKind, InputMetric, InputScope};
+use crate::core::name::MetricName;
+use crate::core::Flush;
 
 use std::sync::Arc;
 

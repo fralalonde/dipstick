@@ -1,15 +1,15 @@
 //! Send metrics to a Prometheus server.
 
-use cache::cache_out;
-use core::attributes::{Attributes, Buffered, OnFlush, Prefixed, WithAttributes};
-use core::error;
-use core::input::InputKind;
-use core::label::Labels;
-use core::metrics;
-use core::name::MetricName;
-use core::output::{Output, OutputMetric, OutputScope};
-use core::{Flush, MetricValue};
-use queue::queue_out;
+use crate::cache::cache_out;
+use crate::core::attributes::{Attributes, Buffered, OnFlush, Prefixed, WithAttributes};
+use crate::core::error;
+use crate::core::input::InputKind;
+use crate::core::label::Labels;
+use crate::core::metrics;
+use crate::core::name::MetricName;
+use crate::core::output::{Output, OutputMetric, OutputScope};
+use crate::core::{Flush, MetricValue};
+use crate::queue::queue_out;
 
 use std::cell::{RefCell, RefMut};
 use std::rc::Rc;
@@ -204,9 +204,8 @@ impl Drop for PrometheusScope {
 mod bench {
 
     use super::*;
-    use core::attributes::*;
-    use core::input::*;
-    use test;
+    use crate::core::attributes::*;
+    use crate::core::input::*;
 
     #[bench]
     pub fn immediate_prometheus(b: &mut test::Bencher) {
