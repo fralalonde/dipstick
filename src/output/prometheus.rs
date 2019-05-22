@@ -147,8 +147,8 @@ impl PrometheusScope {
             return Ok(());
         }
 
-        match minreq::get(self.push_url.as_ref())
-            .with_body(buf.as_ref())
+        match minreq::get(self.push_url.as_str())
+            .with_body(buf.as_str())
             .send()
         {
             Ok(_res) => {
