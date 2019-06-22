@@ -126,6 +126,7 @@ impl PrometheusScope {
             strbuf.push(' ');
         }
         strbuf.push_str(&value_str);
+        strbuf.push('\n');
 
         let mut buffer = self.buffer.borrow_mut();
         if strbuf.len() + buffer.len() > BUFFER_FLUSH_THRESHOLD {
@@ -136,11 +137,6 @@ impl PrometheusScope {
             );
             let _ = self.flush_inner(buffer);
             buffer = self.buffer.borrow_mut();
-        }
-
-        if !buffer.is_empty() {
-            // separate from previous entry
-            buffer.push('\n')
         }
 
         buffer.push_str(&strbuf);
@@ -212,48 +208,3 @@ impl Drop for PrometheusScope {
         }
     }
 }
-
-//#[cfg(test)]
-//mod test {
-//    use super::*;
-//    use crate::core::input::InputKind;
-//    use std::io;
-//    use crate::core::input::Input;
-//    use crate::core::input::InputScope;
-//
-//    #[test]
-//    fn sink_print() {
-//        let sd = Prometheus::push_to("localhost:2003").unwrap().metrics();
-//        let timer = sd.new_metric("timer".into(), InputKind::Counter);
-//        sd.write(33, labels![]);
-//    }
-//}
-
-
-//#[cfg(feature = "bench")]
-//mod bench {
-//
-//    use super::*;
-//    use crate::core::attributes::*;
-//    use crate::core::input::*;
-//
-//    #[bench]
-//    pub fn immediate_prometheus(b: &mut test::Bencher) {
-//        let sd = Prometheus::push_to("localhost:2003").unwrap().metrics();
-//        let timer = sd.new_metric("timer".into(), InputKind::Timer);
-//
-//        b.iter(|| test::black_box(timer.write(2000, labels![])));
-//    }
-//
-//    #[bench]
-//    pub fn buffering_prometheus(b: &mut test::Bencher) {
-//        let sd = Prometheus::push_to("localhost:2003")
-//            .unwrap()
-//            .buffered(Buffering::BufferSize(65465))
-//            .metrics();
-//        let timer = sd.new_metric("timer".into(), InputKind::Timer);
-//
-//        b.iter(|| test::black_box(timer.write(2000, labels![])));
-//    }
-//
-//}

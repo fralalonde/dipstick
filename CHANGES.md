@@ -1,5 +1,9 @@
 # Latest changes + history
 
+## version 0.7.8
+- Fixed Prometheus output https://github.com/fralalonde/dipstick/issues/70 
+
+## version 0.7.6
 - Move to Rust 2018 using cargo fix --edition and some manual help
 - Fix nightly's 'acceptable regression' https://github.com/rust-lang/rust/pull/59825
 - Give each flush listener a unique id
