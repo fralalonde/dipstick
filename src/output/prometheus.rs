@@ -138,12 +138,12 @@ impl PrometheusScope {
             buffer = self.buffer.borrow_mut();
         }
 
+        buffer.push_str(&strbuf);
+
         if !buffer.is_empty() {
             // separate from previous entry
             buffer.push('\n')
         }
-
-        buffer.push_str(&strbuf);
 
         if !self.is_buffered() {
             if let Err(e) = self.flush_inner(buffer) {
@@ -157,16 +157,17 @@ impl PrometheusScope {
             return Ok(());
         }
 
-//        println!("{}", buf.as_str());
-//        buf.clear();
-//        Ok(())
-        match minreq::get(self.push_url.as_str())
+        match minreq::post(self.push_url.as_str())
             .with_body(buf.as_str())
             .send()
         {
             Ok(_res) => {
                 metrics::PROMETHEUS_SENT_BYTES.count(buf.len());
-                trace!("Sent {} bytes to Prometheus", buf.len());
+                trace!(
+                    "Sent {} bytes to Prometheus (resp status code: {})",
+                    buf.len(),
+                    _res.status_code
+                );
                 buf.clear();
                 Ok(())
             }
@@ -228,7 +229,6 @@ impl Drop for PrometheusScope {
 //        sd.write(33, labels![]);
 //    }
 //}
-
 
 //#[cfg(feature = "bench")]
 //mod bench {
