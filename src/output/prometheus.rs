@@ -153,16 +153,17 @@ impl PrometheusScope {
             return Ok(());
         }
 
-//        println!("{}", buf.as_str());
-//        buf.clear();
-//        Ok(())
-        match minreq::get(self.push_url.as_str())
+        match minreq::post(self.push_url.as_str())
             .with_body(buf.as_str())
             .send()
         {
-            Ok(_res) => {
+            Ok(http_result) => {
                 metrics::PROMETHEUS_SENT_BYTES.count(buf.len());
-                trace!("Sent {} bytes to Prometheus", buf.len());
+                trace!(
+                    "Sent {} bytes to Prometheus (resp status code: {})",
+                    buf.len(),
+                    http_result.status_code
+                );
                 buf.clear();
                 Ok(())
             }

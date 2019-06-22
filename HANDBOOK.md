@@ -331,9 +331,41 @@ Because the input's actual _implementation_ depends on the output configuration,
 it is necessary to create an output channel before defining any metrics.
 This is often not possible because metrics configuration could be dynamic (e.g. loaded from a file),
 which might happen after the static initialization phase in which metrics are defined.
-To get around this catch-22, Dipstick provides a Proxy which acts as intermediate output, 
+To get around this catch-22, Dipstick provides `Proxy` which acts as intermediate output, 
 allowing redirection to the effective output after it has been set up.
 
+A default `Proxy` is defined when using the simplest form of the `metrics!` macro:
+```rust
+use dipstick::*;
+
+metrics!(
+    COUNTER: Counter = "another_counter";
+);
+
+fn main() {
+    dipstick::Proxy::default_target(Stream::to_stdout().metrics());
+    COUNTER.count(456);
+}
+``` 
+
+On occasion it might be useful to define your own `Proxy` for independent configuration:
+```rust
+use dipstick::*;
+
+metrics! {
+    pub MY_PROXY: Proxy = "my_proxy" => {
+        COUNTER: Counter = "some_counter";
+    }
+}
+
+fn main() {
+    MY_PROXY.target(Stream::to_stdout().metrics());
+    COUNTER.count(456);
+}
+```
+
+The performance overhead incurred by the proxy's dynamic dispatching of metrics will be negligible 
+in most applications in regards to the flexibility and convenience provided.
 
 ### Bucket
 The `AtomicBucket` can be used to aggregate metric values. 
@@ -396,3 +428,4 @@ I'm sure [an example](https://github.com/fralalonde/dipstick/blob/master/example
 
 This is a tradeoff, lowering app latency by taking any metrics I/O off the thread but increasing overall metrics reporting latency.
 Using async metrics should not be required if using only aggregated metrics such as an `AtomicBucket`. 
+
