@@ -21,7 +21,6 @@ metrics! {
 }
 
 fn main() {
-
     // Placeholder to collect output targets
     // This will prefix all metrics with "my_stats"
     // before flushing them.
