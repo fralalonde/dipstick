@@ -1,5 +1,9 @@
 # Latest changes + history
 
+## version 0.7.10
+- Make OnFlushCancel public
+- Add dyn keyword to dyn traits
+
 ## version 0.7.9
 - Prometheus uses HTTP POST, not GET
 - Add proxy_multi_output example
