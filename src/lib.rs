@@ -53,7 +53,7 @@ macro_rules! read_lock {
 
 mod core;
 pub use crate::core::attributes::{
-    Buffered, Buffering, Observe, ObserveWhen, OnFlush, Prefixed, Sampled, Sampling,
+    Buffered, Buffering, Observe, ObserveWhen, OnFlush, OnFlushCancel, Prefixed, Sampled, Sampling,
 };
 pub use crate::core::clock::TimeHandle;
 pub use crate::core::error::Result;
