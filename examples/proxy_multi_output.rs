@@ -12,7 +12,6 @@ extern crate dipstick;
 ///                     -> Prometheus
 ///                     -> Statsd
 ///                     -> stdout
-
 use dipstick::*;
 use std::time::Duration;
 

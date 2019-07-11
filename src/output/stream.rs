@@ -30,7 +30,7 @@ use parking_lot::RwLock;
 /// Buffered metrics text output.
 pub struct Stream<W: Write + Send + Sync + 'static> {
     attributes: Attributes,
-    format: Arc<LineFormat + Send + Sync>,
+    format: Arc<dyn LineFormat + Send + Sync>,
     inner: Arc<RwLock<W>>,
 }
 

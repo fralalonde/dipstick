@@ -69,7 +69,7 @@ impl Default for Proxy {
 
 struct InnerProxy {
     // namespaces can target one, many or no metrics
-    targets: HashMap<NameParts, Arc<InputScope + Send + Sync>>,
+    targets: HashMap<NameParts, Arc<dyn InputScope + Send + Sync>>,
     // last part of the namespace is the metric's name
     metrics: BTreeMap<NameParts, Weak<ProxyMetric>>,
 }
@@ -89,7 +89,11 @@ impl InnerProxy {
         }
     }
 
-    fn set_target(&mut self, namespace: &NameParts, target_scope: Arc<InputScope + Send + Sync>) {
+    fn set_target(
+        &mut self,
+        namespace: &NameParts,
+        target_scope: Arc<dyn InputScope + Send + Sync>,
+    ) {
         self.targets.insert(namespace.clone(), target_scope.clone());
 
         for (metric_name, metric) in self.metrics.range_mut(namespace.clone()..) {
@@ -113,7 +117,7 @@ impl InnerProxy {
     fn get_effective_target(
         &self,
         namespace: &NameParts,
-    ) -> Option<(Arc<InputScope + Send + Sync>, usize)> {
+    ) -> Option<(Arc<dyn InputScope + Send + Sync>, usize)> {
         if let Some(target) = self.targets.get(namespace) {
             return Some((target.clone(), namespace.len()));
         }

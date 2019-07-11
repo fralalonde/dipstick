@@ -45,7 +45,7 @@ impl LineTemplate {
     /// Template execution applies commands in turn, writing to the output.
     pub fn print<L>(
         &self,
-        output: &mut io::Write,
+        output: &mut dyn io::Write,
         value: MetricValue,
         lookup: L,
     ) -> Result<(), io::Error>

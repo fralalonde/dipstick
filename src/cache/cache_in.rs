@@ -33,7 +33,7 @@ pub trait CachedInput: Input + Send + Sync + 'static + Sized {
 #[derive(Clone)]
 pub struct InputCache {
     attributes: Attributes,
-    target: Arc<InputDyn + Send + Sync + 'static>,
+    target: Arc<dyn InputDyn + Send + Sync + 'static>,
     cache: Arc<RwLock<lru::LRUCache<MetricName, InputMetric>>>,
 }
 
@@ -74,7 +74,7 @@ impl Input for InputCache {
 #[derive(Clone)]
 pub struct InputScopeCache {
     attributes: Attributes,
-    target: Arc<InputScope + Send + Sync + 'static>,
+    target: Arc<dyn InputScope + Send + Sync + 'static>,
     cache: Arc<RwLock<lru::LRUCache<MetricName, InputMetric>>>,
 }
 

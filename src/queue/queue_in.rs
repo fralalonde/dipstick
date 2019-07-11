@@ -95,7 +95,7 @@ fn new_async_channel(length: usize) -> Arc<crossbeam::Sender<InputQueueCmd>> {
 #[derive(Clone)]
 pub struct InputQueue {
     attributes: Attributes,
-    target: Arc<InputDyn + Send + Sync + 'static>,
+    target: Arc<dyn InputDyn + Send + Sync + 'static>,
     #[cfg(not(feature = "crossbeam-channel"))]
     sender: Arc<mpsc::SyncSender<InputQueueCmd>>,
     #[cfg(feature = "crossbeam-channel")]
@@ -144,7 +144,7 @@ pub enum InputQueueCmd {
     /// Send metric write
     Write(InputMetric, MetricValue, Labels),
     /// Send metric flush
-    Flush(Arc<InputScope + Send + Sync + 'static>),
+    Flush(Arc<dyn InputScope + Send + Sync + 'static>),
 }
 
 /// A metric scope wrapper that sends writes & flushes over a Rust sync channel.
@@ -156,7 +156,7 @@ pub struct InputQueueScope {
     sender: Arc<mpsc::SyncSender<InputQueueCmd>>,
     #[cfg(feature = "crossbeam-channel")]
     sender: Arc<crossbeam::Sender<InputQueueCmd>>,
-    target: Arc<InputScope + Send + Sync + 'static>,
+    target: Arc<dyn InputScope + Send + Sync + 'static>,
 }
 
 impl InputQueueScope {

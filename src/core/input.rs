@@ -30,12 +30,12 @@ pub trait Input: Send + Sync + 'static + InputDyn {
 /// A function trait that opens a new metric capture scope.
 pub trait InputDyn: Send + Sync + 'static {
     /// Open a new scope from this output.
-    fn input_dyn(&self) -> Arc<InputScope + Send + Sync + 'static>;
+    fn input_dyn(&self) -> Arc<dyn InputScope + Send + Sync + 'static>;
 }
 
 /// Blanket impl of dyn input trait
 impl<T: Input + Send + Sync + 'static> InputDyn for T {
-    fn input_dyn(&self) -> Arc<InputScope + Send + Sync + 'static> {
+    fn input_dyn(&self) -> Arc<dyn InputScope + Send + Sync + 'static> {
         Arc::new(self.metrics())
     }
 }
@@ -77,7 +77,7 @@ pub trait InputScope: Flush {
 #[derive(Clone)]
 pub struct InputMetric {
     identifier: MetricId,
-    inner: Arc<Fn(MetricValue, Labels) + Send + Sync>,
+    inner: Arc<dyn Fn(MetricValue, Labels) + Send + Sync>,
 }
 
 impl fmt::Debug for InputMetric {

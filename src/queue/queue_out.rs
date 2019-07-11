@@ -98,7 +98,7 @@ fn new_async_channel(length: usize) -> Arc<crossbeam::Sender<OutputQueueCmd>> {
 #[derive(Clone)]
 pub struct OutputQueue {
     attributes: Attributes,
-    target: Arc<OutputDyn + Send + Sync + 'static>,
+    target: Arc<dyn OutputDyn + Send + Sync + 'static>,
     #[cfg(not(feature = "crossbeam-channel"))]
     q_sender: Arc<mpsc::SyncSender<OutputQueueCmd>>,
     #[cfg(feature = "crossbeam-channel")]
@@ -203,7 +203,7 @@ impl Flush for OutputQueueScope {
 /// Wrap an OutputScope to make it Send + Sync, allowing it to travel the world of threads.
 /// Obviously, it should only still be used from a single thread or dragons may occur.
 #[derive(Clone)]
-pub struct UnsafeScope(Rc<OutputScope + 'static>);
+pub struct UnsafeScope(Rc<dyn OutputScope + 'static>);
 
 /// This is ok because scope will only ever be used by the dispatcher thread.
 unsafe impl Send for UnsafeScope {}
@@ -213,13 +213,13 @@ unsafe impl Sync for UnsafeScope {}
 
 impl UnsafeScope {
     /// Wrap a dynamic RawScope to make it Send + Sync.
-    pub fn new(scope: Rc<OutputScope + 'static>) -> Self {
+    pub fn new(scope: Rc<dyn OutputScope + 'static>) -> Self {
         UnsafeScope(scope)
     }
 }
 
 impl ops::Deref for UnsafeScope {
-    type Target = OutputScope + 'static;
+    type Target = dyn OutputScope + 'static;
     fn deref(&self) -> &Self::Target {
         Rc::as_ref(&self.0)
     }

@@ -28,20 +28,20 @@ use std::fmt;
 
 /// A function type to transform aggregated scores into publishable statistics.
 pub type Stat = Option<(InputKind, MetricName, MetricValue)>;
-pub type StatsFn = Fn(InputKind, MetricName, ScoreType) -> Stat + Send + Sync + 'static;
+pub type StatsFn = dyn Fn(InputKind, MetricName, ScoreType) -> Stat + Send + Sync + 'static;
 
 fn initial_stats() -> &'static StatsFn {
     &stats_summary
 }
 
-fn initial_drain() -> Arc<OutputDyn + Send + Sync> {
+fn initial_drain() -> Arc<dyn OutputDyn + Send + Sync> {
     Arc::new(output_none())
 }
 
 lazy_static! {
     static ref DEFAULT_AGGREGATE_STATS: RwLock<Arc<StatsFn>> =
         RwLock::new(Arc::new(initial_stats()));
-    static ref DEFAULT_AGGREGATE_OUTPUT: RwLock<Arc<OutputDyn + Send + Sync>> =
+    static ref DEFAULT_AGGREGATE_OUTPUT: RwLock<Arc<dyn OutputDyn + Send + Sync>> =
         RwLock::new(initial_drain());
 }
 
@@ -58,7 +58,7 @@ struct InnerAtomicBucket {
     metrics: BTreeMap<MetricName, Arc<AtomicScores>>,
     period_start: TimeHandle,
     stats: Option<Arc<StatsFn>>,
-    drain: Option<Arc<OutputDyn + Send + Sync + 'static>>,
+    drain: Option<Arc<dyn OutputDyn + Send + Sync + 'static>>,
     publish_metadata: bool,
 }
 
@@ -101,7 +101,7 @@ impl InnerAtomicBucket {
     /// Take a snapshot of aggregated values and reset them.
     /// Compute stats on captured values using assigned or default stats function.
     /// Write stats to assigned or default output.
-    fn flush_to(&mut self, target: &OutputScope) -> error::Result<()> {
+    fn flush_to(&mut self, target: &dyn OutputScope) -> error::Result<()> {
         let now = TimeHandle::now();
         let duration_seconds = self.period_start.elapsed_us() as f64 / 1_000_000.0;
         self.period_start = now;
@@ -246,7 +246,7 @@ impl AtomicBucket {
     }
 
     /// Immediately flush the bucket's metrics to the specified scope and stats.
-    pub fn flush_to(&self, publish_scope: &OutputScope) -> error::Result<()> {
+    pub fn flush_to(&self, publish_scope: &dyn OutputScope) -> error::Result<()> {
         let mut inner = write_lock!(self.inner);
         inner.flush_to(publish_scope)
     }

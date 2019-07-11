@@ -12,7 +12,7 @@ use std::sync::Arc;
 #[derive(Clone, Default)]
 pub struct MultiInput {
     attributes: Attributes,
-    inputs: Vec<Arc<InputDyn + Send + Sync>>,
+    inputs: Vec<Arc<dyn InputDyn + Send + Sync>>,
 }
 
 impl Input for MultiInput {
@@ -61,7 +61,7 @@ impl WithAttributes for MultiInput {
 #[derive(Clone, Default)]
 pub struct MultiInputScope {
     attributes: Attributes,
-    scopes: Vec<Arc<InputScope + Send + Sync>>,
+    scopes: Vec<Arc<dyn InputScope + Send + Sync>>,
 }
 
 impl MultiInputScope {

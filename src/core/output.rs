@@ -15,7 +15,7 @@ pub trait OutputScope: Flush {
 /// Output metrics are not thread safe.
 #[derive(Clone)]
 pub struct OutputMetric {
-    inner: Rc<Fn(MetricValue, Labels)>,
+    inner: Rc<dyn Fn(MetricValue, Labels)>,
 }
 
 impl OutputMetric {
@@ -52,12 +52,12 @@ pub trait Output: Send + Sync + 'static + OutputDyn {
 /// A function trait that opens a new metric capture scope.
 pub trait OutputDyn {
     /// Open a new scope from this output.
-    fn output_dyn(&self) -> Rc<OutputScope + 'static>;
+    fn output_dyn(&self) -> Rc<dyn OutputScope + 'static>;
 }
 
 /// Blanket impl of dyn output trait
 impl<T: Output + Send + Sync + 'static> OutputDyn for T {
-    fn output_dyn(&self) -> Rc<OutputScope + 'static> {
+    fn output_dyn(&self) -> Rc<dyn OutputScope + 'static> {
         Rc::new(self.new_scope())
     }
 }

@@ -65,7 +65,7 @@ struct ScheduledTask {
     next_time: Instant,
     period: Duration,
     handle: CancelHandle,
-    operation: Arc<Fn(Instant) -> () + Send + Sync + 'static>,
+    operation: Arc<dyn Fn(Instant) -> () + Send + Sync + 'static>,
 }
 
 impl Ord for ScheduledTask {

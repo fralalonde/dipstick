@@ -22,7 +22,7 @@ use std::io::Write;
 #[derive(Clone)]
 pub struct Log {
     attributes: Attributes,
-    format: Arc<LineFormat>,
+    format: Arc<dyn LineFormat>,
     level: log::Level,
     target: Option<String>,
 }

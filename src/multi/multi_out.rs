@@ -14,7 +14,7 @@ use std::sync::Arc;
 #[derive(Clone, Default)]
 pub struct MultiOutput {
     attributes: Attributes,
-    outputs: Vec<Arc<OutputDyn + Send + Sync + 'static>>,
+    outputs: Vec<Arc<dyn OutputDyn + Send + Sync + 'static>>,
 }
 
 impl Output for MultiOutput {
@@ -64,7 +64,7 @@ impl WithAttributes for MultiOutput {
 #[derive(Clone, Default)]
 pub struct MultiOutputScope {
     attributes: Attributes,
-    scopes: Vec<Rc<OutputScope>>,
+    scopes: Vec<Rc<dyn OutputScope>>,
 }
 
 impl MultiOutputScope {

@@ -73,7 +73,7 @@ pub type Shared<T> = Arc<RwLock<T>>;
 
 pub struct Listener {
     listener_id: usize,
-    listener_fn: Arc<Fn(Instant) -> () + Send + Sync + 'static>,
+    listener_fn: Arc<dyn Fn(Instant) -> () + Send + Sync + 'static>,
 }
 
 /// Attributes common to metric components.
@@ -139,7 +139,8 @@ pub struct ObserveWhen<'a, T, F> {
 
 static ID_GENERATOR: AtomicUsize = AtomicUsize::new(0);
 
-pub struct OnFlushCancel(Arc<Fn()>);
+/// A handle to cancel a flush observer.
+pub struct OnFlushCancel(Arc<dyn Fn()>);
 
 impl Cancel for OnFlushCancel {
     fn cancel(&self) {

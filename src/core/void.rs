@@ -8,10 +8,10 @@ use std::sync::Arc;
 
 lazy_static! {
     /// The reference instance identifying an uninitialized metric config.
-    pub static ref VOID_INPUT: Arc<InputDyn + Send + Sync> = Arc::new(Void::new());
+    pub static ref VOID_INPUT: Arc<dyn InputDyn + Send + Sync> = Arc::new(Void::new());
 
     /// The reference instance identifying an uninitialized metric scope.
-    pub static ref NO_METRIC_SCOPE: Arc<InputScope + Send + Sync> = VOID_INPUT.input_dyn();
+    pub static ref NO_METRIC_SCOPE: Arc<dyn InputScope + Send + Sync> = VOID_INPUT.input_dyn();
 }
 
 /// Discard metrics output.
@@ -50,7 +50,7 @@ impl OutputScope for VoidOutput {
 }
 
 impl Flush for VoidOutput {
-    fn flush(&self) -> Result<(), Box<Error + Send + Sync>> {
+    fn flush(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
         Ok(())
     }
 }

@@ -68,10 +68,10 @@ impl<T: Output + Send + Sync + 'static> Input for T {
 /// Wrap an OutputScope to make it Send + Sync, allowing it to travel the world of threads.
 /// Obviously, it should only still be used from a single thread at a time or dragons may occur.
 #[derive(Clone)]
-struct LockedOutputScope(Rc<OutputScope + 'static>);
+struct LockedOutputScope(Rc<dyn OutputScope + 'static>);
 
 impl ops::Deref for LockedOutputScope {
-    type Target = OutputScope + 'static;
+    type Target = dyn OutputScope + 'static;
     fn deref(&self) -> &Self::Target {
         Rc::as_ref(&self.0)
     }

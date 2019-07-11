@@ -36,7 +36,7 @@ pub trait CachedOutput: Output + Send + Sync + 'static + Sized {
 #[derive(Clone)]
 pub struct OutputCache {
     attributes: Attributes,
-    target: Arc<OutputDyn + Send + Sync + 'static>,
+    target: Arc<dyn OutputDyn + Send + Sync + 'static>,
     cache: Arc<RwLock<lru::LRUCache<MetricName, OutputMetric>>>,
 }
 
@@ -77,7 +77,7 @@ impl Output for OutputCache {
 #[derive(Clone)]
 pub struct OutputScopeCache {
     attributes: Attributes,
-    target: Rc<OutputScope + 'static>,
+    target: Rc<dyn OutputScope + 'static>,
     cache: Arc<RwLock<lru::LRUCache<MetricName, OutputMetric>>>,
 }
 

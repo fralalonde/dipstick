@@ -77,7 +77,7 @@ impl OutputScope for StatsMapScope {
 }
 
 impl Flush for StatsMapScope {
-    fn flush(&self) -> Result<(), Box<Error + Send + Sync>> {
+    fn flush(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
         self.notify_flush_listeners();
         Ok(())
     }
