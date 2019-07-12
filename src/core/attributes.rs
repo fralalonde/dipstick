@@ -198,6 +198,7 @@ pub trait Observe {
     /// common.
     type Inner;
     /// Provide a source for a metric's values.
+    #[must_use = "must specify when to observe"]
     fn observe<F>(
         &self,
         metric: impl Deref<Target = InputMetric>,
