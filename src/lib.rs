@@ -64,7 +64,7 @@ pub use crate::core::label::{AppLabel, Labels, ThreadLabel};
 pub use crate::core::locking::LockingOutput;
 pub use crate::core::name::{MetricName, NameParts};
 pub use crate::core::output::{Output, OutputDyn, OutputMetric, OutputScope};
-pub use crate::core::scheduler::{Cancel, CancelHandle, ScheduleFlush};
+pub use crate::core::scheduler::{Cancel, CancelGuard, CancelHandle, ScheduleFlush};
 pub use crate::core::void::Void;
 pub use crate::core::{Flush, MetricValue};
 
