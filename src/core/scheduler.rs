@@ -14,6 +14,8 @@ use std::time::{Duration, Instant};
 ///
 /// See [Cancel::into_guard](trait.Cancel.html#method.into_guard) to create it.
 pub struct CancelGuard<C: Cancel> {
+    // This is Option, so disarm can work.
+    // The problem is, Rust won't let us destructure self because we have a destructor.
     inner: Option<C>,
 }
 
@@ -22,8 +24,8 @@ impl<C: Cancel> CancelGuard<C> {
     ///
     /// This disposes of the guard without performing the cancelation. This is similar to calling
     /// `forget` on it, but doesn't leak resources, while forget potentially could.
-    pub fn disarm(mut self) {
-        self.inner.take();
+    pub fn disarm(mut self) -> C {
+        self.inner.take().expect("The borrowchecker shouldn't allow anyone to call disarm twice")
     }
 }
 
