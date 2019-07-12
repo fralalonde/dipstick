@@ -10,10 +10,45 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
+/// A guard canceling the inner handle when dropped.
+///
+/// See [Cancel::into_guard](trait.Cancel.html#method.into_guard) to create it.
+pub struct CancelGuard<C: Cancel> {
+    inner: Option<C>,
+}
+
+impl<C: Cancel> CancelGuard<C> {
+    /// Disarms the guard.
+    ///
+    /// This disposes of the guard without performing the cancelation. This is similar to calling
+    /// `forget` on it, but doesn't leak resources, while forget potentially could.
+    pub fn disarm(mut self) {
+        self.inner.take();
+    }
+}
+
+impl<C: Cancel> Drop for CancelGuard<C> {
+    fn drop(&mut self) {
+        if let Some(inner) = self.inner.take() {
+            inner.cancel();
+        }
+    }
+}
+
 /// A deferred, repeatable, background action that can be cancelled.
 pub trait Cancel {
     /// Cancel the action.
     fn cancel(&self);
+
+    /// Create a guard that cancels when it is dropped.
+    fn into_guard(self) -> CancelGuard<Self>
+    where
+        Self: Sized,
+    {
+        CancelGuard {
+            inner: Some(self)
+        }
+    }
 }
 
 /// A handle to cancel a scheduled task if required.
@@ -186,6 +221,51 @@ pub mod test {
         thread::sleep(Duration::from_millis(70));
         assert_eq!(sched.task_count(), 0);
         assert_eq!(3, trig1a.load(SeqCst));
+    }
+
+    #[test]
+    fn schedule_and_cancel_by_guard() {
+        let trig1a = Arc::new(AtomicUsize::new(0));
+        let trig1b = trig1a.clone();
+
+        let sched = Scheduler::new();
+
+        let handle1 = sched.schedule(Duration::from_millis(50), move |_| {
+            trig1b.fetch_add(1, SeqCst);
+        });
+        {
+            let _guard = handle1.into_guard();
+            assert_eq!(sched.task_count(), 1);
+            thread::sleep(Duration::from_millis(170));
+            assert_eq!(3, trig1a.load(SeqCst));
+        } // Here, the guard is dropped, cancelling
+
+        thread::sleep(Duration::from_millis(70));
+        assert_eq!(sched.task_count(), 0);
+        assert_eq!(3, trig1a.load(SeqCst));
+    }
+
+    #[test]
+    fn schedule_and_disarm_guard() {
+        let trig1a = Arc::new(AtomicUsize::new(0));
+        let trig1b = trig1a.clone();
+
+        let sched = Scheduler::new();
+
+        let handle1 = sched.schedule(Duration::from_millis(50), move |_| {
+            trig1b.fetch_add(1, SeqCst);
+        });
+        {
+            let guard = handle1.into_guard();
+            assert_eq!(sched.task_count(), 1);
+            thread::sleep(Duration::from_millis(170));
+            assert_eq!(3, trig1a.load(SeqCst));
+
+            guard.disarm();
+        }
+
+        thread::sleep(Duration::from_millis(70));
+        assert_eq!(sched.task_count(), 1); // Not canceled
     }
 
     #[test]
