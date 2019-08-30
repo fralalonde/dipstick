@@ -140,7 +140,7 @@ pub struct ObserveWhen<'a, T, F> {
 static ID_GENERATOR: AtomicUsize = AtomicUsize::new(0);
 
 /// A handle to cancel a flush observer.
-pub struct OnFlushCancel(Arc<dyn Fn()>);
+pub struct OnFlushCancel(Arc<dyn Fn() + Send + Sync>);
 
 impl Cancel for OnFlushCancel {
     fn cancel(&self) {
