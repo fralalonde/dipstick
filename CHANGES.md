@@ -1,5 +1,8 @@
 # Latest changes + history
 
+## version 0.7.11
+- Make OnFlushCancel Send + Sync (@vorner)
+
 ## version 0.7.10
 - Make OnFlushCancel public
 - Add dyn keyword to dyn traits
