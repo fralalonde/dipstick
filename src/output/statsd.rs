@@ -1,23 +1,19 @@
 //! Send metrics to a statsd server.
 
-use crate::cache::cache_out;
-use crate::core::attributes::{
-    Attributes, Buffered, OnFlush, Prefixed, Sampled, Sampling, WithAttributes,
-};
+use crate::core::attributes::{Attributes, Buffered, OnFlush, Prefixed, Sampled, Sampling, WithAttributes, MetricId};
 use crate::core::error;
 use crate::core::input::InputKind;
 use crate::core::metrics;
 use crate::core::name::MetricName;
 use crate::core::output::{Output, OutputMetric, OutputScope};
 use crate::core::pcg32;
-use crate::core::{Flush, MetricValue};
-use crate::queue::queue_out;
 
 use std::cell::{RefCell, RefMut};
 use std::net::ToSocketAddrs;
 use std::net::UdpSocket;
 use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc};
+use crate::{LockingOutput, Locking, QueuedOutput, Flush, MetricValue, CachedOutput};
 
 /// Use a safe maximum size for UDP to prevent fragmentation.
 // TODO make configurable?
@@ -48,8 +44,8 @@ impl Statsd {
 impl Buffered for Statsd {}
 impl Sampled for Statsd {}
 
-impl queue_out::QueuedOutput for Statsd {}
-impl cache_out::CachedOutput for Statsd {}
+impl QueuedOutput for Statsd {}
+impl CachedOutput for Statsd {}
 
 impl Output for Statsd {
     type SCOPE = StatsdScope;
@@ -85,7 +81,7 @@ impl Sampled for StatsdScope {}
 impl OutputScope for StatsdScope {
     /// Define a metric of the specified type.
     fn new_metric(&self, name: MetricName, kind: InputKind) -> OutputMetric {
-        let mut prefix = self.prefix_prepend(name).join(".");
+        let mut prefix = self.prefix_prepend(name.clone()).join(".");
         prefix.push(':');
 
         let mut suffix = String::with_capacity(16);
@@ -113,7 +109,7 @@ impl OutputScope for StatsdScope {
                 scale,
             };
 
-            OutputMetric::new(move |value, _labels| {
+            OutputMetric::new(MetricId::forge("statsd", name), move |value, _labels| {
                 if pcg32::accept_sample(int_sampling_rate) {
                     cloned.print(&metric, value)
                 }
@@ -125,7 +121,7 @@ impl OutputScope for StatsdScope {
                 suffix,
                 scale,
             };
-            OutputMetric::new(move |value, _labels| cloned.print(&metric, value))
+            OutputMetric::new(MetricId::forge("statsd", name), move |value, _labels| cloned.print(&metric, value))
         }
     }
 }
@@ -215,6 +211,12 @@ impl Drop for StatsdScope {
         if let Err(err) = self.flush() {
             warn!("Could not flush statsd metrics upon Drop: {}", err)
         }
+    }
+}
+
+impl Locking for Statsd {
+    fn locking(&self) -> LockingOutput {
+        LockingOutput::new(self.get_attributes(), Rc::new(self.new_scope()))
     }
 }
 

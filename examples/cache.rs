@@ -10,7 +10,7 @@ use std::time::Duration;
 fn main() {
     let metrics = Stream::write_to(io::stdout())
         .cached(5)
-        .metrics()
+        .locking()
         .named("cache");
 
     loop {

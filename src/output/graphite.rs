@@ -1,7 +1,7 @@
 //! Send metrics to a graphite server.
 
 use crate::cache::cache_out;
-use crate::core::attributes::{Attributes, Buffered, OnFlush, Prefixed, WithAttributes};
+use crate::core::attributes::{Attributes, Buffered, OnFlush, Prefixed, WithAttributes, MetricId};
 use crate::core::error;
 use crate::core::input::InputKind;
 use crate::core::metrics;
@@ -27,6 +27,8 @@ use std::sync::RwLock;
 
 #[cfg(feature = "parking_lot")]
 use parking_lot::RwLock;
+use crate::core::locking::Locking;
+use crate::LockingOutput;
 
 /// Graphite output holds a socket to a graphite server.
 /// The socket is shared between scopes opened from the output.
@@ -72,6 +74,12 @@ impl WithAttributes for Graphite {
 
 impl Buffered for Graphite {}
 
+impl Locking for Graphite {
+    fn locking(&self) -> LockingOutput {
+        LockingOutput::new(self.get_attributes(), Rc::new(self.new_scope()))
+    }
+}
+
 /// Graphite Input
 #[derive(Debug, Clone)]
 pub struct GraphiteScope {
@@ -83,7 +91,7 @@ pub struct GraphiteScope {
 impl OutputScope for GraphiteScope {
     /// Define a metric of the specified type.
     fn new_metric(&self, name: MetricName, kind: InputKind) -> OutputMetric {
-        let mut prefix = self.prefix_prepend(name).join(".");
+        let mut prefix = self.prefix_prepend(name.clone()).join(".");
         prefix.push(' ');
 
         let scale = match kind {
@@ -95,7 +103,7 @@ impl OutputScope for GraphiteScope {
         let cloned = self.clone();
         let metric = GraphiteMetric { prefix, scale };
 
-        OutputMetric::new(move |value, _labels| {
+        OutputMetric::new(MetricId::forge("graphite", name), move |value, _labels| {
             cloned.print(&metric, value);
         })
     }

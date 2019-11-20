@@ -9,7 +9,7 @@ fn main() {
     let metrics = Graphite::send_to("localhost:2003")
         .expect("Connected")
         .named("my_app")
-        .metrics();
+        .locking();
 
     loop {
         metrics.counter("counter_a").count(123);

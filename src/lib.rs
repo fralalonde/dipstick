@@ -93,6 +93,7 @@ pub use crate::bucket::{stats_all, stats_average, stats_summary, ScoreType};
 mod cache;
 pub use crate::cache::cache_in::CachedInput;
 pub use crate::cache::cache_out::CachedOutput;
+pub use crate::core::locking::Locking;
 
 mod multi;
 pub use crate::multi::multi_in::{MultiInput, MultiInputScope};

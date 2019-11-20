@@ -57,7 +57,7 @@ impl LineTemplate {
                 Literal(src) => output.write_all(src.as_ref())?,
                 ValueAsText => output.write_all(format!("{}", value).as_ref())?,
                 ScaledValueAsText(scale) => {
-                    let scaled = value as f64 / scale;
+                    let scaled = value as f64 / *scale;
                     output.write_all(format!("{}", scaled).as_ref())?
                 }
                 NewLine => writeln!(output)?,

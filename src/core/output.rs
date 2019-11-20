@@ -5,6 +5,7 @@ use crate::core::void::Void;
 use crate::core::{Flush, MetricValue};
 
 use std::rc::Rc;
+use crate::core::attributes::MetricId;
 
 /// Define metrics, write values and flush them.
 pub trait OutputScope: Flush {
@@ -15,13 +16,15 @@ pub trait OutputScope: Flush {
 /// Output metrics are not thread safe.
 #[derive(Clone)]
 pub struct OutputMetric {
+    identifier: MetricId,
     inner: Rc<dyn Fn(MetricValue, Labels)>,
 }
 
 impl OutputMetric {
     /// Utility constructor
-    pub fn new<F: Fn(MetricValue, Labels) + 'static>(metric: F) -> OutputMetric {
+    pub fn new<F: Fn(MetricValue, Labels) + 'static>(        identifier: MetricId, metric: F) -> OutputMetric {
         OutputMetric {
+            identifier,
             inner: Rc::new(metric),
         }
     }

@@ -8,12 +8,12 @@ use std::time::Duration;
 use dipstick::*;
 
 fn main() {
-    let input = Stream::to_stdout().buffered(Buffering::Unlimited);
+    let stdout = Stream::to_stdout().buffered(Buffering::Unlimited);
 
     loop {
         println!("\n------- open scope");
 
-        let metrics = input.metrics();
+        let metrics = stdout.locking();
 
         metrics.marker("marker_a").mark();
 

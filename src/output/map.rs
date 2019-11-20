@@ -70,7 +70,7 @@ impl OutputScope for StatsMapScope {
         let name = self.prefix_append(name);
         let write_to = self.inner.clone();
         let name: String = name.join(".");
-        OutputMetric::new(move |value, _labels| {
+        OutputMetric::new(MetricId::forge("map", name.clone().into()), move |value, _labels| {
             let _previous = write_to.write().expect("Lock").insert(name.clone(), value);
         })
     }

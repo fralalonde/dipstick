@@ -2,10 +2,7 @@
 
 extern crate dipstick;
 
-use dipstick::{
-    AppLabel, Formatting, Input, InputKind, InputScope, LabelOp, LineFormat, LineOp, LineTemplate,
-    MetricName, Stream,
-};
+use dipstick::{AppLabel, Formatting, InputKind, InputScope, LabelOp, LineFormat, LineOp, LineTemplate, MetricName, Stream, Locking};
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -35,7 +32,7 @@ impl LineFormat for MyFormat {
 fn main() {
     let counter = Stream::to_stderr()
         .formatting(MyFormat)
-        .metrics()
+        .locking()
         .counter("counter_a");
     AppLabel::set("abc", "xyz");
     loop {

@@ -17,6 +17,7 @@ use parking_lot::RwLock;
 
 use log;
 use std::io::Write;
+use crate::{Output, OutputScope, OutputMetric};
 
 /// Buffered metrics log output.
 #[derive(Clone)]
@@ -31,6 +32,18 @@ impl Input for Log {
     type SCOPE = LogScope;
 
     fn metrics(&self) -> Self::SCOPE {
+        LogScope {
+            attributes: self.attributes.clone(),
+            entries: Arc::new(RwLock::new(Vec::new())),
+            log: self.clone(),
+        }
+    }
+}
+
+impl Output for Log {
+    type SCOPE = LogScope;
+
+    fn new_scope(&self) -> Self::SCOPE {
         LogScope {
             attributes: self.attributes.clone(),
             entries: Arc::new(RwLock::new(Vec::new())),
@@ -108,6 +121,45 @@ impl Buffered for LogScope {}
 
 impl queue_in::QueuedInput for Log {}
 impl cache_in::CachedInput for Log {}
+
+impl OutputScope for LogScope {
+    fn new_metric(&self, name: MetricName, kind: InputKind) -> OutputMetric {
+        let name = self.prefix_append(name);
+        let template = self.log.format.template(&name, kind);
+        let entries = self.entries.clone();
+
+        if self.is_buffered() {
+            // buffered
+            OutputMetric::new(MetricId::forge("log", name), move |value, labels| {
+                let mut buffer = Vec::with_capacity(32);
+                match template.print(&mut buffer, value, |key| labels.lookup(key)) {
+                    Ok(()) => {
+                        let mut entries = write_lock!(entries);
+                        entries.push(buffer)
+                    }
+                    Err(err) => debug!("Could not format buffered log metric: {}", err),
+                }
+            })
+        } else {
+            // unbuffered
+            let level = self.log.level;
+            let target = self.log.target.clone();
+            OutputMetric::new(MetricId::forge("log", name), move |value, labels| {
+                let mut buffer = Vec::with_capacity(32);
+                match template.print(&mut buffer, value, |key| labels.lookup(key)) {
+                    Ok(()) => {
+                        if let Some(target) = &target {
+                            log!(target: target, level, "{:?}", &buffer)
+                        } else {
+                            log!(level, "{:?}", &buffer)
+                        }
+                    }
+                    Err(err) => debug!("Could not format buffered log metric: {}", err),
+                }
+            })
+        }
+    }
+}
 
 impl InputScope for LogScope {
     fn new_metric(&self, name: MetricName, kind: InputKind) -> InputMetric {

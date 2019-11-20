@@ -4,20 +4,46 @@
 
 use crate::core::attributes::{Attributes, MetricId, OnFlush, Prefixed, WithAttributes};
 use crate::core::error;
-use crate::core::input::{Input, InputKind, InputMetric, InputScope};
+use crate::core::input::{InputKind, InputMetric, InputScope};
 use crate::core::name::MetricName;
-use crate::core::output::{Output, OutputScope};
+use crate::core::output::{OutputScope};
 use crate::core::Flush;
 use std::rc::Rc;
 
 use std::ops;
 use std::sync::{Arc, Mutex};
 
+/// Allow turning this single-thread output into a threadsafe Input.
+/// Mutex locking will be used to serialize access to the output.
+/// This used to automatically implemented for all Output implementers,
+/// which made impossible have the opposite (a Threadsafe Input implementing Output - e.g. Log)
+pub trait Locking  {
+
+    /// Wrap single threaded output with autolocking, turning it into a threadsafe metric Input
+    #[deprecated(since = "0.8.0", note = "Use locking()")]
+    fn metrics(&self) -> LockingOutput{
+        self.locking()
+    }
+
+    /// Wrap single threaded output with autolocking, turning it into a threadsafe metric Input
+    fn locking(&self) -> LockingOutput;
+}
+
 /// Synchronous thread-safety for metric output using basic locking.
 #[derive(Clone)]
 pub struct LockingOutput {
     attributes: Attributes,
     inner: Arc<Mutex<LockedOutputScope>>,
+}
+
+impl LockingOutput {
+    /// Wrap a single-threaded OutputScope into a mutex-locking InputScope
+    pub fn new(attributes: &Attributes, scope: Rc<dyn OutputScope>) -> Self {
+        LockingOutput {
+            attributes: attributes.clone(),
+            inner: Arc::new(Mutex::new(LockedOutputScope(scope)))
+        }
+    }
 }
 
 impl WithAttributes for LockingOutput {
@@ -51,17 +77,6 @@ impl Flush for LockingOutput {
     fn flush(&self) -> error::Result<()> {
         self.notify_flush_listeners();
         self.inner.lock().expect("LockingOutput").flush()
-    }
-}
-
-impl<T: Output + Send + Sync + 'static> Input for T {
-    type SCOPE = LockingOutput;
-
-    fn metrics(&self) -> Self::SCOPE {
-        LockingOutput {
-            attributes: Attributes::default(),
-            inner: Arc::new(Mutex::new(LockedOutputScope(self.output_dyn()))),
-        }
     }
 }
 

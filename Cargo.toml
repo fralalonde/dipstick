@@ -1,6 +1,6 @@
 [package]
 name = "dipstick"
-version = "0.7.11"
+version = "0.8.0"
 authors = ["Francis Lalonde <fralalonde@gmail.com>"]
 
 description = """A fast, all-purpose metrics library decoupling instrumentation from reporting backends.

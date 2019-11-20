@@ -1,6 +1,6 @@
 //! Dispatch metrics to multiple sinks.
 
-use crate::core::attributes::{Attributes, OnFlush, Prefixed, WithAttributes};
+use crate::core::attributes::{Attributes, OnFlush, Prefixed, WithAttributes, MetricId};
 use crate::core::error;
 use crate::core::input::InputKind;
 use crate::core::name::MetricName;
@@ -9,6 +9,7 @@ use crate::core::Flush;
 
 use std::rc::Rc;
 use std::sync::Arc;
+use crate::{Locking, LockingOutput};
 
 /// Opens multiple scopes at a time from just as many outputs.
 #[derive(Clone, Default)]
@@ -51,6 +52,12 @@ impl MultiOutput {
     }
 }
 
+impl Locking for MultiOutput {
+    fn locking(&self) -> LockingOutput {
+        LockingOutput::new(self.get_attributes(), Rc::new(self.new_scope()))
+    }
+}
+
 impl WithAttributes for MultiOutput {
     fn get_attributes(&self) -> &Attributes {
         &self.attributes
@@ -86,13 +93,13 @@ impl MultiOutputScope {
 
 impl OutputScope for MultiOutputScope {
     fn new_metric(&self, name: MetricName, kind: InputKind) -> OutputMetric {
-        let name = self.prefix_append(name);
+        let mname = self.prefix_append(name.clone());
         let metrics: Vec<OutputMetric> = self
             .scopes
             .iter()
-            .map(move |scope| scope.new_metric(name.clone(), kind))
+            .map(move |scope| scope.new_metric(mname.clone(), kind))
             .collect();
-        OutputMetric::new(move |value, labels| {
+        OutputMetric::new(MetricId::forge("multi", name), move |value, labels| {
             for metric in &metrics {
                 metric.write(value, labels.clone())
             }

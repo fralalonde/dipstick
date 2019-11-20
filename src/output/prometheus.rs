@@ -1,7 +1,7 @@
 //! Send metrics to a Prometheus server.
 
 use crate::cache::cache_out;
-use crate::core::attributes::{Attributes, Buffered, OnFlush, Prefixed, WithAttributes};
+use crate::core::attributes::{Attributes, Buffered, OnFlush, Prefixed, WithAttributes, MetricId};
 use crate::core::error;
 use crate::core::input::InputKind;
 use crate::core::label::Labels;
@@ -13,6 +13,7 @@ use crate::queue::queue_out;
 
 use std::cell::{RefCell, RefMut};
 use std::rc::Rc;
+use crate::{Locking, LockingOutput};
 
 /// Prometheus output holds a socket to a Prometheus server.
 /// The socket is shared between scopes opened from the output.
@@ -49,6 +50,12 @@ impl Prometheus {
     }
 }
 
+impl Locking for Prometheus {
+    fn locking(&self) -> LockingOutput {
+        LockingOutput::new(self.get_attributes(), Rc::new(self.new_scope()))
+    }
+}
+
 impl WithAttributes for Prometheus {
     fn get_attributes(&self) -> &Attributes {
         &self.attributes
@@ -71,7 +78,7 @@ pub struct PrometheusScope {
 impl OutputScope for PrometheusScope {
     /// Define a metric of the specified type.
     fn new_metric(&self, name: MetricName, kind: InputKind) -> OutputMetric {
-        let prefix = self.prefix_prepend(name).join("_");
+        let prefix = self.prefix_prepend(name.clone()).join("_");
 
         let scale = match kind {
             // timers are in µs, but we give Prometheus milliseconds
@@ -82,7 +89,7 @@ impl OutputScope for PrometheusScope {
         let cloned = self.clone();
         let metric = PrometheusMetric { prefix, scale };
 
-        OutputMetric::new(move |value, labels| {
+        OutputMetric::new(MetricId::forge("prometheus", name), move |value, labels| {
             cloned.print(&metric, value, labels);
         })
     }

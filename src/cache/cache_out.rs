@@ -17,6 +17,7 @@ use std::sync::RwLock;
 use parking_lot::RwLock;
 
 use std::rc::Rc;
+use crate::{Locking, LockingOutput};
 
 /// Wrap an output with a metric definition cache.
 /// This can provide performance benefits for metrics that are dynamically defined at runtime on each access.
@@ -48,6 +49,12 @@ impl OutputCache {
             target: Arc::new(target),
             cache: Arc::new(RwLock::new(lru::LRUCache::with_capacity(max_size))),
         }
+    }
+}
+
+impl Locking for OutputCache {
+    fn locking(&self) -> LockingOutput {
+        LockingOutput::new(self.get_attributes(), Rc::new(self.new_scope()))
     }
 }
 

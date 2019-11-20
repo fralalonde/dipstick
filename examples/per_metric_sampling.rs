@@ -12,16 +12,16 @@ fn main() {
     // Sampling::Full is the default
     // .sampled(Sampling::Full);
 
-    let unsampled_marker = statsd.metrics().marker("marker_a");
+    let unsampled_marker = statsd.locking().marker("marker_a");
 
     let low_freq_marker = statsd
         .sampled(Sampling::Random(0.1))
-        .metrics()
+        .locking()
         .marker("low_freq_marker");
 
     let hi_freq_marker = statsd
         .sampled(Sampling::Random(0.001))
-        .metrics()
+        .locking()
         .marker("hi_freq_marker");
 
     loop {

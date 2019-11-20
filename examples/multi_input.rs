@@ -2,20 +2,20 @@
 
 extern crate dipstick;
 
-use dipstick::{Graphite, Input, InputScope, MultiInput, Prefixed, Stream};
+use dipstick::{Graphite, Input, InputScope, MultiInput, Prefixed, Stream, Locking, Log, QueuedOutput};
 use std::time::Duration;
 
 fn main() {
     // will output metrics to graphite and to stdout
     let different_type_metrics = MultiInput::new()
-        .add_target(Graphite::send_to("localhost:2003").expect("Connecting"))
-        .add_target(Stream::to_stdout())
+        .add_target(Graphite::send_to("localhost:2003").expect("Connecting").locking())
+        .add_target(Log::to_log())
         .metrics();
 
     // will output metrics twice, once with "both.yeah" prefix and once with "both.ouch" prefix.
     let same_type_metrics = MultiInput::new()
-        .add_target(Stream::to_stderr().named("yeah"))
-        .add_target(Stream::to_stderr().named("ouch"))
+        .add_target(Stream::to_stderr().named("yeah").queued(5))
+        .add_target(Stream::to_stderr().named("ouch").queued(5))
         .named("both")
         .metrics();
 
