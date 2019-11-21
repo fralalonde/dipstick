@@ -28,7 +28,7 @@ use std::sync::RwLock;
 #[cfg(feature = "parking_lot")]
 use parking_lot::RwLock;
 use crate::core::locking::Locking;
-use crate::LockingOutput;
+use crate::OutputSerializer;
 
 /// Graphite output holds a socket to a graphite server.
 /// The socket is shared between scopes opened from the output.
@@ -75,8 +75,8 @@ impl WithAttributes for Graphite {
 impl Buffered for Graphite {}
 
 impl Locking for Graphite {
-    fn locking(&self) -> LockingOutput {
-        LockingOutput::new(self.get_attributes(), Rc::new(self.new_scope()))
+    fn locking(&self) -> OutputSerializer {
+        OutputSerializer::new(self.get_attributes(), Box::new(self.clone()))
     }
 }
 

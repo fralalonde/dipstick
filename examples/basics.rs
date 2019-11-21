@@ -10,7 +10,7 @@ use std::time::Duration;
 
 fn main() {
     // for this demo, print metric values to the console
-    let app_metrics = Stream::write_to(io::stdout()).locking();
+    let app_metrics = Stream::write_to(io::stdout()).locking().metrics();
 
     // metrics can be predefined by type and name
     let counter = app_metrics.counter("counter_a");

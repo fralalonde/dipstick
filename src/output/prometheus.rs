@@ -13,7 +13,7 @@ use crate::queue::queue_out;
 
 use std::cell::{RefCell, RefMut};
 use std::rc::Rc;
-use crate::{Locking, LockingOutput};
+use crate::{Locking, OutputSerializer};
 
 /// Prometheus output holds a socket to a Prometheus server.
 /// The socket is shared between scopes opened from the output.
@@ -51,8 +51,8 @@ impl Prometheus {
 }
 
 impl Locking for Prometheus {
-    fn locking(&self) -> LockingOutput {
-        LockingOutput::new(self.get_attributes(), Rc::new(self.new_scope()))
+    fn locking(&self) -> OutputSerializer {
+        OutputSerializer::new(self.get_attributes(), Box::new(self.clone()))
     }
 }
 

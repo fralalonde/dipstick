@@ -26,7 +26,7 @@ use std::sync::RwLock;
 
 #[cfg(feature = "parking_lot")]
 use parking_lot::RwLock;
-use crate::{Locking, LockingOutput};
+use crate::{Locking, OutputSerializer};
 
 /// Buffered metrics text output.
 pub struct Stream<W: Write + Send + Sync + 'static> {
@@ -39,8 +39,8 @@ impl<W: Write + Send + Sync + 'static> queue_out::QueuedOutput for Stream<W> {}
 impl<W: Write + Send + Sync + 'static> cache_out::CachedOutput for Stream<W> {}
 
 impl<W: Write + Send + Sync + 'static> Locking for Stream<W> {
-    fn locking(&self) -> LockingOutput {
-        LockingOutput::new(self.get_attributes(), Rc::new(self.new_scope()))
+    fn locking(&self) -> OutputSerializer {
+        OutputSerializer::new(self.get_attributes(), Box::new(self.clone()))
     }
 }
 

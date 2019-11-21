@@ -41,9 +41,9 @@ impl MultiInput {
     }
 
     /// Returns a clone of the dispatch with the new target added to the list.
-    pub fn add_target<OUT: Input + Send + Sync + 'static>(&self, out: OUT) -> Self {
+    pub fn add_target<IN: Input + Send + Sync + 'static>(&self, input: IN) -> Self {
         let mut cloned = self.clone();
-        cloned.inputs.push(Arc::new(out));
+        cloned.inputs.push(Arc::new(input));
         cloned
     }
 }

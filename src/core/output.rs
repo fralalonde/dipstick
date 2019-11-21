@@ -53,7 +53,7 @@ pub trait Output: Send + Sync + 'static + OutputDyn {
 }
 
 /// A function trait that opens a new metric capture scope.
-pub trait OutputDyn {
+pub trait OutputDyn: Send + Sync {
     /// Open a new scope from this output.
     fn output_dyn(&self) -> Rc<dyn OutputScope + 'static>;
 }

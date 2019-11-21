@@ -32,7 +32,7 @@ impl LineFormat for MyFormat {
 fn main() {
     let counter = Stream::to_stderr()
         .formatting(MyFormat)
-        .locking()
+        .metrics()
         .counter("counter_a");
     AppLabel::set("abc", "xyz");
     loop {

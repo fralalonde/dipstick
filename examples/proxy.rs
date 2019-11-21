@@ -2,7 +2,7 @@
 
 extern crate dipstick;
 
-use dipstick::{InputScope, Prefixed, Proxy, Stream, Locking};
+use dipstick::{InputScope, Prefixed, Proxy, Stream, Locking, Input};
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -15,7 +15,7 @@ fn main() {
     let count2 = sub.counter("counter_b");
 
     loop {
-        let stdout = Stream::to_stdout().locking();
+        let stdout = Stream::to_stdout().locking().metrics();
         root_proxy.target(stdout.clone());
         count1.count(1);
         count2.count(2);

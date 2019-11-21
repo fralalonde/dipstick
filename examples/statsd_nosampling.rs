@@ -10,7 +10,8 @@ fn main() {
         .expect("Connected")
         //            .with_sampling(Sampling::Random(0.2))
         .named("my_app")
-        .locking();
+        .locking()
+        .metrics();
 
     let counter = metrics.counter("counter_a");
 

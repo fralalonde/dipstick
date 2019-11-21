@@ -13,7 +13,7 @@ use std::net::ToSocketAddrs;
 use std::net::UdpSocket;
 use std::rc::Rc;
 use std::sync::{Arc};
-use crate::{LockingOutput, Locking, QueuedOutput, Flush, MetricValue, CachedOutput};
+use crate::{OutputSerializer, Locking, QueuedOutput, Flush, MetricValue, CachedOutput};
 
 /// Use a safe maximum size for UDP to prevent fragmentation.
 // TODO make configurable?
@@ -215,8 +215,8 @@ impl Drop for StatsdScope {
 }
 
 impl Locking for Statsd {
-    fn locking(&self) -> LockingOutput {
-        LockingOutput::new(self.get_attributes(), Rc::new(self.new_scope()))
+    fn locking(&self) -> OutputSerializer {
+        OutputSerializer::new(self.get_attributes(), Box::new(self.clone()))
     }
 }
 

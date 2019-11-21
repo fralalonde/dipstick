@@ -9,7 +9,7 @@ use crate::core::Flush;
 
 use std::rc::Rc;
 use std::sync::Arc;
-use crate::{Locking, LockingOutput};
+use crate::{Locking, OutputSerializer};
 
 /// Opens multiple scopes at a time from just as many outputs.
 #[derive(Clone, Default)]
@@ -45,16 +45,16 @@ impl MultiOutput {
 
     /// Add a target to the dispatch list.
     /// Returns a clone of the original object.
-    pub fn add_target<OUT: Output + Send + Sync + 'static>(&self, out: OUT) -> Self {
+    pub fn add_target<OUT: Output + Send + Sync + 'static>(&self, output: OUT) -> Self {
         let mut cloned = self.clone();
-        cloned.outputs.push(Arc::new(out));
+        cloned.outputs.push(Arc::new(output));
         cloned
     }
 }
 
 impl Locking for MultiOutput {
-    fn locking(&self) -> LockingOutput {
-        LockingOutput::new(self.get_attributes(), Rc::new(self.new_scope()))
+    fn locking(&self) -> OutputSerializer {
+        OutputSerializer::new(self.get_attributes(), Box::new(self.clone()))
     }
 }
 

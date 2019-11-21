@@ -17,7 +17,7 @@ use std::sync::RwLock;
 use parking_lot::RwLock;
 
 use std::rc::Rc;
-use crate::{Locking, LockingOutput};
+use crate::{Locking, OutputSerializer};
 
 /// Wrap an output with a metric definition cache.
 /// This can provide performance benefits for metrics that are dynamically defined at runtime on each access.
@@ -53,8 +53,8 @@ impl OutputCache {
 }
 
 impl Locking for OutputCache {
-    fn locking(&self) -> LockingOutput {
-        LockingOutput::new(self.get_attributes(), Rc::new(self.new_scope()))
+    fn locking(&self) -> OutputSerializer {
+        OutputSerializer::new(self.get_attributes(), Box::new(self.clone()))
     }
 }
 

@@ -13,7 +13,7 @@ fn main() {
     loop {
         println!("\n------- open scope");
 
-        let metrics = stdout.locking();
+        let metrics = stdout.locking().metrics();
 
         metrics.marker("marker_a").mark();
 

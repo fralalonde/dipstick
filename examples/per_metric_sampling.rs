@@ -8,20 +8,19 @@ use std::time::Duration;
 fn main() {
     let statsd = Statsd::send_to("localhost:8125")
         .expect("Connected")
-        .named("my_app");
+        .named("my_app")
+        .metrics();
     // Sampling::Full is the default
     // .sampled(Sampling::Full);
 
-    let unsampled_marker = statsd.locking().marker("marker_a");
+    let unsampled_marker = statsd.marker("marker_a");
 
     let low_freq_marker = statsd
         .sampled(Sampling::Random(0.1))
-        .locking()
         .marker("low_freq_marker");
 
     let hi_freq_marker = statsd
         .sampled(Sampling::Random(0.001))
-        .locking()
         .marker("hi_freq_marker");
 
     loop {

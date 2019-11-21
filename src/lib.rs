@@ -61,7 +61,7 @@ pub use crate::core::input::{
     Counter, Gauge, Input, InputDyn, InputKind, InputMetric, InputScope, Level, Marker, Timer,
 };
 pub use crate::core::label::{AppLabel, Labels, ThreadLabel};
-pub use crate::core::locking::LockingOutput;
+pub use crate::core::locking::OutputSerializer;
 pub use crate::core::name::{MetricName, NameParts};
 pub use crate::core::output::{Output, OutputDyn, OutputMetric, OutputScope};
 pub use crate::core::scheduler::{Cancel, CancelGuard, CancelHandle, ScheduleFlush};
