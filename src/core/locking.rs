@@ -2,7 +2,7 @@
 //! This makes all outputs also immediately usable as inputs.
 //! The alternatives are queuing or thread local.
 
-use crate::core::attributes::{Attributes, MetricId, OnFlush, Prefixed, WithAttributes};
+use crate::core::attributes::{Attributes, MetricId, Prefixed, WithAttributes};
 use crate::core::error;
 use crate::core::input::{InputKind, InputMetric, InputScope};
 use crate::core::name::MetricName;
@@ -12,8 +12,7 @@ use std::rc::Rc;
 
 use std::ops;
 use std::sync::{Arc, Mutex};
-use crate::{Output, Input, OutputDyn};
-use std::error::Error;
+use crate::{Input, OutputDyn};
 
 /// Allow turning this single-thread output into a threadsafe Input.
 /// Mutex locking will be used to serialize access to the output.
