@@ -37,7 +37,7 @@ struct ProxyMetric {
     // the metric trait object to proxy metric values to
     // the second part can be up to namespace.len() + 1 if this metric was individually targeted
     // 0 if no target assigned
-    target: (AtomicRefCell<(InputMetric, usize)>),
+    target: AtomicRefCell<(InputMetric, usize)>,
 
     // a reference to the the parent proxy to remove the metric from when it is dropped
     proxy: Arc<RwLock<InnerProxy>>,

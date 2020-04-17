@@ -17,16 +17,14 @@ use std::fmt::Debug;
 use std::io::Write;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use std::cell::{RefCell, RefMut};
-use std::rc::Rc;
-
 use std::sync::Arc;
 
 #[cfg(not(feature = "parking_lot"))]
-use std::sync::RwLock;
+use std::sync::{RwLock, RwLockWriteGuard};
 
 #[cfg(feature = "parking_lot")]
-use parking_lot::RwLock;
+use parking_lot::{RwLock, RwLockWriteGuard};
+
 
 /// Graphite output holds a socket to a graphite server.
 /// The socket is shared between scopes opened from the output.
@@ -42,7 +40,7 @@ impl Output for Graphite {
     fn new_scope(&self) -> Self::SCOPE {
         GraphiteScope {
             attributes: self.attributes.clone(),
-            buffer: Rc::new(RefCell::new(String::new())),
+            buffer: Arc::new(RwLock::new(String::new())),
             socket: self.socket.clone(),
         }
     }
@@ -76,7 +74,7 @@ impl Buffered for Graphite {}
 #[derive(Debug, Clone)]
 pub struct GraphiteScope {
     attributes: Attributes,
-    buffer: Rc<RefCell<String>>,
+    buffer: Arc<RwLock<String>>,
     socket: Arc<RwLock<RetrySocket>>,
 }
 
@@ -104,7 +102,7 @@ impl OutputScope for GraphiteScope {
 impl Flush for GraphiteScope {
     fn flush(&self) -> error::Result<()> {
         self.notify_flush_listeners();
-        let buf = self.buffer.borrow_mut();
+        let buf = self.buffer.write();
         self.flush_inner(buf)
     }
 }
@@ -116,7 +114,7 @@ impl GraphiteScope {
 
         let start = SystemTime::now();
 
-        let mut buffer = self.buffer.borrow_mut();
+        let mut buffer = write_lock!(self.buffer);
         match start.duration_since(UNIX_EPOCH) {
             Ok(timestamp) => {
                 buffer.push_str(&metric.prefix);
@@ -129,7 +127,7 @@ impl GraphiteScope {
                     metrics::GRAPHITE_OVERFLOW.mark();
                     warn!("Graphite Buffer Size Exceeded: {}", BUFFER_FLUSH_THRESHOLD);
                     let _ = self.flush_inner(buffer);
-                    buffer = self.buffer.borrow_mut();
+                    buffer = write_lock!(self.buffer);
                 }
             }
             Err(e) => {
@@ -144,7 +142,7 @@ impl GraphiteScope {
         }
     }
 
-    fn flush_inner(&self, mut buf: RefMut<String>) -> error::Result<()> {
+    fn flush_inner(&self, mut buf: RwLockWriteGuard<String>) -> error::Result<()> {
         if buf.is_empty() {
             return Ok(());
         }

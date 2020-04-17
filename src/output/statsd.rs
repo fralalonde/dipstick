@@ -13,11 +13,16 @@ use crate::core::pcg32;
 use crate::core::{Flush, MetricValue};
 use crate::queue::queue_out;
 
-use std::cell::{RefCell, RefMut};
 use std::net::ToSocketAddrs;
 use std::net::UdpSocket;
-use std::rc::Rc;
 use std::sync::Arc;
+
+#[cfg(not(feature = "parking_lot"))]
+use std::sync::{RwLock, RwLockWriteGuard};
+
+#[cfg(feature = "parking_lot")]
+use parking_lot::{RwLock, RwLockWriteGuard};
+
 
 /// Use a safe maximum size for UDP to prevent fragmentation.
 // TODO make configurable?
@@ -57,7 +62,7 @@ impl Output for Statsd {
     fn new_scope(&self) -> Self::SCOPE {
         StatsdScope {
             attributes: self.attributes.clone(),
-            buffer: Rc::new(RefCell::new(String::with_capacity(MAX_UDP_PAYLOAD))),
+            buffer: Arc::new(RwLock::new(String::with_capacity(MAX_UDP_PAYLOAD))),
             socket: self.socket.clone(),
         }
     }
@@ -76,7 +81,7 @@ impl WithAttributes for Statsd {
 #[derive(Debug, Clone)]
 pub struct StatsdScope {
     attributes: Attributes,
-    buffer: Rc<RefCell<String>>,
+    buffer: Arc<RwLock<String>>,
     socket: Arc<UdpSocket>,
 }
 
@@ -133,7 +138,7 @@ impl OutputScope for StatsdScope {
 impl Flush for StatsdScope {
     fn flush(&self) -> error::Result<()> {
         self.notify_flush_listeners();
-        let buf = self.buffer.borrow_mut();
+        let buf = write_lock!(self.buffer);
         self.flush_inner(buf)
     }
 }
@@ -144,7 +149,7 @@ impl StatsdScope {
         let value_str = scaled_value.to_string();
         let entry_len = metric.prefix.len() + value_str.len() + metric.suffix.len();
 
-        let mut buffer = self.buffer.borrow_mut();
+        let mut buffer = write_lock!(self.buffer);
         if entry_len > buffer.capacity() {
             // TODO report entry too big to fit in buffer (!?)
             return;
@@ -154,7 +159,7 @@ impl StatsdScope {
         if entry_len + 1 > remaining {
             // buffer is nearly full, make room
             let _ = self.flush_inner(buffer);
-            buffer = self.buffer.borrow_mut();
+            buffer = write_lock!(self.buffer);
         } else {
             if !buffer.is_empty() {
                 // separate from previous entry
@@ -172,7 +177,7 @@ impl StatsdScope {
         }
     }
 
-    fn flush_inner(&self, mut buffer: RefMut<String>) -> error::Result<()> {
+    fn flush_inner(&self, mut buffer: RwLockWriteGuard<String>) -> error::Result<()> {
         if !buffer.is_empty() {
             match self.socket.send(buffer.as_bytes()) {
                 Ok(size) => {
