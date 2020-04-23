@@ -102,7 +102,7 @@ impl OutputScope for GraphiteScope {
 impl Flush for GraphiteScope {
     fn flush(&self) -> error::Result<()> {
         self.notify_flush_listeners();
-        let buf = self.buffer.write();
+        let buf = write_lock!(self.buffer);
         self.flush_inner(buf)
     }
 }
