@@ -1,8 +1,8 @@
-pub mod atomic;
+//! Definitions of standard aggregated statistic types and functions
 
-use crate::core::input::InputKind;
-use crate::core::name::MetricName;
-use crate::core::MetricValue;
+use crate::input::InputKind;
+use crate::name::MetricName;
+use crate::MetricValue;
 
 /// Possibly aggregated scores.
 #[derive(Debug, Clone, Copy)]

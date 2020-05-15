@@ -42,7 +42,7 @@ fn main() {
     }
 
     // send application metrics to aggregator
-    AtomicBucket::default_drain(Stream::to_stderr());
+    AtomicBucket::default_drain(Stream::write_to_stderr());
     AtomicBucket::default_stats(custom_statistics);
 
     let app_metrics = AtomicBucket::new();

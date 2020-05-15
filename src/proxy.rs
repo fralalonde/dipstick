@@ -1,11 +1,11 @@
 //! Decouple metric definition from configuration with trait objects.
 
-use crate::core::attributes::{Attributes, MetricId, OnFlush, Prefixed, WithAttributes};
-use crate::core::error;
-use crate::core::input::{InputKind, InputMetric, InputScope};
-use crate::core::name::{MetricName, NameParts};
-use crate::core::void::VOID_INPUT;
-use crate::core::Flush;
+use crate::attributes::{Attributes, MetricId, OnFlush, Prefixed, WithAttributes};
+use crate::error;
+use crate::input::{InputKind, InputMetric, InputScope};
+use crate::name::{MetricName, NameParts};
+use crate::void::VOID_INPUT;
+use crate::Flush;
 
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
@@ -284,7 +284,7 @@ impl WithAttributes for Proxy {
 mod bench {
 
     use super::*;
-    use crate::bucket::atomic::AtomicBucket;
+    use crate::AtomicBucket;
 
     #[bench]
     fn proxy_marker_to_aggregate(b: &mut test::Bencher) {
@@ -298,5 +298,4 @@ mod bench {
         let metric = ROOT_PROXY.marker("event_a");
         b.iter(|| test::black_box(metric.mark()));
     }
-
 }

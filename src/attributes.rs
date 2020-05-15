@@ -4,8 +4,8 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use crate::core::name::{MetricName, NameParts};
-use crate::core::scheduler::{Cancel, SCHEDULER};
+use crate::name::{MetricName, NameParts};
+use crate::scheduler::{Cancel, SCHEDULER};
 use crate::{CancelHandle, Flush, InputMetric, InputScope, MetricValue};
 use std::fmt;
 use std::time::{Duration, Instant};
@@ -340,11 +340,11 @@ pub trait Buffered: WithAttributes {
 
 #[cfg(test)]
 mod test {
-    use crate::core::attributes::*;
-    use crate::core::input::Input;
-    use crate::core::input::*;
-    use crate::core::Flush;
+    use crate::attributes::*;
+    use crate::input::Input;
+    use crate::input::*;
     use crate::output::map::StatsMap;
+    use crate::Flush;
     use crate::StatsMapScope;
 
     #[test]

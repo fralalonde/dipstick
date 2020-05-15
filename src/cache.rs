@@ -1,12 +1,11 @@
-//! Metric output scope caching.
+//! Metric input scope caching.
 
-use crate::cache::lru_cache as lru;
-use crate::core::attributes::{Attributes, OnFlush, Prefixed, WithAttributes};
-use crate::core::error;
-use crate::core::input::InputKind;
-use crate::core::name::MetricName;
-use crate::core::output::{Output, OutputDyn, OutputMetric, OutputScope};
-use crate::core::Flush;
+use crate::attributes::{Attributes, OnFlush, Prefixed, WithAttributes};
+use crate::error;
+use crate::input::{Input, InputDyn, InputKind, InputMetric, InputScope};
+use crate::lru_cache as lru;
+use crate::name::MetricName;
+use crate::Flush;
 
 use std::sync::Arc;
 
@@ -16,34 +15,32 @@ use std::sync::RwLock;
 #[cfg(feature = "parking_lot")]
 use parking_lot::RwLock;
 
-use std::rc::Rc;
-
-/// Wrap an output with a metric definition cache.
+/// Wrap an input with a metric definition cache.
 /// This can provide performance benefits for metrics that are dynamically defined at runtime on each access.
 /// Caching is useless if all metrics are statically declared
 /// or instantiated programmatically in advance and referenced by a long living variable.
-pub trait CachedOutput: Output + Send + Sync + 'static + Sized {
-    /// Wrap an output with a metric definition cache.
+pub trait CachedInput: Input + Send + Sync + 'static + Sized {
+    /// Wrap an input with a metric definition cache.
     /// This can provide performance benefits for metrics that are dynamically defined at runtime on each access.
     /// Caching is useless if all metrics are statically declared
     /// or instantiated programmatically in advance and referenced by a long living variable.
-    fn cached(self, max_size: usize) -> OutputCache {
-        OutputCache::wrap(self, max_size)
+    fn cached(self, max_size: usize) -> InputCache {
+        InputCache::wrap(self, max_size)
     }
 }
 
 /// Output wrapper caching frequently defined metrics
 #[derive(Clone)]
-pub struct OutputCache {
+pub struct InputCache {
     attributes: Attributes,
-    target: Arc<dyn OutputDyn + Send + Sync + 'static>,
-    cache: Arc<RwLock<lru::LRUCache<MetricName, OutputMetric>>>,
+    target: Arc<dyn InputDyn + Send + Sync + 'static>,
+    cache: Arc<RwLock<lru::LRUCache<MetricName, InputMetric>>>,
 }
 
-impl OutputCache {
+impl InputCache {
     /// Wrap scopes with an asynchronous metric write & flush dispatcher.
-    fn wrap<OUT: Output + Send + Sync + 'static>(target: OUT, max_size: usize) -> OutputCache {
-        OutputCache {
+    fn wrap<OUT: Input + Send + Sync + 'static>(target: OUT, max_size: usize) -> InputCache {
+        InputCache {
             attributes: Attributes::default(),
             target: Arc::new(target),
             cache: Arc::new(RwLock::new(lru::LRUCache::with_capacity(max_size))),
@@ -51,7 +48,7 @@ impl OutputCache {
     }
 }
 
-impl WithAttributes for OutputCache {
+impl WithAttributes for InputCache {
     fn get_attributes(&self) -> &Attributes {
         &self.attributes
     }
@@ -60,12 +57,12 @@ impl WithAttributes for OutputCache {
     }
 }
 
-impl Output for OutputCache {
-    type SCOPE = OutputScopeCache;
+impl Input for InputCache {
+    type SCOPE = InputScopeCache;
 
-    fn new_scope(&self) -> Self::SCOPE {
-        let target = self.target.output_dyn();
-        OutputScopeCache {
+    fn metrics(&self) -> Self::SCOPE {
+        let target = self.target.input_dyn();
+        InputScopeCache {
             attributes: self.attributes.clone(),
             target,
             cache: self.cache.clone(),
@@ -73,15 +70,15 @@ impl Output for OutputCache {
     }
 }
 
-/// Output wrapper caching frequently defined metrics
+/// Input wrapper caching frequently defined metrics
 #[derive(Clone)]
-pub struct OutputScopeCache {
+pub struct InputScopeCache {
     attributes: Attributes,
-    target: Rc<dyn OutputScope + 'static>,
-    cache: Arc<RwLock<lru::LRUCache<MetricName, OutputMetric>>>,
+    target: Arc<dyn InputScope + Send + Sync + 'static>,
+    cache: Arc<RwLock<lru::LRUCache<MetricName, InputMetric>>>,
 }
 
-impl WithAttributes for OutputScopeCache {
+impl WithAttributes for InputScopeCache {
     fn get_attributes(&self) -> &Attributes {
         &self.attributes
     }
@@ -90,8 +87,8 @@ impl WithAttributes for OutputScopeCache {
     }
 }
 
-impl OutputScope for OutputScopeCache {
-    fn new_metric(&self, name: MetricName, kind: InputKind) -> OutputMetric {
+impl InputScope for InputScopeCache {
+    fn new_metric(&self, name: MetricName, kind: InputKind) -> InputMetric {
         let name = self.prefix_append(name);
         let lookup = { write_lock!(self.cache).get(&name).cloned() };
         lookup.unwrap_or_else(|| {
@@ -103,7 +100,7 @@ impl OutputScope for OutputScopeCache {
     }
 }
 
-impl Flush for OutputScopeCache {
+impl Flush for InputScopeCache {
     fn flush(&self) -> error::Result<()> {
         self.notify_flush_listeners();
         self.target.flush()

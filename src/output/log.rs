@@ -1,11 +1,9 @@
-use crate::cache::cache_in;
-use crate::core::attributes::{Attributes, Buffered, MetricId, OnFlush, Prefixed, WithAttributes};
-use crate::core::error;
-use crate::core::input::{Input, InputKind, InputMetric, InputScope};
-use crate::core::name::MetricName;
-use crate::core::Flush;
+use crate::attributes::{Attributes, Buffered, MetricId, OnFlush, Prefixed, WithAttributes};
+use crate::input::{Input, InputKind, InputMetric, InputScope};
+use crate::name::MetricName;
 use crate::output::format::{Formatting, LineFormat, SimpleFormat};
-use crate::queue::queue_in;
+use crate::Flush;
+use crate::{error, CachedInput, QueuedInput};
 
 use std::sync::Arc;
 
@@ -15,7 +13,6 @@ use std::sync::RwLock;
 #[cfg(feature = "parking_lot")]
 use parking_lot::RwLock;
 
-use log;
 use std::io::Write;
 
 /// Buffered metrics log output.
@@ -106,8 +103,8 @@ impl WithAttributes for LogScope {
 
 impl Buffered for LogScope {}
 
-impl queue_in::QueuedInput for Log {}
-impl cache_in::CachedInput for Log {}
+impl QueuedInput for Log {}
+impl CachedInput for Log {}
 
 impl InputScope for LogScope {
     fn new_metric(&self, name: MetricName, kind: InputKind) -> InputMetric {
@@ -177,7 +174,7 @@ impl Drop for LogScope {
 
 #[cfg(test)]
 mod test {
-    use crate::core::input::*;
+    use crate::input::*;
 
     #[test]
     fn test_to_log() {
@@ -185,5 +182,4 @@ mod test {
         let m = c.new_metric("test".into(), InputKind::Marker);
         m.write(33, labels![]);
     }
-
 }

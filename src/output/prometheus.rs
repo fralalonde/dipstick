@@ -1,34 +1,38 @@
 //! Send metrics to a Prometheus server.
 
-use crate::cache::cache_out;
-use crate::core::attributes::{Attributes, Buffered, OnFlush, Prefixed, WithAttributes};
-use crate::core::error;
-use crate::core::input::InputKind;
-use crate::core::label::Labels;
-use crate::core::metrics;
-use crate::core::name::MetricName;
-use crate::core::output::{Output, OutputMetric, OutputScope};
-use crate::core::{Flush, MetricValue};
-use crate::queue::queue_out;
+use crate::attributes::{Attributes, Buffered, MetricId, OnFlush, Prefixed, WithAttributes};
+use crate::error;
+use crate::input::InputKind;
+use crate::input::{Input, InputMetric, InputScope};
+use crate::label::Labels;
+use crate::metrics;
+use crate::name::MetricName;
+use crate::{CachedInput, QueuedInput};
+use crate::{Flush, MetricValue};
 
-use std::cell::{RefCell, RefMut};
-use std::rc::Rc;
+use std::sync::Arc;
 
-/// Prometheus output holds a socket to a Prometheus server.
-/// The socket is shared between scopes opened from the output.
+#[cfg(not(feature = "parking_lot"))]
+use std::sync::{RwLock, RwLockWriteGuard};
+
+#[cfg(feature = "parking_lot")]
+use parking_lot::{RwLock, RwLockWriteGuard};
+
+/// Prometheus Input holds a socket to a Prometheus server.
+/// The socket is shared between scopes opened from the Input.
 #[derive(Clone, Debug)]
 pub struct Prometheus {
     attributes: Attributes,
     push_url: String,
 }
 
-impl Output for Prometheus {
+impl Input for Prometheus {
     type SCOPE = PrometheusScope;
 
-    fn new_scope(&self) -> Self::SCOPE {
+    fn metrics(&self) -> Self::SCOPE {
         PrometheusScope {
             attributes: self.attributes.clone(),
-            buffer: Rc::new(RefCell::new(String::new())),
+            buffer: Arc::new(RwLock::new(String::new())),
             push_url: self.push_url.clone(),
         }
     }
@@ -64,14 +68,14 @@ impl Buffered for Prometheus {}
 #[derive(Debug, Clone)]
 pub struct PrometheusScope {
     attributes: Attributes,
-    buffer: Rc<RefCell<String>>,
+    buffer: Arc<RwLock<String>>,
     push_url: String,
 }
 
-impl OutputScope for PrometheusScope {
+impl InputScope for PrometheusScope {
     /// Define a metric of the specified type.
-    fn new_metric(&self, name: MetricName, kind: InputKind) -> OutputMetric {
-        let prefix = self.prefix_prepend(name).join("_");
+    fn new_metric(&self, name: MetricName, kind: InputKind) -> InputMetric {
+        let prefix = self.prefix_prepend(name.clone()).join("_");
 
         let scale = match kind {
             // timers are in µs, but we give Prometheus milliseconds
@@ -82,7 +86,9 @@ impl OutputScope for PrometheusScope {
         let cloned = self.clone();
         let metric = PrometheusMetric { prefix, scale };
 
-        OutputMetric::new(move |value, labels| {
+        let metric_id = MetricId::forge("prometheus", name);
+
+        InputMetric::new(metric_id, move |value, labels| {
             cloned.print(&metric, value, labels);
         })
     }
@@ -91,7 +97,7 @@ impl OutputScope for PrometheusScope {
 impl Flush for PrometheusScope {
     fn flush(&self) -> error::Result<()> {
         self.notify_flush_listeners();
-        let buf = self.buffer.borrow_mut();
+        let buf = write_lock!(self.buffer);
         self.flush_inner(buf)
     }
 }
@@ -128,7 +134,7 @@ impl PrometheusScope {
         strbuf.push_str(&value_str);
         strbuf.push('\n');
 
-        let mut buffer = self.buffer.borrow_mut();
+        let mut buffer = write_lock!(self.buffer);
         if strbuf.len() + buffer.len() > BUFFER_FLUSH_THRESHOLD {
             metrics::PROMETHEUS_OVERFLOW.mark();
             warn!(
@@ -136,7 +142,7 @@ impl PrometheusScope {
                 BUFFER_FLUSH_THRESHOLD
             );
             let _ = self.flush_inner(buffer);
-            buffer = self.buffer.borrow_mut();
+            buffer = write_lock!(self.buffer);
         }
 
         buffer.push_str(&strbuf);
@@ -148,7 +154,7 @@ impl PrometheusScope {
         }
     }
 
-    fn flush_inner(&self, mut buf: RefMut<String>) -> error::Result<()> {
+    fn flush_inner(&self, mut buf: RwLockWriteGuard<String>) -> error::Result<()> {
         if buf.is_empty() {
             return Ok(());
         }
@@ -187,8 +193,8 @@ impl WithAttributes for PrometheusScope {
 
 impl Buffered for PrometheusScope {}
 
-impl queue_out::QueuedOutput for Prometheus {}
-impl cache_out::CachedOutput for Prometheus {}
+impl QueuedInput for Prometheus {}
+impl CachedInput for Prometheus {}
 
 /// Its hard to see how a single scope could get more metrics than this.
 // TODO make configurable?

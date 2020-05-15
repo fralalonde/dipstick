@@ -1,6 +1,6 @@
 //! Task scheduling facilities.
 
-use crate::core::input::InputScope;
+use crate::input::InputScope;
 
 use std::cmp::{max, Ordering};
 use std::collections::BinaryHeap;
@@ -25,7 +25,9 @@ impl<C: Cancel> CancelGuard<C> {
     /// This disposes of the guard without performing the cancelation. This is similar to calling
     /// `forget` on it, but doesn't leak resources, while forget potentially could.
     pub fn disarm(mut self) -> C {
-        self.inner.take().expect("The borrowchecker shouldn't allow anyone to call disarm twice")
+        self.inner
+            .take()
+            .expect("The borrowchecker shouldn't allow anyone to call disarm twice")
     }
 }
 
@@ -47,9 +49,7 @@ pub trait Cancel {
     where
         Self: Sized,
     {
-        CancelGuard {
-            inner: Some(self)
-        }
+        CancelGuard { inner: Some(self) }
     }
 }
 

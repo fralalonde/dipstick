@@ -167,8 +167,8 @@ macro_rules! metrics {
 
 #[cfg(test)]
 mod test {
-    use crate::core::input::*;
-    use crate::core::proxy::Proxy;
+    use crate::input::*;
+    use crate::proxy::Proxy;
 
     metrics! {TEST: Proxy = "test_prefix" => {
         pub M1: Marker = "failed";

@@ -1,16 +1,17 @@
 //! Maintain aggregated metrics for deferred reporting,
 
-use crate::bucket::ScoreType::*;
-use crate::bucket::{stats_summary, ScoreType};
-use crate::core::attributes::{Attributes, MetricId, OnFlush, Prefixed, WithAttributes};
-use crate::core::clock::TimeHandle;
-use crate::core::error;
-use crate::core::input::{InputKind, InputMetric, InputScope};
-use crate::core::name::MetricName;
-use crate::core::output::{output_none, Output, OutputDyn, OutputMetric, OutputScope};
-use crate::core::{Flush, MetricValue};
+use crate::attributes::{Attributes, MetricId, OnFlush, Prefixed, WithAttributes};
+use crate::clock::TimeHandle;
+use crate::error;
+use crate::input::{Input, InputDyn, InputKind, InputMetric, InputScope};
+use crate::name::MetricName;
+use crate::stats::ScoreType::*;
+use crate::stats::{stats_summary, ScoreType};
+use crate::{Flush, MetricValue, Void};
 
+use std::borrow::Borrow;
 use std::collections::BTreeMap;
+use std::fmt;
 use std::isize;
 use std::mem;
 use std::sync::atomic::AtomicIsize;
@@ -23,9 +24,6 @@ use std::sync::RwLock;
 #[cfg(feature = "parking_lot")]
 use parking_lot::RwLock;
 
-use std::borrow::Borrow;
-use std::fmt;
-
 /// A function type to transform aggregated scores into publishable statistics.
 pub type Stat = Option<(InputKind, MetricName, MetricValue)>;
 pub type StatsFn = dyn Fn(InputKind, MetricName, ScoreType) -> Stat + Send + Sync + 'static;
@@ -34,14 +32,14 @@ fn initial_stats() -> &'static StatsFn {
     &stats_summary
 }
 
-fn initial_drain() -> Arc<dyn OutputDyn + Send + Sync> {
-    Arc::new(output_none())
+fn initial_drain() -> Arc<dyn InputDyn + Send + Sync> {
+    Arc::new(Void::new())
 }
 
 lazy_static! {
     static ref DEFAULT_AGGREGATE_STATS: RwLock<Arc<StatsFn>> =
         RwLock::new(Arc::new(initial_stats()));
-    static ref DEFAULT_AGGREGATE_OUTPUT: RwLock<Arc<dyn OutputDyn + Send + Sync>> =
+    static ref DEFAULT_AGGREGATE_INPUT: RwLock<Arc<dyn InputDyn + Send + Sync>> =
         RwLock::new(initial_drain());
 }
 
@@ -58,7 +56,7 @@ struct InnerAtomicBucket {
     metrics: BTreeMap<MetricName, Arc<AtomicScores>>,
     period_start: TimeHandle,
     stats: Option<Arc<StatsFn>>,
-    drain: Option<Arc<dyn OutputDyn + Send + Sync + 'static>>,
+    drain: Option<Arc<dyn InputDyn + Send + Sync + 'static>>,
     publish_metadata: bool,
 }
 
@@ -75,15 +73,15 @@ lazy_static! {
 
 impl InnerAtomicBucket {
     fn flush(&mut self) -> error::Result<()> {
-        let pub_scope = match self.drain {
-            Some(ref out) => out.output_dyn(),
-            None => read_lock!(DEFAULT_AGGREGATE_OUTPUT).output_dyn(),
+        let pub_scope: Arc<dyn InputScope> = match self.drain {
+            Some(ref out) => out.input_dyn(),
+            None => read_lock!(DEFAULT_AGGREGATE_INPUT).input_dyn(),
         };
 
         self.flush_to(pub_scope.borrow())?;
 
         // all metrics published!
-        // purge: if bucket is the last owner of the metric, remove it
+        // purge: if stats is the last owner of the metric, remove it
         // TODO parameterize whether to keep ad-hoc metrics after publish
         let mut purged = self.metrics.clone();
         self.metrics
@@ -101,7 +99,7 @@ impl InnerAtomicBucket {
     /// Take a snapshot of aggregated values and reset them.
     /// Compute stats on captured values using assigned or default stats function.
     /// Write stats to assigned or default output.
-    fn flush_to(&mut self, target: &dyn OutputScope) -> error::Result<()> {
+    fn flush_to(&mut self, target: &dyn InputScope) -> error::Result<()> {
         let now = TimeHandle::now();
         let duration_seconds = self.period_start.elapsed_us() as f64 / 1_000_000.0;
         self.period_start = now;
@@ -142,8 +140,8 @@ impl InnerAtomicBucket {
                 for score in metric.2 {
                     let filtered = stats_fn(metric.1, metric.0.clone(), score);
                     if let Some((kind, name, value)) = filtered {
-                        let metric: OutputMetric = target.new_metric(name, kind);
-                        // TODO provide some bucket context through labels?
+                        let metric: InputMetric = target.new_metric(name, kind);
+                        // TODO provide some stats context through labels?
                         metric.write(value, labels![])
                     }
                 }
@@ -160,7 +158,7 @@ impl<S: AsRef<str>> From<S> for AtomicBucket {
 }
 
 impl AtomicBucket {
-    /// Build a new atomic bucket.
+    /// Build a new atomic stats.
     pub fn new() -> AtomicBucket {
         AtomicBucket {
             attributes: Attributes::default(),
@@ -191,17 +189,17 @@ impl AtomicBucket {
         *write_lock!(DEFAULT_AGGREGATE_STATS) = Arc::new(initial_stats())
     }
 
-    /// Set the default bucket aggregated metrics flush output.
-    pub fn default_drain(default_config: impl Output + Send + Sync + 'static) {
-        *write_lock!(DEFAULT_AGGREGATE_OUTPUT) = Arc::new(default_config);
+    /// Set the default stats aggregated metrics flush output.
+    pub fn default_drain(default_config: impl Input + Send + Sync + 'static) {
+        *write_lock!(DEFAULT_AGGREGATE_INPUT) = Arc::new(default_config);
     }
 
-    /// Revert the default bucket aggregated metrics flush output.
+    /// Revert the default stats aggregated metrics flush output.
     pub fn unset_default_drain() {
-        *write_lock!(DEFAULT_AGGREGATE_OUTPUT) = initial_drain()
+        *write_lock!(DEFAULT_AGGREGATE_INPUT) = initial_drain()
     }
 
-    /// Set this bucket's statistics generator.
+    /// Set this stats's statistics generator.
     #[deprecated(since = "0.7.2", note = "Use stats()")]
     pub fn set_stats<F>(&self, func: F)
     where
@@ -213,7 +211,7 @@ impl AtomicBucket {
         self.stats(func)
     }
 
-    /// Set this bucket's statistics generator.
+    /// Set this stats's statistics generator.
     pub fn stats<F>(&self, func: F)
     where
         F: Fn(InputKind, MetricName, ScoreType) -> Option<(InputKind, MetricName, MetricValue)>
@@ -224,29 +222,29 @@ impl AtomicBucket {
         write_lock!(self.inner).stats = Some(Arc::new(func))
     }
 
-    /// Revert this bucket's statistics generator to the default stats.
+    /// Revert this stats's statistics generator to the default stats.
     pub fn unset_stats(&self) {
         write_lock!(self.inner).stats = None
     }
 
-    /// Set this bucket's aggregated metrics flush output.
+    /// Set this stats's aggregated metrics flush output.
     #[deprecated(since = "0.7.2", note = "Use drain()")]
-    pub fn set_drain(&self, new_drain: impl Output + Send + Sync + 'static) {
+    pub fn set_drain(&self, new_drain: impl Input + Send + Sync + 'static) {
         self.drain(new_drain)
     }
 
-    /// Set this bucket's aggregated metrics flush output.
-    pub fn drain(&self, new_drain: impl Output + Send + Sync + 'static) {
+    /// Set this stats's aggregated metrics flush output.
+    pub fn drain(&self, new_drain: impl Input + Send + Sync + 'static) {
         write_lock!(self.inner).drain = Some(Arc::new(new_drain))
     }
 
-    /// Revert this bucket's flush target to the default output.
+    /// Revert this stats's flush target to the default output.
     pub fn unset_drain(&self) {
         write_lock!(self.inner).drain = None
     }
 
-    /// Immediately flush the bucket's metrics to the specified scope and stats.
-    pub fn flush_to(&self, publish_scope: &dyn OutputScope) -> error::Result<()> {
+    /// Immediately flush the stats's metrics to the specified scope and stats.
+    pub fn flush_to(&self, publish_scope: &dyn InputScope) -> error::Result<()> {
         let mut inner = write_lock!(self.inner);
         inner.flush_to(publish_scope)
     }
@@ -260,7 +258,7 @@ impl InputScope for AtomicBucket {
             .entry(self.prefix_append(name.clone()))
             .or_insert_with(|| Arc::new(AtomicScores::new(kind)))
             .clone();
-        InputMetric::new(MetricId::forge("bucket", name), move |value, _labels| {
+        InputMetric::new(MetricId::forge("stats", name), move |value, _labels| {
             scores.update(value)
         })
     }
@@ -478,15 +476,14 @@ mod bench {
         let metric = sink.new_metric("count_a".into(), InputKind::Counter);
         b.iter(|| test::black_box(metric.write(1, labels![])));
     }
-
 }
 
 #[cfg(test)]
 mod mtest {
     use super::*;
-    use crate::bucket::{stats_all, stats_average, stats_summary};
+    use crate::stats::{stats_all, stats_average, stats_summary};
 
-    use crate::core::clock::{mock_clock_advance, mock_clock_reset};
+    use crate::clock::{mock_clock_advance, mock_clock_reset};
     use crate::output::map::StatsMapScope;
 
     use std::collections::BTreeMap;

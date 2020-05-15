@@ -46,7 +46,7 @@ use dipstick::*;
 
 fn main() {
     let bucket = AtomicBucket::new();
-    bucket.drain(Stream::to_stdout());
+    bucket.drain(Stream::write_to_stdout());
     bucket.flush_every(std::time::Duration::from_secs(3));
     let counter = bucket.counter("counter_a");
     counter.count(8);
@@ -77,7 +77,7 @@ To use Dipstick in your project, add the following line to your `Cargo.toml`
 in the `[dependencies]` section:
 
 ```toml
-dipstick = "0.7.13"
+dipstick = "0.8.0"
 ```
 
 ## External features

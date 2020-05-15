@@ -19,7 +19,6 @@ Or we could make the configuration hot-reloadable, suddenly using different outp
 For example, using a compile-time feature switch, metrics could be collected directly to hash map at test time 
 but be sent over the network and written to a file at runtime, as described by external configuration.
 
-
 # API Overview
 Dipstick's API is split between _input_ and _output_ layers.
 The input layer provides named metrics such as counters and timers to be used by the application.
@@ -57,7 +56,7 @@ Timers can be used in code with the `time!` macro,  wrap around a closure or wit
 extern crate dipstick;
 use dipstick::*;
 fn main() {
-    let metrics = Stream::to_stdout().metrics();
+    let metrics = Stream::write_to_stdout().metrics();
     let timer =  metrics.timer("my_timer");
     
     // using macro
@@ -95,7 +94,7 @@ extern crate dipstick;
 use dipstick::*;
 
 fn main() {
-    let metrics = Stream::to_stdout().metrics();
+    let metrics = Stream::write_to_stdout().metrics();
     let queue_length = metrics.level("queue_length");    
     queue_length.adjust(-2);    
     queue_length.adjust(4);
@@ -115,7 +114,7 @@ extern crate dipstick;
 use dipstick::*;
 
 fn main() {
-    let metrics = Stream::to_stdout().metrics();
+    let metrics = Stream::write_to_stdout().metrics();
     let uptime = metrics.gauge("uptime");    
     uptime.value(2);    
 }
@@ -131,7 +130,7 @@ use dipstick::*;
 use std::time::{Duration, Instant};
 
 fn main() {
-    let metrics = Stream::to_stdout().metrics();
+    let metrics = Stream::write_to_stdout().metrics();
     
     // observe a constant value before each flush     
     let uptime = metrics.gauge("uptime");
@@ -186,7 +185,7 @@ Names may be prepended with a application-namespace shared across all backends.
 extern crate dipstick;
 use dipstick::*;
 fn main() {   
-    let stdout = Stream::to_stdout();
+    let stdout = Stream::write_to_stdout();
     
     let metrics = stdout.metrics();
     
@@ -242,7 +241,7 @@ metrics!("my_app" => {
 });
 
 fn main() {
-    Proxy::default_target(Stream::to_stdout().metrics());
+    Proxy::default_target(Stream::write_to_stdout().metrics());
     COUNTER_A.count(11);
 }
 ```
@@ -275,23 +274,12 @@ Multiple outputs can be used at a time, each with its own configuration.
 ### Types
 These output type are provided, some are extensible, you may write your own if you need to.
 
-#### Stream
-Write values to any Write trait implementer, including files, stderr and stdout.
-
-#### Log
-Write values to the log using the log crate.
-
-### Map
-Insert metric values in a map.  
-
-#### Statsd
-Send metrics to a remote host over UDP using the statsd format. 
-
-#### Graphite
-Send metrics to a remote host over TCP using the graphite format. 
-
-#### TODO Prometheus
-Send metrics to a Prometheus "PushGateway" using the Prometheus 2.0 text format.
+- Stream: Write values to any Write trait implementer, including files, stderr and stdout.
+- Log: Write values to the log using the `log` crate.
+- Map: Insert metric values in a map. Useful for testing or programmatic retrieval of stats.  
+- Statsd: Send metrics over UDP using the statsd format. Allows sampling of values. 
+- Graphite: Send metrics over TCP using the graphite format. 
+- Prometheus: Send metrics to a Prometheus "PushGateway" using the Prometheus 2.0 text format.
 
 ### Attributes
 Attributes change the outputs behavior.
@@ -311,7 +299,7 @@ Most outputs provide optional buffering, which can be used to optimized throughp
 If enabled, buffering is usually a best-effort affair, to safely limit the amount of memory that is used by the metrics.
 
 #### Sampling
-Some outputs such as statsd also have the ability to sample metrics.
+Some outputs such as statsd also have the ability to sample metrics values.
 If enabled, sampling is done using pcg32, a fast random algorithm with reasonable entropy.
 
 ```rust
@@ -343,7 +331,7 @@ metrics!(
 );
 
 fn main() {
-    dipstick::Proxy::default_target(Stream::to_stdout().metrics());
+    dipstick::Proxy::default_target(Stream::write_to_stdout().metrics());
     COUNTER.count(456);
 }
 ``` 
@@ -359,7 +347,7 @@ metrics! {
 }
 
 fn main() {
-    MY_PROXY.target(Stream::to_stdout().metrics());
+    MY_PROXY.target(Stream::write_to_stdout().metrics());
     COUNTER.count(456);
 }
 ```

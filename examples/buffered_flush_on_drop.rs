@@ -8,7 +8,7 @@ use std::time::Duration;
 use dipstick::*;
 
 fn main() {
-    let input = Stream::to_stdout().buffered(Buffering::Unlimited);
+    let input = Stream::write_to_stdout().buffered(Buffering::Unlimited);
 
     loop {
         println!("\n------- open scope");

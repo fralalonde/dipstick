@@ -1,9 +1,9 @@
 use self::LineOp::*;
-use crate::core::input::InputKind;
-use crate::core::name::MetricName;
-use crate::core::MetricValue;
+use crate::input::InputKind;
+use crate::name::MetricName;
+use crate::MetricValue;
 
-use std::io;
+use std::io::{Error, Write};
 use std::sync::Arc;
 
 /// Print commands are steps in the execution of output templates.
@@ -37,18 +37,23 @@ pub struct LineTemplate {
 
 impl From<Vec<LineOp>> for LineTemplate {
     fn from(ops: Vec<LineOp>) -> Self {
-        LineTemplate { ops }
+        LineTemplate::new(ops)
     }
 }
 
 impl LineTemplate {
+    /// Make a new LineTemplate
+    pub fn new(ops: Vec<LineOp>) -> Self {
+        LineTemplate { ops }
+    }
+
     /// Template execution applies commands in turn, writing to the output.
     pub fn print<L>(
         &self,
-        output: &mut dyn io::Write,
+        output: &mut dyn Write,
         value: MetricValue,
         lookup: L,
-    ) -> Result<(), io::Error>
+    ) -> Result<(), Error>
     where
         L: Fn(&str) -> Option<Arc<String>>,
     {
@@ -94,7 +99,7 @@ pub trait LineFormat: Send + Sync {
 #[derive(Default)]
 pub struct SimpleFormat {
     // TODO make separator configurable
-//    separator: String,
+// separator: String,
 }
 
 impl LineFormat for SimpleFormat {
@@ -110,7 +115,7 @@ impl LineFormat for SimpleFormat {
 #[cfg(test)]
 pub mod test {
     use super::*;
-    use crate::core::label::Labels;
+    use crate::label::Labels;
 
     pub struct TestFormat;
 

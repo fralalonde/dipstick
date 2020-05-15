@@ -150,5 +150,4 @@ mod test {
         assert_eq!(true, sd2.is_within(&sd1));
         assert_eq!(false, sd1.is_within(&sd2));
     }
-
 }

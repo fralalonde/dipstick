@@ -14,7 +14,7 @@ struct MyFormat;
 
 impl LineFormat for MyFormat {
     fn template(&self, name: &MetricName, _kind: InputKind) -> LineTemplate {
-        vec![
+        LineTemplate::new(vec![
             LineOp::Literal(format!("{} ", name.join(".")).to_uppercase().into()),
             LineOp::ValueAsText,
             LineOp::Literal(" ".into()),
@@ -27,13 +27,12 @@ impl LineFormat for MyFormat {
                 ],
             ),
             LineOp::NewLine,
-        ]
-        .into()
+        ])
     }
 }
 
 fn main() {
-    let counter = Stream::to_stderr()
+    let counter = Stream::write_to_stderr()
         .formatting(MyFormat)
         .metrics()
         .counter("counter_a");

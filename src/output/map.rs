@@ -1,13 +1,11 @@
-use crate::core::attributes::{Attributes, MetricId, OnFlush, Prefixed, WithAttributes};
-use crate::core::input::InputKind;
-use crate::core::input::{Input, InputMetric, InputScope};
-use crate::core::name::MetricName;
-use crate::core::{Flush, MetricValue};
+use crate::attributes::{Attributes, MetricId, OnFlush, Prefixed, WithAttributes};
+use crate::input::{Input, InputKind, InputMetric, InputScope};
+use crate::name::MetricName;
+use crate::{Flush, MetricValue};
 
 use std::collections::BTreeMap;
 use std::error::Error;
 
-use crate::{OutputMetric, OutputScope};
 use std::sync::{Arc, RwLock};
 
 /// A BTreeMap wrapper to receive metrics or stats values.
@@ -61,17 +59,6 @@ impl InputScope for StatsMapScope {
         let key: String = name.join(".");
         InputMetric::new(MetricId::forge("map", name), move |value, _labels| {
             let _previous = write_to.write().expect("Lock").insert(key.clone(), value);
-        })
-    }
-}
-
-impl OutputScope for StatsMapScope {
-    fn new_metric(&self, name: MetricName, _kind: InputKind) -> OutputMetric {
-        let name = self.prefix_append(name);
-        let write_to = self.inner.clone();
-        let name: String = name.join(".");
-        OutputMetric::new(move |value, _labels| {
-            let _previous = write_to.write().expect("Lock").insert(name.clone(), value);
         })
     }
 }

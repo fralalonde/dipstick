@@ -26,5 +26,7 @@ fn main() {
         });
     }
     sleep(Duration::from_secs(5));
-    bucket.flush_to(&Stream::to_stdout().new_scope()).unwrap();
+    bucket
+        .flush_to(&Stream::write_to_stdout().metrics())
+        .unwrap();
 }

@@ -9,7 +9,7 @@ use std::time::Duration;
 fn main() {
     let metrics = AtomicBucket::new().named("test");
 
-    metrics.drain(Stream::to_stdout());
+    metrics.drain(Stream::write_to_stdout());
 
     metrics.flush_every(Duration::from_secs(3));
 

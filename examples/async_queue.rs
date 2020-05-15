@@ -2,13 +2,13 @@
 
 extern crate dipstick;
 
-use dipstick::{Input, InputScope, QueuedOutput, Stream};
+use dipstick::{Input, InputScope, QueuedInput, Stream};
 use std::thread;
 use std::thread::sleep;
 use std::time::Duration;
 
 fn main() {
-    let async_metrics = Stream::to_stdout().queued(100).metrics();
+    let async_metrics = Stream::write_to_stdout().queued(100).metrics();
     let counter = async_metrics.counter("counter_a");
     for _ in 0..4 {
         let counter = counter.clone();

@@ -1,15 +1,13 @@
 //! Send metrics to a graphite server.
 
-use crate::cache::cache_out;
-use crate::core::attributes::{Attributes, Buffered, OnFlush, Prefixed, WithAttributes};
-use crate::core::error;
-use crate::core::input::InputKind;
-use crate::core::metrics;
-use crate::core::name::MetricName;
-use crate::core::output::{Output, OutputMetric, OutputScope};
-use crate::core::{Flush, MetricValue};
+use crate::attributes::{Attributes, Buffered, MetricId, OnFlush, Prefixed, WithAttributes};
+use crate::input::InputKind;
+use crate::input::{Input, InputMetric, InputScope};
+use crate::metrics;
+use crate::name::MetricName;
 use crate::output::socket::RetrySocket;
-use crate::queue::queue_out;
+use crate::{error, CachedInput, QueuedInput};
+use crate::{Flush, MetricValue};
 
 use std::net::ToSocketAddrs;
 
@@ -25,19 +23,18 @@ use std::sync::{RwLock, RwLockWriteGuard};
 #[cfg(feature = "parking_lot")]
 use parking_lot::{RwLock, RwLockWriteGuard};
 
-
-/// Graphite output holds a socket to a graphite server.
-/// The socket is shared between scopes opened from the output.
+/// Graphite Input holds a socket to a graphite server.
+/// The socket is shared between scopes opened from the Input.
 #[derive(Clone, Debug)]
 pub struct Graphite {
     attributes: Attributes,
     socket: Arc<RwLock<RetrySocket>>,
 }
 
-impl Output for Graphite {
+impl Input for Graphite {
     type SCOPE = GraphiteScope;
 
-    fn new_scope(&self) -> Self::SCOPE {
+    fn metrics(&self) -> Self::SCOPE {
         GraphiteScope {
             attributes: self.attributes.clone(),
             buffer: Arc::new(RwLock::new(String::new())),
@@ -50,7 +47,7 @@ impl Graphite {
     /// Send metrics to a graphite server at the address and port provided.
     pub fn send_to<A: ToSocketAddrs + Debug + Clone>(address: A) -> error::Result<Graphite> {
         debug!("Connecting to graphite {:?}", address);
-        let socket = Arc::new(RwLock::new(RetrySocket::new(address.clone())?));
+        let socket = Arc::new(RwLock::new(RetrySocket::new(address)?));
 
         Ok(Graphite {
             attributes: Attributes::default(),
@@ -78,10 +75,10 @@ pub struct GraphiteScope {
     socket: Arc<RwLock<RetrySocket>>,
 }
 
-impl OutputScope for GraphiteScope {
+impl InputScope for GraphiteScope {
     /// Define a metric of the specified type.
-    fn new_metric(&self, name: MetricName, kind: InputKind) -> OutputMetric {
-        let mut prefix = self.prefix_prepend(name).join(".");
+    fn new_metric(&self, name: MetricName, kind: InputKind) -> InputMetric {
+        let mut prefix = self.prefix_prepend(name.clone()).join(".");
         prefix.push(' ');
 
         let scale = match kind {
@@ -92,8 +89,9 @@ impl OutputScope for GraphiteScope {
 
         let cloned = self.clone();
         let metric = GraphiteMetric { prefix, scale };
+        let metric_id = MetricId::forge("graphite", name);
 
-        OutputMetric::new(move |value, _labels| {
+        InputMetric::new(metric_id, move |value, _labels| {
             cloned.print(&metric, value);
         })
     }
@@ -175,8 +173,8 @@ impl WithAttributes for GraphiteScope {
 
 impl Buffered for GraphiteScope {}
 
-impl queue_out::QueuedOutput for Graphite {}
-impl cache_out::CachedOutput for Graphite {}
+impl QueuedInput for Graphite {}
+impl CachedInput for Graphite {}
 
 /// Its hard to see how a single scope could get more metrics than this.
 // TODO make configurable?
@@ -202,8 +200,8 @@ impl Drop for GraphiteScope {
 mod bench {
 
     use super::*;
-    use crate::core::attributes::*;
-    use crate::core::input::*;
+    use crate::attributes::*;
+    use crate::input::*;
 
     #[bench]
     pub fn immediate_graphite(b: &mut test::Bencher) {
@@ -223,5 +221,4 @@ mod bench {
 
         b.iter(|| test::black_box(timer.write(2000, labels![])));
     }
-
 }

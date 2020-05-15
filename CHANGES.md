@@ -1,5 +1,15 @@
 # Latest changes + history
 
+## version 0.8.0 ("SUCH REJOICING")
+- Abandon non-threadsafe "Output"s in exchange for a simpler, more consistent API.   
+  Everything is now threadsafe and thus all "Output" have been promoted to Inputs.
+  No significant performance loss was observed (using parking_lot locks). 
+  Some client code (custom output classes, etc.) rework might be necessary.
+- Flattened internal project structure down to only two modules, including root.
+
+## version 0.7.13
+- Fixed statsd & graphite panic when running on async threadpool. 
+
 ## version 0.7.11
 - Make OnFlushCancel Send + Sync (@vorner)
 
@@ -35,7 +45,7 @@
 ### features
 - Observe gauge On Flush
 - Observe gauge Periodically
-- Stream::to_new_file() 
+- Stream::write_to_new_file() 
 - Level
 
 ### Enhancement

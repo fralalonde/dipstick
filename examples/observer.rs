@@ -21,7 +21,7 @@ use dipstick::*;
 
 fn main() {
     let metrics = AtomicBucket::new().named("process");
-    metrics.drain(Stream::to_stdout());
+    metrics.drain(Stream::write_to_stdout());
     metrics.flush_every(Duration::from_secs(3));
 
     let uptime = metrics.gauge("uptime");

@@ -9,7 +9,7 @@ use std::time::Duration;
 
 fn main() {
     let bucket = AtomicBucket::new();
-    AtomicBucket::default_drain(Stream::to_stdout());
+    AtomicBucket::default_drain(Stream::write_to_stdout());
 
     let persistent_marker = bucket.marker("persistent");
 

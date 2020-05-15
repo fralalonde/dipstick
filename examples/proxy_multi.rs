@@ -1,8 +1,8 @@
-//! Use the proxy to pipeline metrics to multiple outputs
+//! Use the proxy to send metrics to multiple outputs
 
 extern crate dipstick;
 
-/// Create a pipeline that branches out...
+/// Create a pipeline that fans out
 /// The key here is to use AtomicBucket to read
 /// from the proxy and aggregate and flush metrics
 ///
@@ -23,7 +23,7 @@ fn main() {
     // Placeholder to collect output targets
     // This will prefix all metrics with "my_stats"
     // before flushing them.
-    let mut targets = MultiOutput::new().named("my_stats");
+    let mut targets = MultiInput::new().named("my_stats");
 
     // Skip the metrics here... we just use this for the output
     // Follow the same pattern for Statsd, Graphite, etc.
@@ -32,15 +32,15 @@ fn main() {
     targets = targets.add_target(prometheus);
 
     // Add stdout
-    targets = targets.add_target(Stream::to_stdout());
+    targets = targets.add_target(Stream::write_to_stdout());
 
-    // Create the bucket and drain targets
+    // Create the stats and drain targets
     let bucket = AtomicBucket::new();
     bucket.drain(targets);
     // Crucial, set the flush interval, otherwise risk hammering targets
     bucket.flush_every(Duration::from_secs(3));
 
-    // Now wire up the proxy target with the bucket and you're all set
+    // Now wire up the proxy target with the stats and you're all set
     let proxy = Proxy::default();
     proxy.target(bucket.clone());
 

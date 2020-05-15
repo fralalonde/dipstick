@@ -7,7 +7,7 @@ use dipstick::*;
 use std::time::Duration;
 
 fn main() {
-    // adding a name to the bucket
+    // adding a name to the stats
     let bucket = AtomicBucket::new().named("test");
 
     // adding two names to Graphite output

@@ -1,17 +1,15 @@
 //! Send metrics to a statsd server.
 
-use crate::cache::cache_out;
-use crate::core::attributes::{
-    Attributes, Buffered, OnFlush, Prefixed, Sampled, Sampling, WithAttributes,
+use crate::attributes::{
+    Attributes, Buffered, MetricId, OnFlush, Prefixed, Sampled, Sampling, WithAttributes,
 };
-use crate::core::error;
-use crate::core::input::InputKind;
-use crate::core::metrics;
-use crate::core::name::MetricName;
-use crate::core::output::{Output, OutputMetric, OutputScope};
-use crate::core::pcg32;
-use crate::core::{Flush, MetricValue};
-use crate::queue::queue_out;
+use crate::input::InputKind;
+use crate::input::{Input, InputMetric, InputScope};
+use crate::name::MetricName;
+use crate::pcg32;
+use crate::{error, CachedInput, LineFormat, LineTemplate, QueuedInput};
+use crate::{metrics, LineOp};
+use crate::{Flush, MetricValue};
 
 use std::net::ToSocketAddrs;
 use std::net::UdpSocket;
@@ -23,13 +21,12 @@ use std::sync::{RwLock, RwLockWriteGuard};
 #[cfg(feature = "parking_lot")]
 use parking_lot::{RwLock, RwLockWriteGuard};
 
-
 /// Use a safe maximum size for UDP to prevent fragmentation.
 // TODO make configurable?
 const MAX_UDP_PAYLOAD: usize = 576;
 
-/// Statsd output holds a datagram (UDP) socket to a statsd server.
-/// The socket is shared between scopes opened from the output.
+/// Statsd Input holds a datagram (UDP) socket to a statsd server.
+/// The socket is shared between scopes opened from the Input.
 #[derive(Clone, Debug)]
 pub struct Statsd {
     attributes: Attributes,
@@ -53,13 +50,13 @@ impl Statsd {
 impl Buffered for Statsd {}
 impl Sampled for Statsd {}
 
-impl queue_out::QueuedOutput for Statsd {}
-impl cache_out::CachedOutput for Statsd {}
+impl QueuedInput for Statsd {}
+impl CachedInput for Statsd {}
 
-impl Output for Statsd {
+impl Input for Statsd {
     type SCOPE = StatsdScope;
 
-    fn new_scope(&self) -> Self::SCOPE {
+    fn metrics(&self) -> Self::SCOPE {
         StatsdScope {
             attributes: self.attributes.clone(),
             buffer: Arc::new(RwLock::new(String::with_capacity(MAX_UDP_PAYLOAD))),
@@ -87,10 +84,10 @@ pub struct StatsdScope {
 
 impl Sampled for StatsdScope {}
 
-impl OutputScope for StatsdScope {
+impl InputScope for StatsdScope {
     /// Define a metric of the specified type.
-    fn new_metric(&self, name: MetricName, kind: InputKind) -> OutputMetric {
-        let mut prefix = self.prefix_prepend(name).join(".");
+    fn new_metric(&self, name: MetricName, kind: InputKind) -> InputMetric {
+        let mut prefix = self.prefix_prepend(name.clone()).join(".");
         prefix.push(':');
 
         let mut suffix = String::with_capacity(16);
@@ -108,6 +105,7 @@ impl OutputScope for StatsdScope {
         };
 
         let cloned = self.clone();
+        let metric_id = MetricId::forge("statsd", name);
 
         if let Sampling::Random(float_rate) = self.get_sampling() {
             suffix.push_str(&format! {"|@{}\n", float_rate});
@@ -118,7 +116,7 @@ impl OutputScope for StatsdScope {
                 scale,
             };
 
-            OutputMetric::new(move |value, _labels| {
+            InputMetric::new(metric_id, move |value, _labels| {
                 if pcg32::accept_sample(int_sampling_rate) {
                     cloned.print(&metric, value)
                 }
@@ -130,7 +128,9 @@ impl OutputScope for StatsdScope {
                 suffix,
                 scale,
             };
-            OutputMetric::new(move |value, _labels| cloned.print(&metric, value))
+            InputMetric::new(metric_id, move |value, _labels| {
+                cloned.print(&metric, value)
+            })
         }
     }
 }
@@ -155,8 +155,8 @@ impl StatsdScope {
             return;
         }
 
-        let remaining = buffer.capacity() - buffer.len();
-        if entry_len + 1 > remaining {
+        let available = buffer.capacity() - buffer.len();
+        if entry_len + 1 > available {
             // buffer is nearly full, make room
             let _ = self.flush_inner(buffer);
             buffer = write_lock!(self.buffer);
@@ -223,56 +223,48 @@ impl Drop for StatsdScope {
     }
 }
 
-// TODO use templates for statsd format
-//lazy_static!({
-//    static ref STATSD_FORMAT: StatsdFormat = StatsdFormat;
-//});
-//
-//#[derive(Default)]
-//pub struct StatsdFormat;
-//
-//impl Format for StatsdFormat {
-//    fn template(&self, name: &Name, kind: InputKind) -> Template {
-//        let mut before_value = name.join(".");
-//        before_value.push(':');
-//
-//        let mut after_value = String::with_capacity(16);
-//        after_value.push('|');
-//        after_value.push_str(match kind {
-//            InputKind::Marker | InputKind::Counter => "c",
-//            InputKind::Gauge => "g",
-//            InputKind::Timer => "ms",
-//        });
-//
-//        // specify sampling rate if any
-//        if let Some(Sampling::Random(float_rate)) = self.get_sampling() {
-//            suffix.push_str(&format! {"|@{}\n", float_rate});
-//        }
-//
-//        // scale timer values
-//        let value_text = match kind {
-//            // timers are in µs, statsd wants ms
-//            InputKind::Timer => ScaledValueAsText(1000),
-//            _ => ValueAsText,
-//        };
-//
-//        Template {
-//            commands: vec![
-//                StringLit(before_value),
-//                value_text,
-//                StringLit(after_value),
-//                NewLine,
-//            ]
-//        }
-//    }
-//}
+use crate::output::format::LineOp::{ScaledValueAsText, ValueAsText};
+
+impl LineFormat for StatsdScope {
+    fn template(&self, name: &MetricName, kind: InputKind) -> LineTemplate {
+        let mut prefix = name.join(".");
+        prefix.push(':');
+
+        let mut suffix = String::with_capacity(16);
+        suffix.push('|');
+        suffix.push_str(match kind {
+            InputKind::Marker | InputKind::Counter => "c",
+            InputKind::Gauge | InputKind::Level => "g",
+            InputKind::Timer => "ms",
+        });
+
+        // specify sampling rate if any
+        if let Sampling::Random(float_rate) = self.get_sampling() {
+            suffix.push_str(&format! {"|@{}\n", float_rate});
+        }
+
+        // scale timer values
+        let op_value_text = match kind {
+            // timers are in µs, statsd wants ms
+            InputKind::Timer => ScaledValueAsText(1000.0),
+            _ => ValueAsText,
+        };
+
+        LineTemplate::new(vec![
+            LineOp::Literal(prefix.into_bytes()),
+            op_value_text,
+            LineOp::Literal(suffix.into_bytes()),
+            LineOp::NewLine,
+        ])
+    }
+}
 
 #[cfg(feature = "bench")]
 mod bench {
 
     use super::*;
-    use crate::core::attributes::*;
-    use crate::core::input::*;
+    use crate::attributes::*;
+    use crate::input::*;
 
     #[bench]
     pub fn immediate_statsd(b: &mut test::Bencher) {
@@ -292,5 +284,4 @@ mod bench {
 
         b.iter(|| test::black_box(timer.write(2000, labels![])));
     }
-
 }

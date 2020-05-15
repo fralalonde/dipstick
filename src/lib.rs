@@ -51,27 +51,44 @@ macro_rules! read_lock {
     };
 }
 
-mod core;
-pub use crate::core::attributes::{
+mod attributes;
+mod clock;
+mod error;
+mod input;
+mod label;
+mod metrics;
+mod name;
+mod pcg32;
+mod proxy;
+mod scheduler;
+mod void;
+
+mod atomic;
+mod stats;
+
+mod cache;
+mod lru_cache;
+
+mod multi;
+mod queue;
+
+pub use crate::attributes::{
     Buffered, Buffering, Observe, ObserveWhen, OnFlush, OnFlushCancel, Prefixed, Sampled, Sampling,
 };
-pub use crate::core::clock::TimeHandle;
-pub use crate::core::error::Result;
-pub use crate::core::input::{
+pub use crate::clock::TimeHandle;
+pub use crate::error::Result;
+pub use crate::input::{
     Counter, Gauge, Input, InputDyn, InputKind, InputMetric, InputScope, Level, Marker, Timer,
 };
-pub use crate::core::label::{AppLabel, Labels, ThreadLabel};
-pub use crate::core::locking::LockingOutput;
-pub use crate::core::name::{MetricName, NameParts};
-pub use crate::core::output::{Output, OutputDyn, OutputMetric, OutputScope};
-pub use crate::core::scheduler::{Cancel, CancelGuard, CancelHandle, ScheduleFlush};
-pub use crate::core::void::Void;
-pub use crate::core::{Flush, MetricValue};
+pub use crate::label::{AppLabel, Labels, ThreadLabel};
+pub use crate::name::{MetricName, NameParts};
+pub use crate::scheduler::{Cancel, CancelGuard, CancelHandle, ScheduleFlush};
+pub use crate::void::Void;
 
 #[cfg(test)]
-pub use crate::core::clock::{mock_clock_advance, mock_clock_reset};
+pub use crate::clock::{mock_clock_advance, mock_clock_reset};
 
-pub use crate::core::proxy::Proxy;
+pub use crate::proxy::Proxy;
 
 mod output;
 pub use crate::output::format::{
@@ -86,18 +103,37 @@ pub use crate::output::stream::{Stream, TextScope};
 //#[cfg(feature="prometheus")]
 pub use crate::output::prometheus::{Prometheus, PrometheusScope};
 
-mod bucket;
-pub use crate::bucket::atomic::AtomicBucket;
-pub use crate::bucket::{stats_all, stats_average, stats_summary, ScoreType};
+pub use crate::atomic::AtomicBucket;
+pub use crate::cache::CachedInput;
+pub use crate::multi::{MultiInput, MultiInputScope};
+pub use crate::queue::{InputQueue, InputQueueScope, QueuedInput};
+pub use crate::stats::{stats_all, stats_average, stats_summary, ScoreType};
 
-mod cache;
-pub use crate::cache::cache_in::CachedInput;
-pub use crate::cache::cache_out::CachedOutput;
+/// Base type for recorded metric values.
+pub type MetricValue = isize;
 
-mod multi;
-pub use crate::multi::multi_in::{MultiInput, MultiInputScope};
-pub use crate::multi::multi_out::{MultiOutput, MultiOutputScope};
+/// Both InputScope and OutputScope share the ability to flush the recorded data.
+pub trait Flush {
+    /// Flush does nothing by default.
+    fn flush(&self) -> Result<()>;
+}
 
-mod queue;
-pub use crate::queue::queue_in::{InputQueue, InputQueueScope, QueuedInput};
-pub use crate::queue::queue_out::{OutputQueue, OutputQueueScope, QueuedOutput};
+#[cfg(feature = "bench")]
+pub mod bench {
+
+    use super::clock::*;
+    use super::input::*;
+    use crate::AtomicBucket;
+
+    #[bench]
+    fn get_instant(b: &mut test::Bencher) {
+        b.iter(|| test::black_box(TimeHandle::now()));
+    }
+
+    #[bench]
+    fn time_bench_direct_dispatch_event(b: &mut test::Bencher) {
+        let metrics = AtomicBucket::new();
+        let marker = metrics.marker("aaa");
+        b.iter(|| test::black_box(marker.mark()));
+    }
+}

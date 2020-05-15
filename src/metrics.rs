@@ -2,9 +2,9 @@
 //! Because the possibly high volume of data, this is pre-set to use aggregation.
 //! This is also kept in a separate module because it is not to be exposed outside of the crate.
 
-use crate::core::attributes::Prefixed;
-use crate::core::input::{Counter, InputScope, Marker};
-use crate::core::proxy::Proxy;
+use crate::attributes::Prefixed;
+use crate::input::{Counter, InputScope, Marker};
+use crate::proxy::Proxy;
 
 metrics! {
     /// Dipstick's own internal metrics.

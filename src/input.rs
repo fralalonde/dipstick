@@ -1,8 +1,8 @@
-use crate::core::attributes::MetricId;
-use crate::core::clock::TimeHandle;
-use crate::core::label::Labels;
-use crate::core::name::MetricName;
-use crate::core::{Flush, MetricValue};
+use crate::attributes::MetricId;
+use crate::clock::TimeHandle;
+use crate::label::Labels;
+use crate::name::MetricName;
+use crate::{Flush, MetricValue};
 
 use std::fmt;
 use std::sync::Arc;
@@ -23,6 +23,12 @@ pub trait Input: Send + Sync + 'static + InputDyn {
     /// Open a new scope from this input.
     #[deprecated(since = "0.7.2", note = "Use metrics()")]
     fn input(&self) -> Self::SCOPE {
+        self.metrics()
+    }
+
+    /// Open a new scope from this input.
+    #[deprecated(since = "0.8.0", note = "Use metrics()")]
+    fn new_scope(&self) -> Self::SCOPE {
         self.metrics()
     }
 }
