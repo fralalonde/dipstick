@@ -7,8 +7,8 @@ use crate::input::InputKind;
 use crate::input::{Input, InputMetric, InputScope};
 use crate::name::MetricName;
 use crate::pcg32;
-use crate::{error, CachedInput, LineFormat, LineTemplate, QueuedInput};
-use crate::{metrics, LineOp};
+use crate::{CachedInput, QueuedInput};
+use crate::{metrics};
 use crate::{Flush, MetricValue};
 
 use std::net::ToSocketAddrs;
@@ -20,6 +20,7 @@ use std::sync::{RwLock, RwLockWriteGuard};
 
 #[cfg(feature = "parking_lot")]
 use parking_lot::{RwLock, RwLockWriteGuard};
+use std::io;
 
 /// Use a safe maximum size for UDP to prevent fragmentation.
 // TODO make configurable?
@@ -35,7 +36,7 @@ pub struct Statsd {
 
 impl Statsd {
     /// Send metrics to a statsd server at the address and port provided.
-    pub fn send_to<ADDR: ToSocketAddrs>(address: ADDR) -> error::Result<Statsd> {
+    pub fn send_to<ADDR: ToSocketAddrs>(address: ADDR) -> io::Result<Statsd> {
         let socket = Arc::new(UdpSocket::bind("0.0.0.0:0")?);
         socket.set_nonblocking(true)?;
         socket.connect(address)?;
@@ -136,7 +137,7 @@ impl InputScope for StatsdScope {
 }
 
 impl Flush for StatsdScope {
-    fn flush(&self) -> error::Result<()> {
+    fn flush(&self) -> io::Result<()> {
         self.notify_flush_listeners();
         let buf = write_lock!(self.buffer);
         self.flush_inner(buf)
@@ -177,7 +178,7 @@ impl StatsdScope {
         }
     }
 
-    fn flush_inner(&self, mut buffer: RwLockWriteGuard<String>) -> error::Result<()> {
+    fn flush_inner(&self, mut buffer: RwLockWriteGuard<String>) -> io::Result<()> {
         if !buffer.is_empty() {
             match self.socket.send(buffer.as_bytes()) {
                 Ok(size) => {
@@ -223,41 +224,41 @@ impl Drop for StatsdScope {
     }
 }
 
-use crate::output::format::LineOp::{ScaledValueAsText, ValueAsText};
-
-impl LineFormat for StatsdScope {
-    fn template(&self, name: &MetricName, kind: InputKind) -> LineTemplate {
-        let mut prefix = name.join(".");
-        prefix.push(':');
-
-        let mut suffix = String::with_capacity(16);
-        suffix.push('|');
-        suffix.push_str(match kind {
-            InputKind::Marker | InputKind::Counter => "c",
-            InputKind::Gauge | InputKind::Level => "g",
-            InputKind::Timer => "ms",
-        });
-
-        // specify sampling rate if any
-        if let Sampling::Random(float_rate) = self.get_sampling() {
-            suffix.push_str(&format! {"|@{}\n", float_rate});
-        }
-
-        // scale timer values
-        let op_value_text = match kind {
-            // timers are in µs, statsd wants ms
-            InputKind::Timer => ScaledValueAsText(1000.0),
-            _ => ValueAsText,
-        };
-
-        LineTemplate::new(vec![
-            LineOp::Literal(prefix.into_bytes()),
-            op_value_text,
-            LineOp::Literal(suffix.into_bytes()),
-            LineOp::NewLine,
-        ])
-    }
-}
+// use crate::output::format::LineOp::{ScaledValueAsText, ValueAsText};
+//
+// impl LineFormat for StatsdScope {
+//     fn template(&self, name: &MetricName, kind: InputKind) -> LineTemplate {
+//         let mut prefix = name.join(".");
+//         prefix.push(':');
+//
+//         let mut suffix = String::with_capacity(16);
+//         suffix.push('|');
+//         suffix.push_str(match kind {
+//             InputKind::Marker | InputKind::Counter => "c",
+//             InputKind::Gauge | InputKind::Level => "g",
+//             InputKind::Timer => "ms",
+//         });
+//
+//         // specify sampling rate if any
+//         if let Sampling::Random(float_rate) = self.get_sampling() {
+//             suffix.push_str(&format! {"|@{}\n", float_rate});
+//         }
+//
+//         // scale timer values
+//         let op_value_text = match kind {
+//             // timers are in µs, statsd wants ms
+//             InputKind::Timer => ScaledValueAsText(1000.0),
+//             _ => ValueAsText,
+//         };
+//
+//         LineTemplate::new(vec![
+//             LineOp::Literal(prefix.into_bytes()),
+//             op_value_text,
+//             LineOp::Literal(suffix.into_bytes()),
+//             LineOp::NewLine,
+//         ])
+//     }
+// }
 
 #[cfg(feature = "bench")]
 mod bench {

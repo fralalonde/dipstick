@@ -1,8 +1,6 @@
 //! A dropwizard-like configuration using three buckets
 //! aggregating one, five and fifteen minutes of data.
 
-extern crate dipstick;
-
 use dipstick::*;
 use std::thread::sleep;
 use std::time::Duration;

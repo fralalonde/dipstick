@@ -1,12 +1,12 @@
 //! Dispatch metrics to multiple sinks.
 
 use crate::attributes::{Attributes, MetricId, OnFlush, Prefixed, WithAttributes};
-use crate::error;
 use crate::input::{Input, InputDyn, InputKind, InputMetric, InputScope};
 use crate::name::MetricName;
 use crate::Flush;
 
 use std::sync::Arc;
+use std::io;
 
 /// Opens multiple scopes at a time from just as many outputs.
 #[derive(Clone, Default)]
@@ -102,7 +102,7 @@ impl InputScope for MultiInputScope {
 }
 
 impl Flush for MultiInputScope {
-    fn flush(&self) -> error::Result<()> {
+    fn flush(&self) -> io::Result<()> {
         self.notify_flush_listeners();
         for w in &self.scopes {
             w.flush()?;

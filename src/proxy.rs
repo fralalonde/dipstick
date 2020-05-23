@@ -1,14 +1,13 @@
 //! Decouple metric definition from configuration with trait objects.
 
 use crate::attributes::{Attributes, MetricId, OnFlush, Prefixed, WithAttributes};
-use crate::error;
 use crate::input::{InputKind, InputMetric, InputScope};
 use crate::name::{MetricName, NameParts};
-use crate::void::VOID_INPUT;
+use crate::output::void::VOID_INPUT;
 use crate::Flush;
 
 use std::collections::{BTreeMap, HashMap};
-use std::fmt;
+use std::{fmt, io};
 use std::sync::{Arc, Weak};
 
 #[cfg(not(feature = "parking_lot"))]
@@ -167,7 +166,7 @@ impl InnerProxy {
         }
     }
 
-    fn flush(&self, namespace: &NameParts) -> error::Result<()> {
+    fn flush(&self, namespace: &NameParts) -> io::Result<()> {
         if let Some((target, _nslen)) = self.get_effective_target(namespace) {
             target.flush()
         } else {
@@ -265,7 +264,7 @@ impl InputScope for Proxy {
 }
 
 impl Flush for Proxy {
-    fn flush(&self) -> error::Result<()> {
+    fn flush(&self) -> io::Result<()> {
         self.notify_flush_listeners();
         write_lock!(self.inner).flush(self.get_prefixes())
     }

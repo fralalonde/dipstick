@@ -1,7 +1,5 @@
 //! Transient metrics are not retained by buckets after flushing.
 
-extern crate dipstick;
-
 use dipstick::*;
 
 use std::thread::sleep;

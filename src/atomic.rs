@@ -2,7 +2,6 @@
 
 use crate::attributes::{Attributes, MetricId, OnFlush, Prefixed, WithAttributes};
 use crate::clock::TimeHandle;
-use crate::error;
 use crate::input::{Input, InputDyn, InputKind, InputMetric, InputScope};
 use crate::name::MetricName;
 use crate::stats::ScoreType::*;
@@ -11,7 +10,7 @@ use crate::{Flush, MetricValue, Void};
 
 use std::borrow::Borrow;
 use std::collections::BTreeMap;
-use std::fmt;
+use std::{fmt, io};
 use std::isize;
 use std::mem;
 use std::sync::atomic::AtomicIsize;
@@ -72,7 +71,7 @@ lazy_static! {
 }
 
 impl InnerAtomicBucket {
-    fn flush(&mut self) -> error::Result<()> {
+    fn flush(&mut self) -> io::Result<()> {
         let pub_scope: Arc<dyn InputScope> = match self.drain {
             Some(ref out) => out.input_dyn(),
             None => read_lock!(DEFAULT_AGGREGATE_INPUT).input_dyn(),
@@ -99,7 +98,7 @@ impl InnerAtomicBucket {
     /// Take a snapshot of aggregated values and reset them.
     /// Compute stats on captured values using assigned or default stats function.
     /// Write stats to assigned or default output.
-    fn flush_to(&mut self, target: &dyn InputScope) -> error::Result<()> {
+    fn flush_to(&mut self, target: &dyn InputScope) -> io::Result<()> {
         let now = TimeHandle::now();
         let duration_seconds = self.period_start.elapsed_us() as f64 / 1_000_000.0;
         self.period_start = now;
@@ -244,7 +243,7 @@ impl AtomicBucket {
     }
 
     /// Immediately flush the stats's metrics to the specified scope and stats.
-    pub fn flush_to(&self, publish_scope: &dyn InputScope) -> error::Result<()> {
+    pub fn flush_to(&self, publish_scope: &dyn InputScope) -> io::Result<()> {
         let mut inner = write_lock!(self.inner);
         inner.flush_to(publish_scope)
     }
@@ -267,7 +266,7 @@ impl InputScope for AtomicBucket {
 impl Flush for AtomicBucket {
     /// Collect and reset aggregated data.
     /// Publish statistics
-    fn flush(&self) -> error::Result<()> {
+    fn flush(&self) -> io::Result<()> {
         self.notify_flush_listeners();
         let mut inner = write_lock!(self.inner);
         inner.flush()

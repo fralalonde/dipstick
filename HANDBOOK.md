@@ -53,7 +53,6 @@ Timers measure an operation's duration.
 Timers can be used in code with the `time!` macro,  wrap around a closure or with explicit calls to `start()` and `stop()`.
 
 ```rust
-extern crate dipstick;
 use dipstick::*;
 fn main() {
     let metrics = Stream::write_to_stdout().metrics();
@@ -90,7 +89,6 @@ Compared to counters:
    rather than min/max observed individual values. 
    
 ```rust
-extern crate dipstick;
 use dipstick::*;
 
 fn main() {
@@ -110,7 +108,6 @@ As such, a gauge's aggregated statistics are simply the mean, max and min values
 Values can be observed for gauges at any moment, like any other metric.    
 
 ```rust
-extern crate dipstick;
 use dipstick::*;
 
 fn main() {
@@ -125,7 +122,6 @@ The observation of values for any metric can be triggered on schedule or upon pu
 
 This mechanism can be used for automatic reporting of gauge values:
 ```rust
-extern crate dipstick;
 use dipstick::*;
 use std::time::{Duration, Instant};
 
@@ -151,7 +147,6 @@ Observations triggered `on_flush` take place _before_  metrics are published, al
 
 Scheduling could also be used to setup a "heartbeat" metric:
 ```rust
-extern crate dipstick;
 use dipstick::*;
 use std::time::{Duration};
 
@@ -182,7 +177,6 @@ Names are opaque to the application and are used only to identify the metrics up
 Names may be prepended with a application-namespace shared across all backends.
 
 ```rust
-extern crate dipstick;
 use dipstick::*;
 fn main() {   
     let stdout = Stream::write_to_stdout();
@@ -233,7 +227,6 @@ Notes about labels:
 Metric inputs are usually setup statically upon application startup.
 
 ```rust
-extern crate dipstick;
 use dipstick::*;
 
 metrics!("my_app" => {
@@ -254,7 +247,6 @@ If necessary, metrics can also be defined "dynamically".
 This is more flexible but has a higher runtime cost, which may be alleviated with the optional caching mechanism.
 
 ```rust
-extern crate dipstick;
 use dipstick::*;
 fn main() {
     let user_name = "john_day";
@@ -303,7 +295,6 @@ Some outputs such as statsd also have the ability to sample metrics values.
 If enabled, sampling is done using pcg32, a fast random algorithm with reasonable entropy.
 
 ```rust
-extern crate dipstick;
 use dipstick::*;
 fn main() {
     let _app_metrics = Statsd::send_to("localhost:8125").expect("connected")

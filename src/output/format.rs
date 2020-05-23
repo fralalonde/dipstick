@@ -3,8 +3,9 @@ use crate::input::InputKind;
 use crate::name::MetricName;
 use crate::MetricValue;
 
-use std::io::{Error, Write};
+use std::io::{Write};
 use std::sync::Arc;
+use std::io;
 
 /// Print commands are steps in the execution of output templates.
 pub enum LineOp {
@@ -53,7 +54,7 @@ impl LineTemplate {
         output: &mut dyn Write,
         value: MetricValue,
         lookup: L,
-    ) -> Result<(), Error>
+    ) -> io::Result<()>
     where
         L: Fn(&str) -> Option<Arc<String>>,
     {

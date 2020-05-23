@@ -1,7 +1,5 @@
 //! A sample application sending ad-hoc metrics to prometheus.
 
-extern crate dipstick;
-
 use dipstick::*;
 use std::time::Duration;
 

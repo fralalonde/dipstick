@@ -1,6 +1,14 @@
 # Latest changes + history
 
-## version 0.8.0 ("SUCH REJOICING")
+## version 0.9.0
+- Abandon custom Result type and error module in favor 
+  of io::Result usage across all API. (Based on @rtyler's comment in #80)
+- Update all dependencies to latest versions
+- Move Void module to output (internal change)
+- Examples no longer declare `extern crate dipstick;`  
+
+## version 0.8.0 - ("SUCH REJOICING")
+- THIS VERSION HAS BEEN YANKED - API broke (again) for 0.9.0 and 0.8.0 hadn't been out long enough.
 - Abandon non-threadsafe "Output"s in exchange for a simpler, more consistent API.   
   Everything is now threadsafe and thus all "Output" have been promoted to Inputs.
   No significant performance loss was observed (using parking_lot locks). 

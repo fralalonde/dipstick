@@ -3,8 +3,8 @@ use crate::Flush;
 
 use crate::attributes::MetricId;
 use crate::{Input, InputDyn, InputKind, InputMetric, InputScope};
-use std::error::Error;
 use std::sync::Arc;
+use std::io;
 
 lazy_static! {
     /// The reference instance identifying an uninitialized metric config.
@@ -50,7 +50,7 @@ impl InputScope for VoidInput {
 }
 
 impl Flush for VoidInput {
-    fn flush(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
+    fn flush(&self) -> io::Result<()> {
         Ok(())
     }
 }

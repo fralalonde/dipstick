@@ -41,7 +41,6 @@ These are all best done by downstream timeseries visualization and monitoring to
 Here's a basic aggregating & auto-publish counter metric:
 
 ```rust
-extern crate dipstick;
 use dipstick::*;
 
 fn main() {
@@ -56,7 +55,6 @@ fn main() {
 Persistent apps wanting to declare static metrics will prefer using the `metrics!` macro:
 
 ```rust
-extern crate dipstick;
 use dipstick::*;
 
 metrics! { METRICS = "my_app" => {

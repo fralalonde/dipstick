@@ -1,7 +1,5 @@
 //! Use the proxy to send metrics to multiple outputs
 
-extern crate dipstick;
-
 /// Create a pipeline that fans out
 /// The key here is to use AtomicBucket to read
 /// from the proxy and aggregate and flush metrics

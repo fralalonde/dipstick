@@ -3,7 +3,6 @@
 //! If queue size is exceeded, calling code reverts to blocking.
 
 use crate::attributes::{Attributes, MetricId, OnFlush, Prefixed, WithAttributes};
-use crate::error;
 use crate::input::{Input, InputDyn, InputKind, InputMetric, InputScope};
 use crate::label::Labels;
 use crate::metrics;
@@ -14,7 +13,7 @@ use crate::{Flush, MetricValue};
 #[cfg(not(feature = "crossbeam-channel"))]
 use std::sync::mpsc;
 use std::sync::Arc;
-use std::thread;
+use std::{thread, io};
 
 #[cfg(feature = "crossbeam-channel")]
 use crossbeam_channel as crossbeam;
@@ -199,12 +198,12 @@ impl InputScope for InputQueueScope {
 }
 
 impl Flush for InputQueueScope {
-    fn flush(&self) -> error::Result<()> {
+    fn flush(&self) -> io::Result<()> {
         self.notify_flush_listeners();
         if let Err(e) = self.sender.send(InputQueueCmd::Flush(self.target.clone())) {
             metrics::SEND_FAILED.mark();
             debug!("Failed to flush async metrics: {}", e);
-            Err(e.into())
+            Err(io::Error::new(io::ErrorKind::Other, e))
         } else {
             Ok(())
         }
