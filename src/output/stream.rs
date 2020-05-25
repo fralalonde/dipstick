@@ -6,7 +6,7 @@ use crate::attributes::{Attributes, Buffered, MetricId, OnFlush, Prefixed, WithA
 use crate::input::InputKind;
 use crate::name::MetricName;
 use crate::Flush;
-use crate::{error, CachedInput, QueuedInput};
+use crate::{CachedInput, QueuedInput};
 
 use std::fs::{File, OpenOptions};
 use std::io::{self, Write};
@@ -55,12 +55,12 @@ impl Stream<File> {
     /// Write metric values to a file.
     #[deprecated(since = "0.8.0", note = "Use write_to_file()")]
     #[allow(clippy::wrong_self_convention)]
-    pub fn to_file<P: AsRef<Path>>(file: P) -> error::Result<Stream<File>> {
+    pub fn to_file<P: AsRef<Path>>(file: P) -> io::Result<Stream<File>> {
         Self::write_to_file(file)
     }
 
     /// Write metric values to a file.
-    pub fn write_to_file<P: AsRef<Path>>(file: P) -> error::Result<Stream<File>> {
+    pub fn write_to_file<P: AsRef<Path>>(file: P) -> io::Result<Stream<File>> {
         let file = OpenOptions::new()
             .write(true)
             .create(true)
@@ -75,7 +75,7 @@ impl Stream<File> {
     /// existing file, if false, the attempt will result in an error.
     #[deprecated(since = "0.8.0", note = "Use write_to_new_file()")]
     #[allow(clippy::wrong_self_convention)]
-    pub fn to_new_file<P: AsRef<Path>>(file: P, clobber: bool) -> error::Result<Stream<File>> {
+    pub fn to_new_file<P: AsRef<Path>>(file: P, clobber: bool) -> io::Result<Stream<File>> {
         Self::write_to_new_file(file, clobber)
     }
 
@@ -83,10 +83,7 @@ impl Stream<File> {
     ///
     /// Creates a new file to dump data into. If `clobber` is set to true, it allows overwriting
     /// existing file, if false, the attempt will result in an error.
-    pub fn write_to_new_file<P: AsRef<Path>>(
-        file: P,
-        clobber: bool,
-    ) -> error::Result<Stream<File>> {
+    pub fn write_to_new_file<P: AsRef<Path>>(file: P, clobber: bool) -> io::Result<Stream<File>> {
         let file = OpenOptions::new()
             .write(true)
             .create(true)
@@ -223,7 +220,7 @@ impl<W: Write + Send + Sync + 'static> InputScope for TextScope<W> {
 }
 
 impl<W: Write + Send + Sync + 'static> Flush for TextScope<W> {
-    fn flush(&self) -> error::Result<()> {
+    fn flush(&self) -> io::Result<()> {
         self.notify_flush_listeners();
         let mut entries = write_lock!(self.entries);
         if !entries.is_empty() {

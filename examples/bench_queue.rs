@@ -1,8 +1,6 @@
 //! A sample application asynchronously printing metrics to stdout.
 
-extern crate dipstick;
-
-use dipstick::*;
+use dipstick::{AtomicBucket, Input, InputQueueScope, InputScope, Stream};
 use std::env::args;
 use std::str::FromStr;
 use std::thread;
@@ -11,6 +9,7 @@ use std::time::Duration;
 
 fn main() {
     let bucket = AtomicBucket::new();
+    // NOTE: Wrapping an AtomicBucket with a Queue probably useless, as it is very fast and performs no I/O.
     let queue = InputQueueScope::wrap(bucket.clone(), 10000);
     let event = queue.marker("a");
     let args = &mut args();

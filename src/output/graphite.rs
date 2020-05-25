@@ -6,7 +6,7 @@ use crate::input::{Input, InputMetric, InputScope};
 use crate::metrics;
 use crate::name::MetricName;
 use crate::output::socket::RetrySocket;
-use crate::{error, CachedInput, QueuedInput};
+use crate::{CachedInput, QueuedInput};
 use crate::{Flush, MetricValue};
 
 use std::net::ToSocketAddrs;
@@ -22,6 +22,7 @@ use std::sync::{RwLock, RwLockWriteGuard};
 
 #[cfg(feature = "parking_lot")]
 use parking_lot::{RwLock, RwLockWriteGuard};
+use std::io;
 
 /// Graphite Input holds a socket to a graphite server.
 /// The socket is shared between scopes opened from the Input.
@@ -45,7 +46,7 @@ impl Input for Graphite {
 
 impl Graphite {
     /// Send metrics to a graphite server at the address and port provided.
-    pub fn send_to<A: ToSocketAddrs + Debug + Clone>(address: A) -> error::Result<Graphite> {
+    pub fn send_to<A: ToSocketAddrs + Debug + Clone>(address: A) -> io::Result<Graphite> {
         debug!("Connecting to graphite {:?}", address);
         let socket = Arc::new(RwLock::new(RetrySocket::new(address)?));
 
@@ -98,7 +99,7 @@ impl InputScope for GraphiteScope {
 }
 
 impl Flush for GraphiteScope {
-    fn flush(&self) -> error::Result<()> {
+    fn flush(&self) -> io::Result<()> {
         self.notify_flush_listeners();
         let buf = write_lock!(self.buffer);
         self.flush_inner(buf)
@@ -140,7 +141,7 @@ impl GraphiteScope {
         }
     }
 
-    fn flush_inner(&self, mut buf: RwLockWriteGuard<String>) -> error::Result<()> {
+    fn flush_inner(&self, mut buf: RwLockWriteGuard<String>) -> io::Result<()> {
         if buf.is_empty() {
             return Ok(());
         }
@@ -156,7 +157,7 @@ impl GraphiteScope {
             Err(e) => {
                 metrics::GRAPHITE_SEND_ERR.mark();
                 debug!("Failed to send buffer to graphite: {}", e);
-                Err(e.into())
+                Err(e)
             }
         }
     }

@@ -1,8 +1,6 @@
 //! A demonstration of customization of exported aggregated metrics.
 //! Using match on origin metric kind or score type to alter publication output.
 
-extern crate dipstick;
-
 use dipstick::*;
 use std::time::Duration;
 

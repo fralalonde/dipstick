@@ -13,8 +13,6 @@
 //! ```
 //!
 
-extern crate dipstick;
-
 use std::time::{Duration, Instant};
 
 use dipstick::*;

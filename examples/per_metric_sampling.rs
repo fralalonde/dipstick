@@ -1,7 +1,5 @@
 //! A sample application sending ad-hoc marker values both to statsd _and_ to stdout.
 
-extern crate dipstick;
-
 use dipstick::*;
 use std::time::Duration;
 

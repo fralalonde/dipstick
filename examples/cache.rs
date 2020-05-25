@@ -1,7 +1,5 @@
 //! A sample application asynchronously printing metrics to stdout.
 
-extern crate dipstick;
-
 use dipstick::*;
 use std::io;
 use std::thread::sleep;

@@ -1,10 +1,7 @@
 //! Use the metrics backend directly to log a metric value.
 //! Applications should use the metrics()-provided instruments instead.
 
-#[macro_use]
-extern crate dipstick;
-
-use dipstick::{Input, InputScope, Labels};
+use dipstick::{labels, Input, InputScope, Labels};
 
 fn main() {
     raw_write()

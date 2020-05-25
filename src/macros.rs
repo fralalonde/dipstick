@@ -23,8 +23,7 @@ macro_rules! time {
 /// ## Example
 ///
 /// ```
-/// #[macro_use] extern crate dipstick;
-///
+/// #[macro_use] ///
 /// use dipstick::*;
 ///
 /// # fn main() {

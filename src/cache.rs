@@ -1,7 +1,6 @@
 //! Metric input scope caching.
 
 use crate::attributes::{Attributes, OnFlush, Prefixed, WithAttributes};
-use crate::error;
 use crate::input::{Input, InputDyn, InputKind, InputMetric, InputScope};
 use crate::lru_cache as lru;
 use crate::name::MetricName;
@@ -14,6 +13,7 @@ use std::sync::RwLock;
 
 #[cfg(feature = "parking_lot")]
 use parking_lot::RwLock;
+use std::io;
 
 /// Wrap an input with a metric definition cache.
 /// This can provide performance benefits for metrics that are dynamically defined at runtime on each access.
@@ -101,7 +101,7 @@ impl InputScope for InputScopeCache {
 }
 
 impl Flush for InputScopeCache {
-    fn flush(&self) -> error::Result<()> {
+    fn flush(&self) -> io::Result<()> {
         self.notify_flush_listeners();
         self.target.flush()
     }

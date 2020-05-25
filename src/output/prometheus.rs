@@ -1,7 +1,6 @@
 //! Send metrics to a Prometheus server.
 
 use crate::attributes::{Attributes, Buffered, MetricId, OnFlush, Prefixed, WithAttributes};
-use crate::error;
 use crate::input::InputKind;
 use crate::input::{Input, InputMetric, InputScope};
 use crate::label::Labels;
@@ -17,6 +16,7 @@ use std::sync::{RwLock, RwLockWriteGuard};
 
 #[cfg(feature = "parking_lot")]
 use parking_lot::{RwLock, RwLockWriteGuard};
+use std::io;
 
 /// Prometheus Input holds a socket to a Prometheus server.
 /// The socket is shared between scopes opened from the Input.
@@ -43,7 +43,7 @@ impl Prometheus {
     /// URL path must include group identifier labels `job`
     /// as shown in https://github.com/prometheus/pushgateway#command-line
     /// For example `http://pushgateway.example.org:9091/metrics/job/some_job`
-    pub fn push_to(url: &str) -> error::Result<Prometheus> {
+    pub fn push_to(url: &str) -> io::Result<Prometheus> {
         debug!("Pushing to Prometheus {:?}", url);
 
         Ok(Prometheus {
@@ -95,7 +95,7 @@ impl InputScope for PrometheusScope {
 }
 
 impl Flush for PrometheusScope {
-    fn flush(&self) -> error::Result<()> {
+    fn flush(&self) -> io::Result<()> {
         self.notify_flush_listeners();
         let buf = write_lock!(self.buffer);
         self.flush_inner(buf)
@@ -154,7 +154,7 @@ impl PrometheusScope {
         }
     }
 
-    fn flush_inner(&self, mut buf: RwLockWriteGuard<String>) -> error::Result<()> {
+    fn flush_inner(&self, mut buf: RwLockWriteGuard<String>) -> io::Result<()> {
         if buf.is_empty() {
             return Ok(());
         }
@@ -176,7 +176,7 @@ impl PrometheusScope {
             Err(e) => {
                 metrics::PROMETHEUS_SEND_ERR.mark();
                 debug!("Failed to send buffer to Prometheus: {}", e);
-                Err(e.into())
+                Err(io::Error::new(io::ErrorKind::Other, e))
             }
         }
     }

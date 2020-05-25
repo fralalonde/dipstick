@@ -1,7 +1,5 @@
 //! Print metrics to stderr with custom formatter including a label.
 
-extern crate dipstick;
-
 use dipstick::{
     AppLabel, Formatting, Input, InputKind, InputScope, LabelOp, LineFormat, LineOp, LineTemplate,
     MetricName, Stream,

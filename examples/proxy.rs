@@ -1,7 +1,5 @@
 //! Use the proxy to dynamically switch the metrics input & names.
 
-extern crate dipstick;
-
 use dipstick::{Input, InputScope, Prefixed, Proxy, Stream};
 use std::thread::sleep;
 use std::time::Duration;

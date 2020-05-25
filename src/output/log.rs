@@ -3,7 +3,7 @@ use crate::input::{Input, InputKind, InputMetric, InputScope};
 use crate::name::MetricName;
 use crate::output::format::{Formatting, LineFormat, SimpleFormat};
 use crate::Flush;
-use crate::{error, CachedInput, QueuedInput};
+use crate::{CachedInput, QueuedInput};
 
 use std::sync::Arc;
 
@@ -13,6 +13,7 @@ use std::sync::RwLock;
 #[cfg(feature = "parking_lot")]
 use parking_lot::RwLock;
 
+use std::io;
 use std::io::Write;
 
 /// Buffered metrics log output.
@@ -146,7 +147,7 @@ impl InputScope for LogScope {
 }
 
 impl Flush for LogScope {
-    fn flush(&self) -> error::Result<()> {
+    fn flush(&self) -> io::Result<()> {
         self.notify_flush_listeners();
         let mut entries = write_lock!(self.entries);
         if !entries.is_empty() {

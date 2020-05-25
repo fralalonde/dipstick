@@ -53,7 +53,6 @@ macro_rules! read_lock {
 
 mod attributes;
 mod clock;
-mod error;
 mod input;
 mod label;
 mod metrics;
@@ -61,7 +60,6 @@ mod name;
 mod pcg32;
 mod proxy;
 mod scheduler;
-mod void;
 
 mod atomic;
 mod stats;
@@ -76,14 +74,13 @@ pub use crate::attributes::{
     Buffered, Buffering, Observe, ObserveWhen, OnFlush, OnFlushCancel, Prefixed, Sampled, Sampling,
 };
 pub use crate::clock::TimeHandle;
-pub use crate::error::Result;
 pub use crate::input::{
     Counter, Gauge, Input, InputDyn, InputKind, InputMetric, InputScope, Level, Marker, Timer,
 };
 pub use crate::label::{AppLabel, Labels, ThreadLabel};
 pub use crate::name::{MetricName, NameParts};
+pub use crate::output::void::Void;
 pub use crate::scheduler::{Cancel, CancelGuard, CancelHandle, ScheduleFlush};
-pub use crate::void::Void;
 
 #[cfg(test)]
 pub use crate::clock::{mock_clock_advance, mock_clock_reset};
@@ -109,13 +106,15 @@ pub use crate::multi::{MultiInput, MultiInputScope};
 pub use crate::queue::{InputQueue, InputQueueScope, QueuedInput};
 pub use crate::stats::{stats_all, stats_average, stats_summary, ScoreType};
 
+use std::io;
+
 /// Base type for recorded metric values.
 pub type MetricValue = isize;
 
 /// Both InputScope and OutputScope share the ability to flush the recorded data.
 pub trait Flush {
     /// Flush does nothing by default.
-    fn flush(&self) -> Result<()>;
+    fn flush(&self) -> io::Result<()>;
 }
 
 #[cfg(feature = "bench")]

@@ -4,8 +4,8 @@ use crate::name::MetricName;
 use crate::{Flush, MetricValue};
 
 use std::collections::BTreeMap;
-use std::error::Error;
 
+use std::io;
 use std::sync::{Arc, RwLock};
 
 /// A BTreeMap wrapper to receive metrics or stats values.
@@ -64,7 +64,7 @@ impl InputScope for StatsMapScope {
 }
 
 impl Flush for StatsMapScope {
-    fn flush(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
+    fn flush(&self) -> io::Result<()> {
         self.notify_flush_listeners();
         Ok(())
     }

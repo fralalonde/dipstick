@@ -3,7 +3,7 @@ use crate::Flush;
 
 use crate::attributes::MetricId;
 use crate::{Input, InputDyn, InputKind, InputMetric, InputScope};
-use std::error::Error;
+use std::io;
 use std::sync::Arc;
 
 lazy_static! {
@@ -50,7 +50,7 @@ impl InputScope for VoidInput {
 }
 
 impl Flush for VoidInput {
-    fn flush(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
+    fn flush(&self) -> io::Result<()> {
         Ok(())
     }
 }

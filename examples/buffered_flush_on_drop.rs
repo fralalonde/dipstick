@@ -1,7 +1,5 @@
 //! Metrics are printed at the end of every cycle as scope is dropped
 
-extern crate dipstick;
-
 use std::thread::sleep;
 use std::time::Duration;
 

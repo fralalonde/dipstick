@@ -1,7 +1,5 @@
 //! A sample application sending ad-hoc counter values both to statsd _and_ to stdout.
 
-extern crate dipstick;
-
 use dipstick::{Graphite, Input, InputScope, MultiInput, Prefixed, Stream};
 use std::time::Duration;
 

@@ -3,7 +3,8 @@ use crate::input::InputKind;
 use crate::name::MetricName;
 use crate::MetricValue;
 
-use std::io::{Error, Write};
+use std::io;
+use std::io::Write;
 use std::sync::Arc;
 
 /// Print commands are steps in the execution of output templates.
@@ -48,12 +49,7 @@ impl LineTemplate {
     }
 
     /// Template execution applies commands in turn, writing to the output.
-    pub fn print<L>(
-        &self,
-        output: &mut dyn Write,
-        value: MetricValue,
-        lookup: L,
-    ) -> Result<(), Error>
+    pub fn print<L>(&self, output: &mut dyn Write, value: MetricValue, lookup: L) -> io::Result<()>
     where
         L: Fn(&str) -> Option<Arc<String>>,
     {

@@ -1,8 +1,6 @@
 //! A sample application continuously aggregating metrics,
 //! printing the summary stats every three seconds
 
-extern crate dipstick;
-
 use dipstick::*;
 use std::time::Duration;
 
