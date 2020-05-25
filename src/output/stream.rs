@@ -83,10 +83,7 @@ impl Stream<File> {
     ///
     /// Creates a new file to dump data into. If `clobber` is set to true, it allows overwriting
     /// existing file, if false, the attempt will result in an error.
-    pub fn write_to_new_file<P: AsRef<Path>>(
-        file: P,
-        clobber: bool,
-    ) -> io::Result<Stream<File>> {
+    pub fn write_to_new_file<P: AsRef<Path>>(file: P, clobber: bool) -> io::Result<Stream<File>> {
         let file = OpenOptions::new()
             .write(true)
             .create(true)

@@ -7,8 +7,8 @@ use crate::output::void::VOID_INPUT;
 use crate::Flush;
 
 use std::collections::{BTreeMap, HashMap};
-use std::{fmt, io};
 use std::sync::{Arc, Weak};
+use std::{fmt, io};
 
 #[cfg(not(feature = "parking_lot"))]
 use std::sync::RwLock;

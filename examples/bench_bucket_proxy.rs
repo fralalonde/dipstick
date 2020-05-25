@@ -1,11 +1,11 @@
 //! A sample application asynchronously printing metrics to stdout.
 
+use dipstick::{AtomicBucket, Input, InputScope, Proxy, Stream};
 use std::env::args;
 use std::str::FromStr;
 use std::thread;
 use std::thread::sleep;
 use std::time::Duration;
-use dipstick::{Proxy, AtomicBucket, InputScope, Stream, Input};
 
 fn main() {
     let event = Proxy::default().marker("a");

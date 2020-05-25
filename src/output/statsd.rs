@@ -5,10 +5,10 @@ use crate::attributes::{
 };
 use crate::input::InputKind;
 use crate::input::{Input, InputMetric, InputScope};
+use crate::metrics;
 use crate::name::MetricName;
 use crate::pcg32;
 use crate::{CachedInput, QueuedInput};
-use crate::{metrics};
 use crate::{Flush, MetricValue};
 
 use std::net::ToSocketAddrs;
@@ -187,7 +187,7 @@ impl StatsdScope {
                 }
                 Err(e) => {
                     metrics::STATSD_SEND_ERR.mark();
-                    return Err(e.into());
+                    return Err(e);
                 }
             };
             buffer.clear();

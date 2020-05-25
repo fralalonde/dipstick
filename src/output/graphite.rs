@@ -157,7 +157,7 @@ impl GraphiteScope {
             Err(e) => {
                 metrics::GRAPHITE_SEND_ERR.mark();
                 debug!("Failed to send buffer to graphite: {}", e);
-                Err(e.into())
+                Err(e)
             }
         }
     }

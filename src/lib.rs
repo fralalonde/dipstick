@@ -79,8 +79,8 @@ pub use crate::input::{
 };
 pub use crate::label::{AppLabel, Labels, ThreadLabel};
 pub use crate::name::{MetricName, NameParts};
-pub use crate::scheduler::{Cancel, CancelGuard, CancelHandle, ScheduleFlush};
 pub use crate::output::void::Void;
+pub use crate::scheduler::{Cancel, CancelGuard, CancelHandle, ScheduleFlush};
 
 #[cfg(test)]
 pub use crate::clock::{mock_clock_advance, mock_clock_reset};

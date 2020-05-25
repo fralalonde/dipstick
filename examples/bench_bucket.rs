@@ -1,11 +1,11 @@
 //! A sample application asynchronously printing metrics to stdout.
 
+use dipstick::{stats_all, AtomicBucket, Input, InputScope, Stream};
 use std::env::args;
 use std::str::FromStr;
 use std::thread;
 use std::thread::sleep;
 use std::time::Duration;
-use dipstick::{AtomicBucket, stats_all, InputScope, Stream, Input};
 
 fn main() {
     let bucket = AtomicBucket::new();

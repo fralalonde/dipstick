@@ -10,12 +10,12 @@ use crate::{Flush, MetricValue, Void};
 
 use std::borrow::Borrow;
 use std::collections::BTreeMap;
-use std::{fmt, io};
 use std::isize;
 use std::mem;
 use std::sync::atomic::AtomicIsize;
 use std::sync::atomic::Ordering::*;
 use std::sync::Arc;
+use std::{fmt, io};
 
 #[cfg(not(feature = "parking_lot"))]
 use std::sync::RwLock;

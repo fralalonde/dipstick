@@ -5,8 +5,8 @@ use crate::input::{Input, InputDyn, InputKind, InputMetric, InputScope};
 use crate::name::MetricName;
 use crate::Flush;
 
-use std::sync::Arc;
 use std::io;
+use std::sync::Arc;
 
 /// Opens multiple scopes at a time from just as many outputs.
 #[derive(Clone, Default)]

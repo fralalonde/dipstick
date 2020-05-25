@@ -5,8 +5,8 @@ use crate::{Flush, MetricValue};
 
 use std::collections::BTreeMap;
 
-use std::sync::{Arc, RwLock};
 use std::io;
+use std::sync::{Arc, RwLock};
 
 /// A BTreeMap wrapper to receive metrics or stats values.
 /// Every received value for a metric replaces the previous one (if any).

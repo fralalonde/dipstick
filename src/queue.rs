@@ -13,7 +13,7 @@ use crate::{Flush, MetricValue};
 #[cfg(not(feature = "crossbeam-channel"))]
 use std::sync::mpsc;
 use std::sync::Arc;
-use std::{thread, io};
+use std::{io, thread};
 
 #[cfg(feature = "crossbeam-channel")]
 use crossbeam_channel as crossbeam;

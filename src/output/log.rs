@@ -13,8 +13,8 @@ use std::sync::RwLock;
 #[cfg(feature = "parking_lot")]
 use parking_lot::RwLock;
 
-use std::io::Write;
 use std::io;
+use std::io::Write;
 
 /// Buffered metrics log output.
 #[derive(Clone)]

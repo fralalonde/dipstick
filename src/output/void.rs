@@ -3,8 +3,8 @@ use crate::Flush;
 
 use crate::attributes::MetricId;
 use crate::{Input, InputDyn, InputKind, InputMetric, InputScope};
-use std::sync::Arc;
 use std::io;
+use std::sync::Arc;
 
 lazy_static! {
     /// The reference instance identifying an uninitialized metric config.
