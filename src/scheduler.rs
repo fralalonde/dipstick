@@ -102,7 +102,7 @@ struct ScheduledTask {
     next_time: Instant,
     period: Duration,
     handle: CancelHandle,
-    operation: Arc<dyn Fn(Instant) -> () + Send + Sync + 'static>,
+    operation: Arc<dyn Fn(Instant) + Send + Sync + 'static>,
 }
 
 impl Ord for ScheduledTask {
@@ -185,7 +185,7 @@ impl Scheduler {
     /// Schedule a task to run periodically.
     pub fn schedule<F>(&self, period: Duration, operation: F) -> CancelHandle
     where
-        F: Fn(Instant) -> () + Send + Sync + 'static,
+        F: Fn(Instant) + Send + Sync + 'static,
     {
         let handle = CancelHandle::new();
         let new_task = ScheduledTask {

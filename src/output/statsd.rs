@@ -10,6 +10,7 @@ use crate::name::MetricName;
 use crate::pcg32;
 use crate::{CachedInput, QueuedInput};
 use crate::{Flush, MetricValue};
+use std::fmt::Write;
 
 use std::net::ToSocketAddrs;
 use std::net::UdpSocket;
@@ -49,9 +50,11 @@ impl Statsd {
 }
 
 impl Buffered for Statsd {}
+
 impl Sampled for Statsd {}
 
 impl QueuedInput for Statsd {}
+
 impl CachedInput for Statsd {}
 
 impl Input for Statsd {
@@ -109,7 +112,7 @@ impl InputScope for StatsdScope {
         let metric_id = MetricId::forge("statsd", name);
 
         if let Sampling::Random(float_rate) = self.get_sampling() {
-            suffix.push_str(&format! {"|@{}\n", float_rate});
+            let _ = write!(suffix, "|@{}\n", float_rate);
             let int_sampling_rate = pcg32::to_int_rate(float_rate);
             let metric = StatsdMetric {
                 prefix,
@@ -123,7 +126,7 @@ impl InputScope for StatsdScope {
                 }
             })
         } else {
-            suffix.push_str("\n");
+            suffix.push('\n');
             let metric = StatsdMetric {
                 prefix,
                 suffix,
@@ -262,7 +265,6 @@ impl Drop for StatsdScope {
 
 #[cfg(feature = "bench")]
 mod bench {
-
     use super::*;
     use crate::attributes::*;
     use crate::input::*;

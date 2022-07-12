@@ -236,7 +236,7 @@ impl InputScope for Proxy {
             .metrics
             .get(&name)
             // TODO validate that InputKind matches existing
-            .and_then(|proxy_ref| Weak::upgrade(proxy_ref))
+            .and_then(Weak::upgrade)
             .unwrap_or_else(|| {
                 let namespace = &*name;
                 {

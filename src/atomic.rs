@@ -107,11 +107,9 @@ impl InnerAtomicBucket {
             .metrics
             .iter()
             .flat_map(|(name, scores)| {
-                if let Some(values) = scores.reset(duration_seconds) {
-                    Some((name, scores.metric_kind(), values))
-                } else {
-                    None
-                }
+                scores
+                    .reset(duration_seconds)
+                    .map(|values| (name, scores.metric_kind(), values))
             })
             .collect();
 
@@ -429,7 +427,10 @@ impl AtomicScores {
 fn swap_if(counter: &AtomicIsize, new_value: isize, compare: fn(isize, isize) -> bool) {
     let mut current = counter.load(Acquire);
     while compare(new_value, current) {
-        if counter.compare_and_swap(current, new_value, Release) == new_value {
+        if counter
+            .compare_exchange(current, new_value, Relaxed, Relaxed)
+            .is_ok()
+        {
             // update successful
             break;
         }

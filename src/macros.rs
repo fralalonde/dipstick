@@ -51,7 +51,7 @@ macro_rules! labels {
             $(
                 let _ = _map.insert($key.into(), ::std::sync::Arc::new($value.into()));
             )*
-            crate::Labels::from(_map)
+            $crate::Labels::from(_map)
         }
     };
     () => {

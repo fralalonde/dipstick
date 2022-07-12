@@ -1,11 +1,11 @@
 [package]
 name = "dipstick"
-version = "0.9.0"
+version = "0.9.1"
 authors = ["Francis Lalonde <fralalonde@gmail.com>"]
 
-description = """A fast, all-purpose metrics library decoupling instrumentation from reporting backends.
- Similar to popular logging frameworks, but with counters, timers and gauges.
- Can combine outputs (e.g. log + graphite), do sampling, aggregation, periodical publication, etc."""
+description = """Fast, all-purpose metrics library decoupling instrumentation from reporting backends.
+ Like logging frameworks but with counters, timers and gauges.
+ Supports combined outputs (e.g. log + graphite), sampling, aggregation, scheduled push, etc."""
 
 documentation = "https://docs.rs/dipstick"
 homepage = "https://github.com/fralalonde/dipstick"
@@ -13,7 +13,7 @@ repository = "https://github.com/fralalonde/dipstick"
 readme = "README.md"
 keywords = ["metrics", "statsd", "graphite", "timer", "prometheus"]
 license = "MIT/Apache-2.0"
-edition = "2018"
+edition = "2021"
 
 [badges]
 travis-ci = { repository = "fralalonde/dipstick", branch = "master" }

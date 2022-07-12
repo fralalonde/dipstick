@@ -39,7 +39,7 @@ fn pcg32_random() -> u32 {
 /// all  | 1.0        | 0x0      | 100%
 /// none | 0.0        | 0xFFFFFFFF | 0%
 pub fn to_int_rate(float_rate: f64) -> u32 {
-    assert!(float_rate <= 1.0 && float_rate >= 0.0);
+    assert!((0.0..=1.0).contains(&float_rate));
     ((1.0 - float_rate) * f64::from(::std::u32::MAX)) as u32
 }
 

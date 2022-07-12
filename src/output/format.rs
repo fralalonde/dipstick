@@ -95,7 +95,7 @@ pub trait LineFormat: Send + Sync {
 #[derive(Default)]
 pub struct SimpleFormat {
     // TODO make separator configurable
-// separator: String,
+    // separator: String,
 }
 
 impl LineFormat for SimpleFormat {

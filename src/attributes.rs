@@ -73,7 +73,7 @@ pub type Shared<T> = Arc<RwLock<T>>;
 
 pub struct Listener {
     listener_id: usize,
-    listener_fn: Arc<dyn Fn(Instant) -> () + Send + Sync + 'static>,
+    listener_fn: Arc<dyn Fn(Instant) + Send + Sync + 'static>,
 }
 
 /// Attributes common to metric components.
