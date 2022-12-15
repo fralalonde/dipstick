@@ -59,10 +59,12 @@ impl Default for Buffering {
     }
 }
 
+/// A metrics identifier
 #[derive(Clone, Debug, Hash, Eq, PartialOrd, PartialEq)]
 pub struct MetricId(String);
 
 impl MetricId {
+    /// Return a MetricId based on output type and metric name
     pub fn forge(out_type: &str, name: MetricName) -> Self {
         let id: String = name.join("/");
         MetricId(format!("{}:{}", out_type, id))
