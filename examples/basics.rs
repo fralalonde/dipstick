@@ -45,6 +45,6 @@ fn main() {
 
     // using a "time handle"
     let start_time = timer.start();
-    Duration::from_millis(5);
+    sleep(Duration::from_millis(5));
     timer.stop(start_time);
 }

@@ -71,7 +71,8 @@ mod multi;
 mod queue;
 
 pub use crate::attributes::{
-    Buffered, Buffering, Observe, ObserveWhen, OnFlush, OnFlushCancel, Prefixed, Sampled, Sampling,
+    Attributes, Buffered, Buffering, MetricId, Observe, ObserveWhen, OnFlush, OnFlushCancel,
+    Prefixed, Sampled, Sampling, WithAttributes,
 };
 pub use crate::clock::TimeHandle;
 pub use crate::input::{
