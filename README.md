@@ -75,7 +75,7 @@ To use Dipstick in your project, add the following line to your `Cargo.toml`
 in the `[dependencies]` section:
 
 ```toml
-dipstick = "0.8.0"
+dipstick = "0.9.0"
 ```
 
 ## External features

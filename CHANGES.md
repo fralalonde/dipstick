@@ -1,5 +1,13 @@
 # Latest changes + history
 
+## version 0.9.1
+- Fix sleep in `basic` example (@RafalGoslawski)
+- Expose attributes::MetricId+Attributes to make extending new outputs possible (@RafalGoslawski #86)
+- Various clippy fixes
+- Dropped boilerplate-y CoC and contribution documents. Just be nice, mkay?
+- Dropped .travis.yml. Trav's dead, baby.
+- Revalidated full build after overdue `cargo update`
+
 ## version 0.9.0
 - Abandon custom Result type and error module in favor 
   of io::Result usage across all API. (Based on @rtyler's comment in #80)
