@@ -40,7 +40,7 @@ fn pcg32_random() -> u32 {
 /// none | 0.0        | 0xFFFFFFFF | 0%
 pub fn to_int_rate(float_rate: f64) -> u32 {
     assert!((0.0..=1.0).contains(&float_rate));
-    ((1.0 - float_rate) * f64::from(::std::u32::MAX)) as u32
+    ((1.0 - float_rate) * f64::from(u32::MAX)) as u32
 }
 
 /// randomly select samples based on an int rate

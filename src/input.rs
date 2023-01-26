@@ -230,10 +230,7 @@ impl Timer {
 
     /// Obtain a opaque handle to the current time.
     /// The handle is passed back to the stop() method to record a time interval.
-    /// This is actually a convenience method to the TimeHandle::now()
-    /// Beware, handles obtained here are not bound to this specific timer instance
-    /// _for now_ but might be in the future for safety.
-    /// If you require safe multi-timer handles, get them through TimeType::now()
+    /// Caveat: Handles obtained are not bound to this specific timer instance (but should be)
     pub fn start(&self) -> TimeHandle {
         TimeHandle::now()
     }
@@ -242,9 +239,9 @@ impl Timer {
     /// This call can be performed multiple times using the same handle,
     /// reporting distinct time intervals each time.
     /// Returns the microsecond interval value that was recorded.
-    pub fn stop(&self, start_time: TimeHandle) -> MetricValue {
+    pub fn stop(&self, start_time: TimeHandle) {
         let elapsed_us = start_time.elapsed_us();
-        self.interval_us(elapsed_us) as isize
+        self.interval_us(elapsed_us);
     }
 
     /// Record the time taken to execute the provided closure
