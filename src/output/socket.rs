@@ -31,9 +31,11 @@ impl RetrySocket {
         // FIXME instead of collecting addresses early, store ToSocketAddrs as trait object
         // FIXME apparently this can not be one because of Associated Types clusterfuck (?!)
         let addresses = addresses.to_socket_addrs()?.collect();
+        const INIT_DELAY: Duration = Duration::from_millis(MIN_RECONNECT_DELAY_MS);
+        let next_try = Instant::now().checked_add(INIT_DELAY).expect("init delay");
         let mut socket = RetrySocket {
             retries: 0,
-            next_try: Instant::now() - Duration::from_millis(MIN_RECONNECT_DELAY_MS),
+            next_try,
             addresses,
             socket: None,
         };
@@ -63,12 +65,14 @@ impl RetrySocket {
     fn backoff(&mut self, e: io::Error) -> io::Error {
         self.socket = None;
         self.retries += 1;
-        let delay = MAX_RECONNECT_DELAY_MS.min(MIN_RECONNECT_DELAY_MS << self.retries);
+        // double the delay with each retry
+        let exp_delay = MIN_RECONNECT_DELAY_MS << self.retries;
+        let max_delay = MAX_RECONNECT_DELAY_MS.min(exp_delay);
         warn!(
             "Could not connect to {:?} after {} trie(s). Backing off reconnection by {}ms. {}",
-            self.addresses, self.retries, delay, e
+            self.addresses, self.retries, exp_delay, e
         );
-        self.next_try = Instant::now() + Duration::from_millis(delay);
+        self.next_try = Instant::now() + Duration::from_millis(max_delay);
         e
     }
 

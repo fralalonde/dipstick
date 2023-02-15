@@ -143,7 +143,7 @@ impl Scheduler {
             .spawn(move || {
                 let mut wait_for = MIN_DELAY;
                 while let Some(sss) = sched1.upgrade() {
-                    let &(ref heap_mutex, ref condvar) = &*sss;
+                    let (heap_mutex, condvar) = &*sss;
                     let heap = heap_mutex.lock().unwrap();
                     let (mut tasks, _timed_out) = condvar.wait_timeout(heap, wait_for).unwrap();
                     'work: loop {

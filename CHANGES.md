@@ -8,6 +8,9 @@
 - Dropped .travis.yml. Trav's dead, baby.
 - Revalidated full build after overdue `cargo update`
 
+## version 0.9.1
+- Fix bugs
+
 ## version 0.9.0
 - Abandon custom Result type and error module in favor 
   of io::Result usage across all API. (Based on @rtyler's comment in #80)
