@@ -98,7 +98,7 @@ impl InputScope for StatsdScope {
         suffix.push('|');
         suffix.push_str(match kind {
             InputKind::Marker | InputKind::Counter => "c",
-            InputKind::Gauge | InputKind::Level => "g",
+            InputKind::Gauge | InputKind::Level | InputKind::Percentile => "g",
             InputKind::Timer => "ms",
         });
 

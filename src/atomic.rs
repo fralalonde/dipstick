@@ -294,6 +294,10 @@ struct AtomicScores {
     kind: InputKind,
     /// The actual recorded metric scores
     scores: [AtomicIsize; SCORES_LEN],
+    /// Percentile Data Point
+    percentile_scores: std::sync::Mutex<Vec<MetricValue>>,
+    /// Percentile List
+    percentiles: Vec<isize>, // 0 - 1000
 }
 
 impl AtomicScores {
@@ -302,6 +306,8 @@ impl AtomicScores {
         AtomicScores {
             kind,
             scores: unsafe { mem::transmute(AtomicScores::blank()) },
+            percentile_scores: std::sync::Mutex::new(Vec::new()),
+            percentiles: vec![0, 25, 50, 75, 90, 100]
         }
     }
 
@@ -338,11 +344,15 @@ impl AtomicScores {
                 swap_if(&self.scores[MAX], value, |new, current| new > current);
                 swap_if(&self.scores[MIN], value, |new, current| new < current);
             }
+            InputKind::Percentile => {
+                let mut data = self.percentile_scores.lock().unwrap();
+                data.push(value);
+            }
         }
     }
 
     /// Reset scores to zero, return previous values
-    fn snapshot(&self, scores: &mut [isize; 4]) -> bool {
+    fn snapshot(&self, scores: &mut [isize; 4], percentile_scores: &mut Vec<(isize, isize)>) -> bool {
         // NOTE copy timestamp, count AND sum _before_ testing for data to reduce concurrent discrepancies
         scores[HIT] = self.scores[HIT].swap(0, AcqRel);
         scores[SUM] = self.scores[SUM].swap(0, AcqRel);
@@ -365,14 +375,28 @@ impl AtomicScores {
                 scores[MIN] = scores[SUM];
             }
         }
-
+        let mut p_data = self.percentile_scores.lock().unwrap();
+        let p_data_len = p_data.len();
+        if p_data_len > 0 {
+            p_data.sort();
+            let mut index = 0;
+            for percentile in self.percentiles.iter() {
+                while index < p_data_len && 100 * (index + 1) < *percentile as usize * p_data_len {
+                    index += 1;
+                }
+                let i = std::cmp::max(std::cmp::min(index, p_data_len - 1), 0);
+                percentile_scores.push((*percentile, p_data[i]));
+            }
+            p_data.clear();
+        }
         true
     }
 
     /// Map raw scores (if any) to applicable statistics
     pub fn reset(&self, duration_seconds: f64) -> Option<Vec<ScoreType>> {
         let mut scores = AtomicScores::blank();
-        if self.snapshot(&mut scores) {
+        let mut percentile_scores = Vec::new();
+        if self.snapshot(&mut scores, &mut percentile_scores) {
             let mut snapshot = Vec::new();
             match self.kind {
                 InputKind::Marker => {
@@ -413,6 +437,11 @@ impl AtomicScores {
                     snapshot.push(Mean(scores[SUM] as f64 / scores[HIT] as f64));
                     // counter rate uses the SUM of values per second (e.g. to get bytes/s)
                     snapshot.push(Rate(scores[SUM] as f64 / duration_seconds))
+                }
+                InputKind::Percentile => {
+                    for (percentile, score) in percentile_scores {
+                        snapshot.push(Percentile((percentile, score)));
+                    }
                 }
             }
             Some(snapshot)

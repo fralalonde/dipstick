@@ -73,6 +73,11 @@ pub trait InputScope: Flush {
         self.new_metric(name.into(), InputKind::Gauge).into()
     }
 
+    /// Define a Percentile
+    fn percentile(&self, name: &str) -> Percentile {
+        self.new_metric(name.into(), InputKind::Percentile).into()
+    }
+
     /// Define a Level.
     fn level(&self, name: &str) -> Level {
         self.new_metric(name.into(), InputKind::Level).into()
@@ -129,6 +134,8 @@ pub enum InputKind {
     Gauge,
     /// Time interval, internal to the app or provided by an external source
     Timer,
+    /// Percentile
+    Percentile,
 }
 
 /// Used by the metrics! macro to obtain the InputKind from the stringified type.
@@ -140,6 +147,7 @@ impl<'a> From<&'a str> for InputKind {
             "Gauge" => InputKind::Gauge,
             "Timer" => InputKind::Timer,
             "Level" => InputKind::Level,
+            "Percentile" => InputKind::Percentile,
             _ => panic!("No InputKind '{}' defined", s),
         }
     }
@@ -209,6 +217,18 @@ impl Gauge {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct Percentile {
+    inner: InputMetric
+}
+
+impl Percentile {
+    /// Record a value point for this percentile
+    pub fn value<V: ToPrimitive>(&self, value: V) {
+        self.inner.write(value.to_isize().unwrap(), labels![])
+    }
+}
+
 /// A timer that sends values to the metrics backend
 /// Timers can record time intervals in multiple ways :
 /// - with the time! macrohich wraps an expression or block with start() and stop() calls.
@@ -256,6 +276,12 @@ impl Timer {
 impl From<InputMetric> for Gauge {
     fn from(metric: InputMetric) -> Gauge {
         Gauge { inner: metric }
+    }
+}
+
+impl From<InputMetric> for Percentile {
+    fn from(metric: InputMetric) -> Percentile {
+        Percentile { inner: metric }
     }
 }
 
