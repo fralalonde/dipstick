@@ -5,7 +5,7 @@ use crate::name::MetricName;
 use crate::MetricValue;
 
 /// Possibly aggregated scores.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum ScoreType {
     /// Number of times the metric was used.
     Count(isize),
@@ -19,6 +19,8 @@ pub enum ScoreType {
     Mean(f64),
     /// Mean rate (hit count / period length in seconds, non-atomic)
     Rate(f64),
+    /// Percentile
+    Percentile((isize, isize)),
 }
 
 /// A predefined export strategy reporting all aggregated stats for all metric types.
@@ -40,6 +42,8 @@ pub fn stats_all(
             name.make_name("rate"),
             rate.round() as MetricValue,
         )),
+        ScoreType::Percentile((percentile, value)) => 
+            Some((InputKind::Percentile, name.make_name(format!("percentile_{percentile}")), value)),
     }
 }
 
@@ -86,7 +90,7 @@ pub fn stats_summary(
             ScoreType::Sum(sum) => Some((kind, name, sum)),
             _ => None,
         },
-        InputKind::Gauge | InputKind::Level => match score {
+        InputKind::Gauge | InputKind::Level | InputKind::Percentile => match score {
             ScoreType::Mean(mean) => Some((InputKind::Gauge, name, mean.round() as MetricValue)),
             _ => None,
         },
