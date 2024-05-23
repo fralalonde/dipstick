@@ -4,14 +4,14 @@
 #![cfg_attr(feature = "tool_lints", allow(clippy::unreadable_literal))]
 #![allow(clippy::unreadable_literal)]
 
-use std::cell::RefCell;
+use std::{cell::RefCell, time::{SystemTime, UNIX_EPOCH}};
 
 fn seed() -> u64 {
     let seed = 5573589319906701683_u64;
     let seed = seed
         .wrapping_mul(6364136223846793005)
         .wrapping_add(1442695040888963407)
-        .wrapping_add(time::precise_time_ns());
+        .wrapping_add(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos() as u64);
     seed.wrapping_mul(6364136223846793005)
         .wrapping_add(1442695040888963407)
 }
