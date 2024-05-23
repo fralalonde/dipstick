@@ -8,7 +8,6 @@ use std::fmt;
 use std::sync::Arc;
 
 // TODO maybe define an 'AsValue' trait + impl for supported number types, then drop 'num' crate
-pub use num::integer;
 pub use num::ToPrimitive;
 use std::ops::Deref;
 
