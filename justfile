@@ -6,7 +6,7 @@ all: format test examples bench lint
 
 # Unit and doc tests
 test:
-	cargo test --no-default-features --features="skeptic"
+	cargo test --no-default-features --features="doc-comment"
 
 examples:
 	cargo build --examples

@@ -10,6 +10,14 @@
 )]
 #![recursion_limit = "32"]
 
+#[cfg(doctest)]
+#[macro_use]
+extern crate doc_comment;
+#[cfg(doctest)]
+doctest!("../README.md");
+#[cfg(doctest)]
+doctest!("../HANDBOOK.md");
+
 #[cfg(feature = "bench")]
 extern crate test;
 

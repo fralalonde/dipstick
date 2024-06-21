@@ -113,7 +113,7 @@ impl Ord for ScheduledTask {
 
 impl PartialOrd for ScheduledTask {
     fn partial_cmp(&self, other: &ScheduledTask) -> Option<Ordering> {
-        other.next_time.partial_cmp(&self.next_time)
+        Some(other.next_time.cmp(&self.next_time))
     }
 }
 

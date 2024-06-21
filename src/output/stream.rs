@@ -61,11 +61,7 @@ impl Stream<File> {
 
     /// Write metric values to a file.
     pub fn write_to_file<P: AsRef<Path>>(file: P) -> io::Result<Stream<File>> {
-        let file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .append(true)
-            .open(file)?;
+        let file = OpenOptions::new().create(true).append(true).open(file)?;
         Ok(Stream::write_to(file))
     }
 
@@ -86,7 +82,6 @@ impl Stream<File> {
     pub fn write_to_new_file<P: AsRef<Path>>(file: P, clobber: bool) -> io::Result<Stream<File>> {
         let file = OpenOptions::new()
             .write(true)
-            .create(true)
             .create_new(!clobber)
             .open(file)?;
         Ok(Stream::write_to(file))
@@ -250,7 +245,7 @@ mod test {
 
     #[test]
     fn sink_print() {
-        let c = super::Stream::write_to(io::stdout()).metrics();
+        let c = Stream::write_to(io::stdout()).metrics();
         let m = c.new_metric("test".into(), InputKind::Marker);
         m.write(33, labels![]);
     }
