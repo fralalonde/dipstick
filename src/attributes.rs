@@ -18,11 +18,12 @@ use crate::Labels;
 use parking_lot::RwLock;
 use std::ops::Deref;
 
-/// The actual distribution (random, fixed-cycled, etc) depends on selected sampling method.
-#[derive(Debug, Clone, Copy)]
+/// The actual distribution (random, fixed-cycled, etc.) depends on selected sampling method.
+#[derive(Debug, Clone, Copy, Default)]
 pub enum Sampling {
     /// Record every collected value.
     /// Effectively disable sampling.
+    #[default]
     Full,
 
     /// Floating point sampling rate
@@ -32,18 +33,13 @@ pub enum Sampling {
     Random(f64),
 }
 
-impl Default for Sampling {
-    fn default() -> Sampling {
-        Sampling::Full
-    }
-}
-
 /// A metrics buffering strategy.
 /// All strategies other than `Unbuffered` are applied as a best-effort, meaning that the buffer
 /// may be flushed at any moment before reaching the limit, for any or no reason in particular.
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Default)]
 pub enum Buffering {
     /// Do not buffer output.
+    #[default]
     Unbuffered,
 
     /// A buffer of maximum specified size is used.
@@ -51,12 +47,6 @@ pub enum Buffering {
 
     /// Buffer as much as possible.
     Unlimited,
-}
-
-impl Default for Buffering {
-    fn default() -> Buffering {
-        Buffering::Unbuffered
-    }
 }
 
 /// A metrics identifier
@@ -267,15 +257,6 @@ pub trait Prefixed {
     fn prefix_prepend<S: Into<MetricName>>(&self, name: S) -> MetricName {
         name.into().prepend(self.get_prefixes().clone())
     }
-}
-
-/// Name operations support.
-pub trait Label {
-    /// Return the namespace of the component.
-    fn get_label(&self) -> &Arc<HashMap<String, String>>;
-
-    /// Join namespace and prepend in newly defined metrics.
-    fn label(&self, name: &str) -> Self;
 }
 
 impl<T: WithAttributes> Prefixed for T {

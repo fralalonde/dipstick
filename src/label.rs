@@ -66,7 +66,7 @@ impl LabelScope {
 
     fn collect(&self, map: &mut HashMap<String, LabelValue>) {
         if let Some(pairs) = &self.pairs {
-            map.extend(pairs.as_ref().clone().into_iter())
+            map.extend(pairs.as_ref().clone())
         }
     }
 }

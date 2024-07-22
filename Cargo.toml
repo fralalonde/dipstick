@@ -1,6 +1,6 @@
 [package]
 name = "dipstick"
-version = "0.9.1"
+version = "0.9.2"
 authors = ["Francis Lalonde <fralalonde@gmail.com>"]
 
 description = """Fast, all-purpose metrics library decoupling instrumentation from reporting backends.
@@ -22,24 +22,23 @@ travis-ci = { repository = "fralalonde/dipstick", branch = "master" }
 log = "0.4"
 lazy_static = "1"
 atomic_refcell = "0.1"
-skeptic = { version = "0.13", optional = true }
+#skeptic = { version = "0.13", optional = true }
 num = { version = "0.4", default-features = false }
 crossbeam-channel = { version = "0.5", optional = true }
 parking_lot = { version = "0.12", optional = true }
-
 minreq = { version = "2" }
 
 # optional dep for standalone http pull metrics
 tiny_http = { version = "0.12", optional = true }
 
-[build-dependencies]
-skeptic = { version = "0.13", optional = true }
+doc-comment = { version = "0.3", optional = true }
 
 [features]
 default = [ "self_metrics", "crossbeam-channel", "parking_lot" ]
 bench = []
 self_metrics = []
 tokio = []
+
 
 [package.metadata.release]
 #sign-commit = true

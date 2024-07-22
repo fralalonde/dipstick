@@ -10,7 +10,6 @@ use crate::{Flush, MetricValue, Void};
 
 use std::borrow::Borrow;
 use std::collections::BTreeMap;
-use std::isize;
 use std::mem;
 use std::sync::atomic::AtomicIsize;
 use std::sync::atomic::Ordering::*;
@@ -187,7 +186,7 @@ impl AtomicBucket {
     }
 
     /// Set the default stats aggregated metrics flush output.
-    pub fn default_drain(default_config: impl Input + Send + Sync + 'static) {
+    pub fn default_drain(default_config: impl Input + 'static) {
         *write_lock!(DEFAULT_AGGREGATE_INPUT) = Arc::new(default_config);
     }
 
@@ -226,12 +225,12 @@ impl AtomicBucket {
 
     /// Set this stats's aggregated metrics flush output.
     #[deprecated(since = "0.7.2", note = "Use drain()")]
-    pub fn set_drain(&self, new_drain: impl Input + Send + Sync + 'static) {
+    pub fn set_drain(&self, new_drain: impl Input + 'static) {
         self.drain(new_drain)
     }
 
     /// Set this stats's aggregated metrics flush output.
-    pub fn drain(&self, new_drain: impl Input + Send + Sync + 'static) {
+    pub fn drain(&self, new_drain: impl Input + 'static) {
         write_lock!(self.inner).drain = Some(Arc::new(new_drain))
     }
 
