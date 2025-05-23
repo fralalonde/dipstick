@@ -203,7 +203,7 @@ impl Flush for InputQueueScope {
         if let Err(e) = self.sender.send(InputQueueCmd::Flush(self.target.clone())) {
             metrics::SEND_FAILED.mark();
             debug!("Failed to flush async metrics: {}", e);
-            Err(io::Error::new(io::ErrorKind::Other, e))
+            Err(io::Error::other(e))
         } else {
             Ok(())
         }

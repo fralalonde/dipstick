@@ -130,7 +130,7 @@ pub enum InputKind {
 }
 
 /// Used by the metrics! macro to obtain the InputKind from the stringified type.
-impl<'a> From<&'a str> for InputKind {
+impl From<&str> for InputKind {
     fn from(s: &str) -> InputKind {
         match s {
             "Marker" => InputKind::Marker,
@@ -163,6 +163,7 @@ impl Marker {
 /// - Bytes sent
 /// - Records written
 /// - Apples eaten
+///
 /// For relative (possibly negative) values, the `Level` counter type can be used.
 /// If aggregated, minimum and maximum scores will track the collected values, not their sum.
 #[derive(Debug, Clone)]
@@ -179,8 +180,9 @@ impl Counter {
 
 /// A counter of fluctuating resources accepting positive and negative values.
 /// Can be used as a stateful `Gauge` or as a `Counter` of possibly decreasing amounts.
-/// - Size of messages in a queue
-/// - Strawberries on a conveyor belt
+///  - Size of messages in a queue
+///  - Strawberries on a conveyor belt
+///
 /// If aggregated, minimum and maximum scores will track the sum of values, not the collected values themselves.
 #[derive(Debug, Clone)]
 pub struct Level {

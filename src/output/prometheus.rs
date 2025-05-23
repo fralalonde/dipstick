@@ -176,7 +176,7 @@ impl PrometheusScope {
             Err(e) => {
                 metrics::PROMETHEUS_SEND_ERR.mark();
                 debug!("Failed to send buffer to Prometheus: {}", e);
-                Err(io::Error::new(io::ErrorKind::Other, e))
+                Err(io::Error::other(e))
             }
         }
     }

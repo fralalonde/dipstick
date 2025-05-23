@@ -133,10 +133,11 @@ impl InputScope for LogScope {
                 let mut buffer = Vec::with_capacity(32);
                 match template.print(&mut buffer, value, |key| labels.lookup(key)) {
                     Ok(()) => {
+                        let str = String::from_utf8_lossy(&buffer);
                         if let Some(target) = &target {
-                            log!(target: target, level, "{:?}", &buffer)
+                            log!(target: target, level, "{}", str)
                         } else {
-                            log!(level, "{:?}", &buffer)
+                            log!(level, "{}", str)
                         }
                     }
                     Err(err) => debug!("Could not format buffered log metric: {}", err),
@@ -155,10 +156,11 @@ impl Flush for LogScope {
             for entry in entries.drain(..) {
                 writeln!(&mut buf, "{:?}", &entry)?;
             }
+            let str = String::from_utf8_lossy(&buf);
             if let Some(target) = &self.log.target {
-                log!(target: target, self.log.level, "{:?}", &buf)
+                log!(target: target, self.log.level, "{}", str)
             } else {
-                log!(self.log.level, "{:?}", &buf)
+                log!(self.log.level, "{:?}", str)
             }
         }
         Ok(())

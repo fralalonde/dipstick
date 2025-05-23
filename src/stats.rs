@@ -66,9 +66,10 @@ pub fn stats_average(
 }
 
 /// A predefined single-stat-per-metric export strategy:
-/// - Timers and Counters each export their sums
-/// - Markers each export their hit count
-/// - Gauges each export their average
+///   - Timers and Counters each export their sums
+///   - Markers each export their hit count
+///   - Gauges each export their average
+///
 /// Since there is only one stat per metric, there is no risk of collision
 /// and so exported stats copy their metric's name.
 #[allow(dead_code)]

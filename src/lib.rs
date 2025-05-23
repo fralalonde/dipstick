@@ -126,6 +126,7 @@ pub trait Flush {
     fn flush(&self) -> io::Result<()>;
 }
 
+/// Basic benchmarks
 #[cfg(feature = "bench")]
 pub mod bench {
 
