@@ -93,6 +93,7 @@ pub use crate::output::format::{
     Formatting, LabelOp, LineFormat, LineOp, LineTemplate, SimpleFormat,
 };
 pub use crate::output::graphite::{Graphite, GraphiteMetric, GraphiteScope};
+pub use crate::output::graphite_udp::{GraphiteUdp, GraphiteUdpMetric, GraphiteUdpScope};
 pub use crate::output::log::{Log, LogScope};
 pub use crate::output::map::StatsMapScope;
 pub use crate::output::statsd::{Statsd, StatsdMetric, StatsdScope};
