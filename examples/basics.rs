@@ -1,7 +1,7 @@
 //! An app demonstrating the basics of the metrics front-end.
 //! Defines metrics of each kind and use them to print values to the console in multiple ways.
 
-use dipstick::{time, Input, InputScope, Prefixed, Stream};
+use dipstick::{Input, InputScope, Prefixed, Stream, time};
 use std::io;
 use std::thread::sleep;
 use std::time::Duration;

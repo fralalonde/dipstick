@@ -1,7 +1,7 @@
 use self::LineOp::*;
+use crate::MetricValue;
 use crate::input::InputKind;
 use crate::name::MetricName;
-use crate::MetricValue;
 
 use std::io;
 use std::io::Write;
@@ -56,10 +56,10 @@ impl LineTemplate {
         for cmd in &self.ops {
             match cmd {
                 Literal(src) => output.write_all(src.as_ref())?,
-                ValueAsText => output.write_all(format!("{}", value).as_ref())?,
+                ValueAsText => output.write_all(format!("{value}").as_ref())?,
                 ScaledValueAsText(scale) => {
                     let scaled = value as f64 / scale;
-                    output.write_all(format!("{}", scaled).as_ref())?
+                    output.write_all(format!("{scaled}").as_ref())?
                 }
                 NewLine => writeln!(output)?,
                 LabelExists(label_key, print_label) => {

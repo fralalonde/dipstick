@@ -2,17 +2,17 @@
 //! Metrics definitions are still synchronous.
 //! If queue size is exceeded, calling code reverts to blocking.
 
+use crate::CachedInput;
 use crate::attributes::{Attributes, MetricId, OnFlush, Prefixed, WithAttributes};
 use crate::input::{Input, InputDyn, InputKind, InputMetric, InputScope};
 use crate::label::Labels;
 use crate::metrics;
 use crate::name::MetricName;
-use crate::CachedInput;
 use crate::{Flush, MetricValue};
 
+use std::sync::Arc;
 #[cfg(not(feature = "crossbeam-channel"))]
 use std::sync::mpsc;
-use std::sync::Arc;
 use std::{io, thread};
 
 #[cfg(feature = "crossbeam-channel")]
@@ -44,11 +44,11 @@ fn new_async_channel(length: usize) -> Arc<mpsc::SyncSender<InputQueueCmd>> {
                     Ok(InputQueueCmd::Write(metric, value, labels)) => metric.write(value, labels),
                     Ok(InputQueueCmd::Flush(scope)) => {
                         if let Err(e) = scope.flush() {
-                            debug!("Could not asynchronously flush metrics: {}", e);
+                            debug!("Could not asynchronously flush metrics: {e}");
                         }
                     }
                     Err(e) => {
-                        debug!("Async metrics receive loop terminated: {}", e);
+                        debug!("Async metrics receive loop terminated: {e}");
                         // cannot break from within match, use safety pin instead
                         done = true
                     }
@@ -75,11 +75,11 @@ fn new_async_channel(length: usize) -> Arc<crossbeam::Sender<InputQueueCmd>> {
                     Ok(InputQueueCmd::Write(metric, value, labels)) => metric.write(value, labels),
                     Ok(InputQueueCmd::Flush(scope)) => {
                         if let Err(e) = scope.flush() {
-                            debug!("Could not asynchronously flush metrics: {}", e);
+                            debug!("Could not asynchronously flush metrics: {e}");
                         }
                     }
                     Err(e) => {
-                        debug!("Async metrics receive loop terminated: {}", e);
+                        debug!("Async metrics receive loop terminated: {e}");
                         // cannot break from within match, use safety pin instead
                         done = true
                     }
@@ -191,7 +191,7 @@ impl InputScope for InputQueueScope {
             if let Err(e) = sender.send(InputQueueCmd::Write(target_metric.clone(), value, labels))
             {
                 metrics::SEND_FAILED.mark();
-                debug!("Failed to send async metrics: {}", e);
+                debug!("Failed to send async metrics: {e}");
             }
         })
     }
@@ -202,7 +202,7 @@ impl Flush for InputQueueScope {
         self.notify_flush_listeners();
         if let Err(e) = self.sender.send(InputQueueCmd::Flush(self.target.clone())) {
             metrics::SEND_FAILED.mark();
-            debug!("Failed to flush async metrics: {}", e);
+            debug!("Failed to flush async metrics: {e}");
             Err(io::Error::other(e))
         } else {
             Ok(())

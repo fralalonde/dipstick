@@ -1,6 +1,6 @@
 //! A sample application asynchronously printing metrics to stdout.
 
-use dipstick::{stats_all, AtomicBucket, Input, InputScope, Stream};
+use dipstick::{AtomicBucket, Input, InputScope, Stream, stats_all};
 use std::env::args;
 use std::str::FromStr;
 use std::thread;

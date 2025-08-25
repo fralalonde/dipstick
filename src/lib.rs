@@ -114,7 +114,7 @@ pub use crate::atomic::AtomicBucket;
 pub use crate::cache::CachedInput;
 pub use crate::multi::{MultiInput, MultiInputScope};
 pub use crate::queue::{InputQueue, InputQueueScope, QueuedInput};
-pub use crate::stats::{stats_all, stats_average, stats_summary, ScoreType};
+pub use crate::stats::{ScoreType, stats_all, stats_average, stats_summary};
 
 use std::io;
 

@@ -2,10 +2,10 @@
 
 // TODO parameterize templates
 
+use crate::Flush;
 use crate::attributes::{Attributes, Buffered, MetricId, OnFlush, Prefixed, WithAttributes};
 use crate::input::InputKind;
 use crate::name::MetricName;
-use crate::Flush;
 use crate::{CachedInput, QueuedInput};
 
 use std::fs::{File, OpenOptions};
@@ -192,7 +192,7 @@ impl<W: Write + Send + Sync + 'static> InputScope for TextScope<W> {
                         let mut entries = write_lock!(entries);
                         entries.push(buffer)
                     }
-                    Err(err) => debug!("{}", err),
+                    Err(err) => debug!("{err}"),
                 }
             })
         } else {
@@ -204,10 +204,10 @@ impl<W: Write + Send + Sync + 'static> InputScope for TextScope<W> {
                     Ok(()) => {
                         let mut input = write_lock!(input.inner);
                         if let Err(e) = input.write_all(&buffer).and_then(|_| input.flush()) {
-                            debug!("Could not write text metrics: {}", e)
+                            debug!("Could not write text metrics: {e}")
                         }
                     }
-                    Err(err) => debug!("{}", err),
+                    Err(err) => debug!("{err}"),
                 }
             })
         }
@@ -232,7 +232,7 @@ impl<W: Write + Send + Sync + 'static> Flush for TextScope<W> {
 impl<W: Write + Send + Sync + 'static> Drop for TextScope<W> {
     fn drop(&mut self) {
         if let Err(e) = self.flush() {
-            warn!("Could not flush text metrics on Drop. {}", e)
+            warn!("Could not flush text metrics on Drop. {e}")
         }
     }
 }

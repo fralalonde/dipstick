@@ -1,7 +1,7 @@
 //! Use the metrics backend directly to log a metric value.
 //! Applications should use the metrics()-provided instruments instead.
 
-use dipstick::{labels, Input, InputScope};
+use dipstick::{Input, InputScope, labels};
 
 fn main() {
     raw_write()

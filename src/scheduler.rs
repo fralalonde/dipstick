@@ -2,7 +2,7 @@
 
 use crate::input::InputScope;
 
-use std::cmp::{max, Ordering};
+use std::cmp::{Ordering, max};
 use std::collections::BinaryHeap;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::SeqCst;
@@ -88,7 +88,7 @@ impl<T: InputScope + Send + Sync + Clone + 'static> ScheduleFlush for T {
         let scope = self.clone();
         SCHEDULER.schedule(period, move |_| {
             if let Err(err) = scope.flush() {
-                error!("Could not flush metrics: {}", err);
+                error!("Could not flush metrics: {err}");
             }
         })
     }

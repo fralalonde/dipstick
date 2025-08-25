@@ -1,10 +1,10 @@
 //! Decouple metric definition from configuration with trait objects.
 
+use crate::Flush;
 use crate::attributes::{Attributes, MetricId, OnFlush, Prefixed, WithAttributes};
 use crate::input::{InputKind, InputMetric, InputScope};
 use crate::name::{MetricName, NameParts};
 use crate::output::void::VOID_INPUT;
-use crate::Flush;
 
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Weak};

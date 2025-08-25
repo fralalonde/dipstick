@@ -44,7 +44,7 @@ impl Prometheus {
     /// as shown in https://github.com/prometheus/pushgateway#command-line
     /// For example `http://pushgateway.example.org:9091/metrics/job/some_job`
     pub fn push_to(url: &str) -> io::Result<Prometheus> {
-        debug!("Pushing to Prometheus {:?}", url);
+        debug!("Pushing to Prometheus {url:?}");
 
         Ok(Prometheus {
             attributes: Attributes::default(),
@@ -137,10 +137,7 @@ impl PrometheusScope {
         let mut buffer = write_lock!(self.buffer);
         if strbuf.len() + buffer.len() > BUFFER_FLUSH_THRESHOLD {
             metrics::PROMETHEUS_OVERFLOW.mark();
-            warn!(
-                "Prometheus Buffer Size Exceeded: {}",
-                BUFFER_FLUSH_THRESHOLD
-            );
+            warn!("Prometheus Buffer Size Exceeded: {BUFFER_FLUSH_THRESHOLD}");
             let _ = self.flush_inner(buffer);
             buffer = write_lock!(self.buffer);
         }
@@ -149,7 +146,7 @@ impl PrometheusScope {
 
         if !self.is_buffered() {
             if let Err(e) = self.flush_inner(buffer) {
-                debug!("Could not send to statsd {}", e)
+                debug!("Could not send to statsd {e}")
             }
         }
     }
@@ -175,7 +172,7 @@ impl PrometheusScope {
             }
             Err(e) => {
                 metrics::PROMETHEUS_SEND_ERR.mark();
-                debug!("Failed to send buffer to Prometheus: {}", e);
+                debug!("Failed to send buffer to Prometheus: {e}");
                 Err(io::Error::other(e))
             }
         }
@@ -211,7 +208,7 @@ pub struct PrometheusMetric {
 impl Drop for PrometheusScope {
     fn drop(&mut self) {
         if let Err(err) = self.flush() {
-            warn!("Could not flush Prometheus metrics upon Drop: {}", err)
+            warn!("Could not flush Prometheus metrics upon Drop: {err}")
         }
     }
 }

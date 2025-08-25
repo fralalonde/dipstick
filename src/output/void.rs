@@ -1,5 +1,5 @@
-use crate::name::MetricName;
 use crate::Flush;
+use crate::name::MetricName;
 
 use crate::attributes::MetricId;
 use crate::{Input, InputDyn, InputKind, InputMetric, InputScope};

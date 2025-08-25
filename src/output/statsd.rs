@@ -112,7 +112,7 @@ impl InputScope for StatsdScope {
         let metric_id = MetricId::forge("statsd", name);
 
         if let Sampling::Random(float_rate) = self.get_sampling() {
-            let _ = writeln!(suffix, "|@{}", float_rate);
+            let _ = writeln!(suffix, "|@{float_rate}");
             let int_sampling_rate = pcg32::to_int_rate(float_rate);
             let metric = StatsdMetric {
                 prefix,
@@ -176,7 +176,7 @@ impl StatsdScope {
 
         if !self.is_buffered() {
             if let Err(e) = self.flush_inner(buffer) {
-                debug!("Could not send to statsd {}", e)
+                debug!("Could not send to statsd {e}")
             }
         }
     }
@@ -222,7 +222,7 @@ pub struct StatsdMetric {
 impl Drop for StatsdScope {
     fn drop(&mut self) {
         if let Err(err) = self.flush() {
-            warn!("Could not flush statsd metrics upon Drop: {}", err)
+            warn!("Could not flush statsd metrics upon Drop: {err}")
         }
     }
 }

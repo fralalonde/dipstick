@@ -138,7 +138,7 @@ impl From<&str> for InputKind {
             "Gauge" => InputKind::Gauge,
             "Timer" => InputKind::Timer,
             "Level" => InputKind::Level,
-            _ => panic!("No InputKind '{}' defined", s),
+            _ => panic!("No InputKind '{s}' defined"),
         }
     }
 }
@@ -196,7 +196,9 @@ impl Level {
     }
 }
 
-/// A gauge that sends values to the metrics backend
+/// A non-cumulative counter for immediate observation of resource usage.
+///  - Memory in use
+///  - Number of open files
 #[derive(Debug, Clone)]
 pub struct Gauge {
     inner: InputMetric,

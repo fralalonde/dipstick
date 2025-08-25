@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::default::Default;
+use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 use crate::name::{MetricName, NameParts};
 use crate::scheduler::{Cancel, SCHEDULER};
@@ -57,7 +57,7 @@ impl MetricId {
     /// Return a MetricId based on output type and metric name
     pub fn forge(out_type: &str, name: MetricName) -> Self {
         let id: String = name.join("/");
-        MetricId(format!("{}:{}", out_type, id))
+        MetricId(format!("{out_type}:{id}"))
     }
 }
 
@@ -323,12 +323,12 @@ pub trait Buffered: WithAttributes {
 
 #[cfg(test)]
 mod test {
+    use crate::Flush;
+    use crate::StatsMapScope;
     use crate::attributes::*;
     use crate::input::Input;
     use crate::input::*;
     use crate::output::map::StatsMap;
-    use crate::Flush;
-    use crate::StatsMapScope;
 
     #[test]
     fn on_flush() {

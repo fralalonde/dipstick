@@ -1,8 +1,8 @@
+use crate::Flush;
 use crate::attributes::{Attributes, Buffered, MetricId, OnFlush, Prefixed, WithAttributes};
 use crate::input::{Input, InputKind, InputMetric, InputScope};
 use crate::name::MetricName;
 use crate::output::format::{Formatting, LineFormat, SimpleFormat};
-use crate::Flush;
 use crate::{CachedInput, QueuedInput};
 
 use std::sync::Arc;
@@ -122,7 +122,7 @@ impl InputScope for LogScope {
                         let mut entries = write_lock!(entries);
                         entries.push(buffer)
                     }
-                    Err(err) => debug!("Could not format buffered log metric: {}", err),
+                    Err(err) => debug!("Could not format buffered log metric: {err}"),
                 }
             })
         } else {
@@ -135,12 +135,12 @@ impl InputScope for LogScope {
                     Ok(()) => {
                         let str = String::from_utf8_lossy(&buffer);
                         if let Some(target) = &target {
-                            log!(target: target, level, "{}", str)
+                            log!(target: target, level, "{str}")
                         } else {
-                            log!(level, "{}", str)
+                            log!(level, "{str}")
                         }
                     }
-                    Err(err) => debug!("Could not format buffered log metric: {}", err),
+                    Err(err) => debug!("Could not format buffered log metric: {err}"),
                 }
             })
         }
@@ -158,9 +158,9 @@ impl Flush for LogScope {
             }
             let str = String::from_utf8_lossy(&buf);
             if let Some(target) = &self.log.target {
-                log!(target: target, self.log.level, "{}", str)
+                log!(target: target, self.log.level, "{str}")
             } else {
-                log!(self.log.level, "{:?}", str)
+                log!(self.log.level, "{str:?}")
             }
         }
         Ok(())
@@ -170,7 +170,7 @@ impl Flush for LogScope {
 impl Drop for LogScope {
     fn drop(&mut self) {
         if let Err(e) = self.flush() {
-            warn!("Could not flush log metrics on Drop. {}", e)
+            warn!("Could not flush log metrics on Drop. {e}")
         }
     }
 }

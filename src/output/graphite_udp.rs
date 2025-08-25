@@ -121,7 +121,7 @@ impl GraphiteUdpScope {
         match start.duration_since(UNIX_EPOCH) {
             Ok(timestamp) => {
                 let metric = format!(
-                   "{}{} {}\n",
+                    "{}{} {}\n",
                     &metric.prefix,
                     &value_str,
                     &timestamp.as_secs().to_string()
@@ -135,16 +135,16 @@ impl GraphiteUdpScope {
                 if entry_len > available {
                     let _ = self.flush_inner(buffer);
                     buffer = write_lock!(self.buffer);
-                } 
-                buffer.push_str(&metric);                
+                }
+                buffer.push_str(&metric);
             }
             Err(e) => {
-                warn!("Could not compute epoch timestamp. {}", e);
+                warn!("Could not compute epoch timestamp. {e}");
             }
         };
         if !self.is_buffered() {
             if let Err(e) = self.flush_inner(buffer) {
-                debug!("Could not send to graphite {}", e)
+                debug!("Could not send to graphite {e}")
             }
         }
     }
@@ -158,7 +158,7 @@ impl GraphiteUdpScope {
                 }
                 Err(e) => {
                     metrics::GRAPHITE_SEND_ERR.mark();
-                    debug!("Failed to send buffer to graphite: {}", e);
+                    debug!("Failed to send buffer to graphite: {e}");
                     return Err(e);
                 }
             };
@@ -193,7 +193,7 @@ pub struct GraphiteUdpMetric {
 impl Drop for GraphiteUdpScope {
     fn drop(&mut self) {
         if let Err(err) = self.flush() {
-            warn!("Could not flush graphite metrics upon Drop: {}", err)
+            warn!("Could not flush graphite metrics upon Drop: {err}")
         }
     }
 }

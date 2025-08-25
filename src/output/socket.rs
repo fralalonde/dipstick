@@ -55,7 +55,7 @@ impl RetrySocket {
                 let socket = TcpStream::connect(addresses)?;
                 socket.set_nonblocking(true)?;
                 self.retries = 0;
-                info!("Connected to {:?}", addresses);
+                info!("Connected to {addresses:?}");
                 self.socket = Some(socket);
             }
         }

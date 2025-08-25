@@ -1,9 +1,9 @@
 //! Dispatch metrics to multiple sinks.
 
+use crate::Flush;
 use crate::attributes::{Attributes, MetricId, OnFlush, Prefixed, WithAttributes};
 use crate::input::{Input, InputDyn, InputKind, InputMetric, InputScope};
 use crate::name::MetricName;
-use crate::Flush;
 
 use std::io;
 use std::sync::Arc;

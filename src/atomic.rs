@@ -5,15 +5,15 @@ use crate::clock::TimeHandle;
 use crate::input::{Input, InputDyn, InputKind, InputMetric, InputScope};
 use crate::name::MetricName;
 use crate::stats::ScoreType::*;
-use crate::stats::{stats_summary, ScoreType};
+use crate::stats::{ScoreType, stats_summary};
 use crate::{Flush, MetricValue, Void};
 
 use std::borrow::Borrow;
 use std::collections::BTreeMap;
 use std::mem;
+use std::sync::Arc;
 use std::sync::atomic::AtomicIsize;
 use std::sync::atomic::Ordering::*;
-use std::sync::Arc;
 use std::{fmt, io};
 
 #[cfg(not(feature = "parking_lot"))]

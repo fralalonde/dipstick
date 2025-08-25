@@ -47,7 +47,7 @@ impl Input for Graphite {
 impl Graphite {
     /// Send metrics to a graphite server at the address and port provided.
     pub fn send_to<A: ToSocketAddrs + Debug + Clone>(address: A) -> io::Result<Graphite> {
-        debug!("Connecting to graphite {:?}", address);
+        debug!("Connecting to graphite {address:?}");
         let socket = Arc::new(RwLock::new(RetrySocket::new(address)?));
 
         Ok(Graphite {
@@ -124,19 +124,19 @@ impl GraphiteScope {
 
                 if buffer.len() > BUFFER_FLUSH_THRESHOLD {
                     metrics::GRAPHITE_OVERFLOW.mark();
-                    warn!("Graphite Buffer Size Exceeded: {}", BUFFER_FLUSH_THRESHOLD);
+                    warn!("Graphite Buffer Size Exceeded: {BUFFER_FLUSH_THRESHOLD}");
                     let _ = self.flush_inner(buffer);
                     buffer = write_lock!(self.buffer);
                 }
             }
             Err(e) => {
-                warn!("Could not compute epoch timestamp. {}", e);
+                warn!("Could not compute epoch timestamp. {e}");
             }
         };
 
         if self.is_buffered() {
             if let Err(e) = self.flush_inner(buffer) {
-                debug!("Could not send to graphite {}", e)
+                debug!("Could not send to graphite {e}")
             }
         }
     }
@@ -156,7 +156,7 @@ impl GraphiteScope {
             }
             Err(e) => {
                 metrics::GRAPHITE_SEND_ERR.mark();
-                debug!("Failed to send buffer to graphite: {}", e);
+                debug!("Failed to send buffer to graphite: {e}");
                 Err(e)
             }
         }
@@ -192,7 +192,7 @@ pub struct GraphiteMetric {
 impl Drop for GraphiteScope {
     fn drop(&mut self) {
         if let Err(err) = self.flush() {
-            warn!("Could not flush graphite metrics upon Drop: {}", err)
+            warn!("Could not flush graphite metrics upon Drop: {err}")
         }
     }
 }
