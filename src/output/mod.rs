@@ -12,6 +12,8 @@ pub mod socket;
 
 pub mod graphite;
 
+pub mod graphite_udp; 
+
 pub mod statsd;
 
 //#[cfg(feature="prometheus")]
